@@ -2,6 +2,8 @@
 
 Eine spektakuläre, professionelle und vollständige Website für die legendäre Skisprungtournee **MAXIMAN JUMP TOUR**.
 
+WICHTIG: DIE MAXIMAN JUMP TOUR IST REIN FIKTIV!
+
 ## 📋 Features
 
 ### ✨ Sezioni Principali
