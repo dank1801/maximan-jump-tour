@@ -218,7 +218,7 @@ Small:    360px - 479px
 
 ## 📝 Lizenz
 
-Diese Website ist für die **MAXIMAN JUMP TOUR** gedacht und lizenziert unter der MIT Lizenz.
+Diese Website ist für die FIKTIVE **MAXIMAN JUMP TOUR** gedacht und lizenziert unter der MIT Lizenz.
 
 ## 👨‍💻 Entwicklung
 
@@ -235,13 +235,6 @@ Diese Website ist für die **MAXIMAN JUMP TOUR** gedacht und lizenziert unter de
 - BEM Naming Convention (teilweise)
 - Mobile-First Approach
 
-## 📞 Support & Kontakt
-
-Für Fragen, Bugs oder Feature-Requests:
-- 📧 Email: info@maximanjumptour.de
-- 🐦 Twitter: @maximanjump
-- 📱 Instagram: @maximanjumptour
-
 ## 🎯 Zukünftige Features
 
 - [ ] Dark Mode Toggle
@@ -250,7 +243,6 @@ Für Fragen, Bugs oder Feature-Requests:
 - [ ] Ticketing System
 - [ ] Mobile App
 - [ ] Streaming Integration
-- [ ] VR Experience
 
 ## 🙏 Danksagungen
 
