@@ -3,9 +3,11 @@ emailjs.init("DEIN_PUBLIC_KEY");
 
 // Whitelist
 const whitelist = [
-    "beispiel1@gmail.com",
-    "beispiel2@web.de",
-    "beispiel3@posteo.de"
+    "staorder@posteo.de",
+    "ukat42@posteo.de",
+    "ukat10@gmx.de",
+    "vesta@posteo.de",
+    "dankat@posteo.de"
 ];
 
 document.getElementById("contactForm").addEventListener("submit", function(e) {
