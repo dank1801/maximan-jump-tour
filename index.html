@@ -1230,14 +1230,18 @@
     
             const card = this.closest('.news-card');
             const image = card.querySelector('img').src;
-            const title = card.querySelector('h3').innerText;
-            const text = card.querySelector('p').innerText;
+            const articleFile = this.dataset.article;
     
+            // Bild setzen
             document.getElementById('modalImage').src = image;
-            document.getElementById('modalTitle').innerText = title;
-            document.getElementById('modalText').innerText = text;
     
-            document.getElementById('newsModal').style.display = 'flex';
+            // Artikel laden
+            fetch('articles/' + articleFile)
+                .then(res => res.text())
+                .then(html => {
+                    document.getElementById('modalArticle').innerHTML = html;
+                    document.getElementById('newsModal').style.display = 'flex';
+                });
         });
     });
     
