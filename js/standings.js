@@ -167,7 +167,7 @@ tabBtns.forEach(btn => {
 
             tr.innerHTML = `
                 <td class="rank"><span class="medal">${medalSymbol}</span></td>
-                <td class="name"><strong>${row.name}</strong></td>
+                <td class="name">${row.rank <= 3 ? `<strong>${row.name}</strong>` : row.name}</td>
                 <td class="nation">${row.nation}</td>
                 <td class="team">${row.team}</td>
                 <td class="points"><strong>${row.points}</strong></td>
