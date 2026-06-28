@@ -157,10 +157,8 @@ tabBtns.forEach(btn => {
             const tr = document.createElement('tr');
 
             let medalClass = '';
-            let medalSymbol = index === 0 ? '🥇' :
-                              index === 1 ? '🥈' :
-                              index === 2 ? '🥉' : row.rank;
-
+            let medalSymbol = row.rank;
+            
             if (index === 0) medalClass = 'medal-gold';
             if (index === 1) medalClass = 'medal-silver';
             if (index === 2) medalClass = 'medal-bronze';
