@@ -1223,5 +1223,35 @@
             <p id="modalText"></p>
         </div>
     </div>
+    <script>
+    document.querySelectorAll('.read-more').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+    
+            const card = this.closest('.news-card');
+            const image = card.querySelector('img').src;
+            const title = card.querySelector('h3').innerText;
+            const text = card.querySelector('p').innerText;
+    
+            document.getElementById('modalImage').src = image;
+            document.getElementById('modalTitle').innerText = title;
+            document.getElementById('modalText').innerText = text;
+    
+            document.getElementById('newsModal').style.display = 'flex';
+        });
+    });
+    
+    // Schließen
+    document.querySelector('.news-modal-close').addEventListener('click', () => {
+        document.getElementById('newsModal').style.display = 'none';
+    });
+    
+    // Klick außerhalb schließt Fenster
+    window.addEventListener('click', e => {
+        if (e.target.id === 'newsModal') {
+            document.getElementById('newsModal').style.display = 'none';
+        }
+    });
+    </script>
 </body>
 </html>
