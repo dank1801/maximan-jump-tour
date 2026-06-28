@@ -1,0 +1,34 @@
+<h2>Nachricht wird gesendet…</h2>
+<p id="status"></p>
+
+<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+<script>
+emailjs.init("DEIN_PUBLIC_KEY");
+
+const params = new URLSearchParams(window.location.search);
+const token = params.get("token");
+
+const status = document.getElementById("status");
+
+if (!token) {
+    status.innerText = "Ungültiger Link.";
+} else {
+    const data = JSON.parse(localStorage.getItem(token));
+
+    if (!data) {
+        status.innerText = "Token abgelaufen oder ungültig.";
+    } else {
+        // Nachricht an dich senden
+        emailjs.send("DEIN_SERVICE_ID", "DEIN_TEMPLATE_FORWARD", {
+            name: data.name,
+            email: data.email,
+            subject: data.subject,
+            message: data.message,
+            to_email: "dankat@posteo.de"
+        }).then(() => {
+            status.innerText = "Danke! Deine Nachricht wurde erfolgreich gesendet.";
+            localStorage.removeItem(token);
+        });
+    }
+}
+</script>
