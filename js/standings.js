@@ -155,19 +155,25 @@ tabBtns.forEach(btn => {
 
         data.forEach((row, index) => {
             const tr = document.createElement('tr');
-
+        
             let medalClass = '';
             let medalSymbol = row.rank;
-            
+        
             if (index === 0) medalClass = 'medal-gold';
             if (index === 1) medalClass = 'medal-silver';
             if (index === 2) medalClass = 'medal-bronze';
-
+        
             tr.className = medalClass;
-
+        
+            // Name vorbereiten
+            let displayName = row.name;
+            if (row.rank <= 3) {
+                displayName = `<strong>${row.name}</strong>`;
+            }
+        
             tr.innerHTML = `
-                <td class="rank"><span class="medal">${medalSymbol}</span></td>
-                <td class="name">${row.rank <= 3 ? `<strong>${row.name}</strong>` : row.name}</td>
+                <td class="rank">${medalSymbol}</td>
+                <td class="name">${displayName}</td>
                 <td class="nation">${row.nation}</td>
                 <td class="team">${row.team}</td>
                 <td class="points"><strong>${row.points}</strong></td>
