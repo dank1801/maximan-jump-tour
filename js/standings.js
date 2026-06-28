@@ -196,5 +196,6 @@ tabBtns.forEach(btn => {
         });
     });
 });
+document.querySelector('.tab-btn.active').click();
 
 console.log('Standings System Loaded! 🏆');
