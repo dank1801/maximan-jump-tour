@@ -266,6 +266,7 @@ const overlay = document.getElementById('impressumOverlay');
 overlay.addEventListener('click', (e) => {
   if (e.target === overlay) {
     overlay.style.display = 'none';
+    document.body.style.overflow = '';
   }
 });
 
