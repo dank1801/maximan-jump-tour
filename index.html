@@ -1230,11 +1230,9 @@
     <div id="newsModal" class="news-modal">
         <div class="news-modal-content">
             <span class="news-modal-close">&times;</span>
-    
             <img id="modalImage" class="modal-image" src="" alt="">
-    
-            <!-- HIER kommt der komplette Artikel rein -->
-            <div id="modalArticle"></div>
+            <h2 id="modalTitle"></h2>
+            <p id="modalText"></p>
         </div>
     </div>
     <script>
@@ -1244,18 +1242,14 @@
     
             const card = this.closest('.news-card');
             const image = card.querySelector('img').src;
-            const articleFile = this.dataset.article;
+            const title = card.querySelector('h3').innerText;
+            const text = card.querySelector('p').innerText;
     
-            // Bild setzen
             document.getElementById('modalImage').src = image;
+            document.getElementById('modalTitle').innerText = title;
+            document.getElementById('modalText').innerText = text;
     
-            // Artikel laden
-            fetch('articles/' + articleFile)
-                .then(res => res.text())
-                .then(html => {
-                    document.getElementById('modalArticle').innerHTML = html;
-                    document.getElementById('newsModal').style.display = 'flex';
-                });
+            document.getElementById('newsModal').style.display = 'flex';
         });
     });
     
