@@ -257,8 +257,7 @@ document.getElementById('impressumLink').addEventListener('click', function(e) {
   document.getElementById('impressumOverlay').style.display = 'flex';
 });
 
-// Schließen des Overlays
-document.getElementById('closeOverlay').addEventListener('click', function() {
+document.getElementById('closeImpressum').addEventListener('click', () => {
   document.getElementById('impressumOverlay').style.display = 'none';
 });
 
