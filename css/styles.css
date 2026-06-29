@@ -1387,3 +1387,28 @@ body {
     z-index: 5;
     pointer-events: none;
 }
+
+.article-image {
+    width: 100%;
+    margin: 25px 0;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #f3f3f3;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+}
+
+.article-image img {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: cover;
+}
+
+.article-caption {
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    color: #555;
+    background: #fff;
+    border-top: 1px solid #eee;
+    font-style: italic;
+}
