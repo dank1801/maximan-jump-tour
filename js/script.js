@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 const rulesOverlay = document.getElementById('rulesOverlay');
-const rulesLink = document.querySelector('a[href="#"]:not(#impressumLink)');
+const rulesLink = document.getElementById('rulesLink');
 const closeRules = document.getElementById('closeRules');
 
 // Öffnen
