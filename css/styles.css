@@ -1427,7 +1427,6 @@ body {
   align-items: center;
   padding: 20px;
   overflow-y: auto;
-  display: flex; /* Flexbox für Zentrierung */
 }
 
 /* Container im Overlay */
