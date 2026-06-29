@@ -251,23 +251,28 @@ function animateCounter(element, target, duration = 2000) {
     updateCounter();
 }
 
-// Öffnen des Impressum Overlays
-document.getElementById('impressumLink').addEventListener('click', function(e) {
-  e.preventDefault();
-  document.getElementById('impressumOverlay').style.display = 'flex';
-});
+document.addEventListener('DOMContentLoaded', () => {
+  const overlay = document.getElementById('impressumOverlay');
+  const openBtn = document.getElementById('impressumLink');
+  const closeBtn = document.getElementById('closeImpressum');
 
-document.getElementById('closeImpressum').addEventListener('click', () => {
-  document.getElementById('impressumOverlay').style.display = 'none';
-});
+  openBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  });
 
-const overlay = document.getElementById('impressumOverlay');
-
-overlay.addEventListener('click', (e) => {
-  if (e.target === overlay) {
+  closeBtn.addEventListener('click', () => {
     overlay.style.display = 'none';
     document.body.style.overflow = '';
-  }
+  });
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      overlay.style.display = 'none';
+      document.body.style.overflow = '';
+    }
+  });
 });
 
 // ===========================
