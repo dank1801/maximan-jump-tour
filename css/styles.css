@@ -1414,7 +1414,7 @@ body {
 }
 
 /* Overlay Hintergrund */
-.overlay {
+#impressumOverlay {
   display: none; /* Anfangs versteckt */
   position: fixed;
   top: 0;
@@ -1427,34 +1427,33 @@ body {
   align-items: center;
   padding: 20px;
   overflow-y: auto;
+  display: flex; /* Flexbox für Zentrierung */
 }
 
-/* Inhalt im Overlay */
-.overlay-content {
+/* Container im Overlay */
+.impressum-container {
+  position: relative; /* Für absolute Positionierung des Schließen-Buttons */
   background-color: #fff;
-  padding: 30px;
+  padding: 40px 30px 30px 30px;
   max-width: 900px;
   width: 100%;
   border-radius: 15px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-  position: relative;
-  font-family: 'Montserrat', sans-serif;
-  line-height: 1.6;
   border-top: 5px solid #1a1a2e; /* obere Abgrenzung */
   border-bottom: 5px solid #1a1a2e; /* untere Abgrenzung */
-  box-sizing: border-box;
 }
 
-/* Schließen-Button */
+/* Schließen Button oben rechts im Overlay */
 .close-btn {
   position: absolute;
   top: 15px;
   right: 20px;
   font-size: 30px;
-  cursor: pointer;
-  color: #333;
   font-weight: bold;
-  transition: color 0.3s, transform 0.2s;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 10;
 }
 
 .close-btn:hover {
@@ -1462,7 +1461,7 @@ body {
   transform: rotate(90deg);
 }
 
-/* Überschriften im Impressum */
+/* Überschrift im Impressum */
 .impressum-container h3 {
   margin-top: 0;
   font-size: 1.5em;
@@ -1471,17 +1470,18 @@ body {
   padding-bottom: 10px;
 }
 
-/* Text und Listen */
+/* Text und Inhalte im Impressum */
 .impressum-container p,
 .impressum-container ul {
   margin-top: 15px;
   font-size: 1em;
   color: #34495e;
+  line-height: 1.6;
 }
 
-/* Responsive */
+/* Responsive Design */
 @media (max-width: 600px) {
-  .overlay-content {
+  .impressum-container {
     padding: 20px;
   }
   .close-btn {
