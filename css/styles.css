@@ -1413,77 +1413,74 @@ body {
     font-style: italic;
 }
 
-/* Overlay Hintergrund */
+/* Overlay */
 #impressumOverlay {
-  display: none; /* Anfangs versteckt */
+  display: none;
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(26, 26, 46, 0.9);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
   z-index: 9999;
   justify-content: center;
   align-items: center;
-  padding: 20px;
-  overflow-y: auto;
+  padding: 40px 20px;
 }
 
-/* Container im Overlay */
+/* Container */
 .impressum-container {
-  position: relative; /* Für absolute Positionierung des Schließen-Buttons */
-  background-color: #fff;
-  padding: 40px 30px 30px 30px;
-  max-width: 900px;
+  background: #ffffff;
   width: 100%;
-  border-radius: 15px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-  border-top: 5px solid #1a1a2e; /* obere Abgrenzung */
-  border-bottom: 5px solid #1a1a2e; /* untere Abgrenzung */
+  max-width: 700px;
+  padding: 40px;
+  border-radius: 18px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+  position: relative;
+  animation: fadeIn 0.25s ease-out;
 }
 
-/* Schließen Button oben rechts im Overlay */
+/* Close Button */
 .close-btn {
   position: absolute;
-  top: 15px;
-  right: 20px;
-  font-size: 30px;
-  font-weight: bold;
-  color: #333;
+  top: 18px;
+  right: 18px;
+  background: none;
+  border: none;
+  font-size: 32px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  z-index: 10;
+  color: #444;
+  transition: 0.2s;
 }
 
 .close-btn:hover {
   color: #e74c3c;
-  transform: rotate(90deg);
+  transform: scale(1.2);
 }
 
-/* Überschrift im Impressum */
+/* Headings */
+.impressum-container h2 {
+  margin-bottom: 20px;
+  font-size: 2rem;
+  color: #1a1a2e;
+}
+
 .impressum-container h3 {
-  margin-top: 0;
-  font-size: 1.5em;
+  margin-top: 30px;
+  font-size: 1.3rem;
   color: #2c3e50;
-  border-bottom: 2px solid #ccc;
-  padding-bottom: 10px;
+  border-bottom: 2px solid #eee;
+  padding-bottom: 6px;
 }
 
-/* Text und Inhalte im Impressum */
+/* Text */
 .impressum-container p,
 .impressum-container ul {
-  margin-top: 15px;
-  font-size: 1em;
-  color: #34495e;
+  margin-top: 12px;
+  color: #444;
   line-height: 1.6;
 }
 
-/* Responsive Design */
-@media (max-width: 600px) {
-  .impressum-container {
-    padding: 20px;
-  }
-  .close-btn {
-    font-size: 24px;
-  }
+/* Animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
