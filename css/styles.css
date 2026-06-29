@@ -1422,8 +1422,10 @@ body {
   backdrop-filter: blur(4px);
   z-index: 9999;
   justify-content: center;
-  align-items: center;
-  padding: 40px 20px;
+  align-items: flex-start;
+  padding-top: 60px;
+  padding-bottom: 60px;
+  overflow-y: auto;
 }
 
 /* Container */
