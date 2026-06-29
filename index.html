@@ -1233,9 +1233,6 @@
             const image = card.querySelector('img').src;
             const articleFile = this.dataset.article;
     
-            // Bild setzen
-            document.getElementById('modalImage').src = image;
-    
             // Artikel laden
             fetch('articles/' + articleFile)
                 .then(res => res.text())
