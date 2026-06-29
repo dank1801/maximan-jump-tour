@@ -261,10 +261,11 @@ document.getElementById('closeImpressum').addEventListener('click', () => {
   document.getElementById('impressumOverlay').style.display = 'none';
 });
 
-// Beim Klick auf das Overlay (Hintergrund) schließen
-document.getElementById('impressumOverlay').addEventListener('click', function(e) {
-  if (e.target === this) {
-    this.style.display = 'none';
+const overlay = document.getElementById('impressumOverlay');
+
+overlay.addEventListener('click', (e) => {
+  if (e.target === overlay) {
+    overlay.style.display = 'none';
   }
 });
 
