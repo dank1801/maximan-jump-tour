@@ -275,29 +275,30 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-const rulesOverlay = document.getElementById('rulesOverlay');
-const rulesLink = document.getElementById('rulesLink');
-const closeRules = document.getElementById('closeRules');
+document.addEventListener('DOMContentLoaded', () => {
 
-// Öffnen
-rulesLink.addEventListener('click', (e) => {
-  e.preventDefault();
-  rulesOverlay.style.display = 'flex';
-  document.body.style.overflow = 'hidden';
-});
+  const rulesOverlay = document.getElementById('rulesOverlay');
+  const rulesLink = document.getElementById('rulesLink');
+  const closeRules = document.getElementById('closeRules');
 
-// Schließen per Button
-closeRules.addEventListener('click', () => {
-  rulesOverlay.style.display = 'none';
-  document.body.style.overflow = '';
-});
+  rulesLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    rulesOverlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  });
 
-// Schließen per Klick auf Hintergrund
-rulesOverlay.addEventListener('click', (e) => {
-  if (e.target === rulesOverlay) {
+  closeRules.addEventListener('click', () => {
     rulesOverlay.style.display = 'none';
     document.body.style.overflow = '';
-  }
+  });
+
+  rulesOverlay.addEventListener('click', (e) => {
+    if (e.target === rulesOverlay) {
+      rulesOverlay.style.display = 'none';
+      document.body.style.overflow = '';
+    }
+  });
+
 });
 
 // ===========================
