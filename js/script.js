@@ -275,6 +275,31 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+const rulesOverlay = document.getElementById('rulesOverlay');
+const rulesLink = document.querySelector('a[href="#"]:not(#impressumLink)');
+const closeRules = document.getElementById('closeRules');
+
+// Öffnen
+rulesLink.addEventListener('click', (e) => {
+  e.preventDefault();
+  rulesOverlay.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+});
+
+// Schließen per Button
+closeRules.addEventListener('click', () => {
+  rulesOverlay.style.display = 'none';
+  document.body.style.overflow = '';
+});
+
+// Schließen per Klick auf Hintergrund
+rulesOverlay.addEventListener('click', (e) => {
+  if (e.target === rulesOverlay) {
+    rulesOverlay.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+});
+
 // ===========================
 // EVENT LISTENERS
 // ===========================
