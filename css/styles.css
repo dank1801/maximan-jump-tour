@@ -1486,3 +1486,96 @@ body {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Overlay (gleich wie Impressum) */
+#rulesOverlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 60px;
+  padding-bottom: 60px;
+  overflow-y: auto;
+}
+
+/* Fenster */
+.rules-window {
+  background: #ffffff;
+  width: 100%;
+  max-width: 700px;
+  padding: 40px;
+  border-radius: 18px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+  position: relative;
+  animation: fadeIn 0.25s ease-out;
+}
+
+/* Close Button */
+#closeRules {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  background: none;
+  border: none;
+  font-size: 32px;
+  cursor: pointer;
+  color: #444;
+  transition: 0.2s;
+}
+
+#closeRules:hover {
+  color: #e74c3c;
+  transform: scale(1.2);
+}
+
+/* Download-Liste */
+.rules-list {
+  margin-top: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.rule-item {
+  background: #f7f7f7;
+  padding: 20px;
+  border-radius: 12px;
+  border-left: 5px solid #1a1a2e;
+}
+
+.rule-item h3 {
+  margin: 0;
+  font-size: 1.3rem;
+  color: #1a1a2e;
+}
+
+.rule-item p {
+  margin-top: 8px;
+  color: #444;
+}
+
+.download-btn {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 10px 16px;
+  background: #1a1a2e;
+  color: #fff;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: 0.2s;
+}
+
+.download-btn:hover {
+  background: #e74c3c;
+}
+
+/* Animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
