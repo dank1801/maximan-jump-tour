@@ -98,3 +98,14 @@
 #login-button:hover {
     background: #003fcc;
 }
+
+/* Teammanagement spezifisch */
+.panel-table td .tag {
+    margin-right: 4px;
+}
+
+/* Modal Buttons */
+#btn-save-team {
+    margin-top: 10px;
+}
+
