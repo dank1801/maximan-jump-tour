@@ -1,7 +1,9 @@
-// Öffnen des Modals
-document.getElementById('btn-create-user').addEventListener('click', () => {
-    document.getElementById('modal-create-user').style.display = 'flex';
-});
+const btnCreateUser = document.getElementById('btn-create-user');
+if (btnCreateUser) {
+    btnCreateUser.addEventListener('click', () => {
+        // Modal öffnen
+    });
+}
 
 // Schließen des Modals
 document.getElementById('modal-close-create').addEventListener('click', () => {
