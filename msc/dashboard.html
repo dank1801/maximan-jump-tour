@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>MSC Portal – Dashboard</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #0b1024;
+    color: #f5f5f5;
+}
+
+/* Layout */
+.portal-container {
+    display: flex;
+    height: 100vh;
+}
+
+/* Sidebar */
+.portal-sidebar {
+    width: 240px;
+    background: #11163a;
+    padding: 20px 0;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 4px 0 15px rgba(0,0,0,0.4);
+}
+
+.portal-logo {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.portal-logo h1 {
+    font-size: 1.3rem;
+    margin: 0;
+}
+
+.portal-logo span {
+    font-size: 0.8rem;
+    color: #9aa4ff;
+}
+
+.portal-nav {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.portal-nav li {
+    margin-bottom: 5px;
+}
+
+.portal-nav a {
+    display: block;
+    padding: 10px 20px;
+    color: #d0d4ff;
+    text-decoration: none;
+    font-size: 0.95rem;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.portal-nav a:hover {
+    background: #1b2250;
+    color: #ffffff;
+}
+
+.portal-nav .active {
+    background: #0055ff;
+    color: #fff;
+}
+
+/* Main area */
+.portal-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Top bar */
+.portal-topbar {
+    height: 60px;
+    background: #141a3f;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 25px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+}
+
+.portal-topbar-left {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.portal-topbar-right {
+    font-size: 0.9rem;
+    color: #c0c4ff;
+}
+
+/* Content */
+.portal-content {
+    padding: 20px 25px;
+    overflow-y: auto;
+}
+
+/* Section titles */
+.section-title {
+    font-size: 1.2rem;
+    margin-bottom: 10px;
+}
+
+.section-subtitle {
+    font-size: 0.9rem;
+    color: #b0b4d8;
+    margin-bottom: 20px;
+}
+
+/* KPI cards */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.kpi-card {
+    background: #141a3f;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.kpi-label {
+    font-size: 0.85rem;
+    color: #b0b4d8;
+    margin-bottom: 8px;
+}
+
+.kpi-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 5px;
+}
+
+.kpi-meta {
+    font-size: 0.8rem;
+    color: #8c92c8;
+}
+
+/* Two-column layout */
+.grid-2 {
+    display: grid;
+    grid-template-columns: 2fr 1.5fr;
+    gap: 20px;
+}
+
+/* Panels */
+.panel {
+    background: #141a3f;
+    border-radius: 10px;
+    padding: 15px 15px 10px 15px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    margin-bottom: 20px;
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.panel-header h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.panel-header span {
+    font-size: 0.8rem;
+    color: #9aa4ff;
+}
+
+/* Tables */
+.panel-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.panel-table th,
+.panel-table td {
+    padding: 6px 4px;
+    border-bottom: 1px solid #22274f;
+}
+
+.panel-table th {
+    text-align: left;
+    color: #c0c4ff;
+    font-weight: 600;
+}
+
+.panel-table tr:last-child td {
+    border-bottom: none;
+}
+
+/* Tags / status */
+.tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+}
+
+.tag-warning {
+    background: #ffcc00;
+    color: #000;
+}
+
+.tag-success {
+    background: #00c853;
+    color: #000;
+}
+
+.tag-danger {
+    background: #ff5252;
+    color: #000;
+}
+
+.tag-info {
+    background: #29b6f6;
+    color: #000;
+}
+
+/* Footer note */
+.portal-footer-note {
+    font-size: 0.8rem;
+    color: #8c92c8;
+    margin-top: 10px;
+}
+</style>
+</head>
+
+<body>
+<div class="portal-container">
+
+    <!-- Sidebar -->
+    <aside class="portal-sidebar">
+        <div class="portal-logo">
+            <h1>MSC Portal</h1>
+            <span>Maximanischer Sport Club – Administration</span>
+        </div>
+
+        <ul class="portal-nav">
+            <li><a href="dashboard.html" class="active">Dashboard</a></li>
+            <li><a href="users.html">Benutzer & Rollen</a></li>
+            <li><a href="teams.html">Teams & Lizenzen</a></li>
+            <li><a href="events.html">Wettkämpfe & Kalender</a></li>
+            <li><a href="points.html">Punkte & Wertungen</a></li>
+            <li><a href="transfers.html">Transfers & Verträge</a></li>
+            <li><a href="reporting.html">Reporting & Audit</a></li>
+            <li><a href="settings.html">Einstellungen</a></li>
+        </ul>
+    </aside>
+
+    <!-- Main -->
+    <main class="portal-main">
+
+        <!-- Topbar -->
+        <div class="portal-topbar">
+            <div class="portal-topbar-left">
+                Willkommen im MSC Administrationsportal
+            </div>
+            <div class="portal-topbar-right">
+                Eingeloggt als: <strong>admin.maximan</strong> · Rolle: <strong>MSC Admin</strong>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="portal-content">
+
+            <div class="section-title">Dashboard</div>
+            <div class="section-subtitle">
+                Überblick über Lizenzen, Events, Transfers und aktuelle Systemaktivitäten.
+            </div>
+
+            <!-- KPI Cards -->
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-label">Offene Lizenzanträge</div>
+                    <div class="kpi-value">7</div>
+                    <div class="kpi-meta">3 A‑Lizenz, 4 B‑Lizenz in Prüfung</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Bevorstehende Events (nächste 14 Tage)</div>
+                    <div class="kpi-value">4</div>
+                    <div class="kpi-meta">inkl. SeaBar Trilogie & Super‑Team</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Aktive Teams</div>
+                    <div class="kpi-value">18</div>
+                    <div class="kpi-meta">12 A‑Lizenz, 4 B‑Lizenz, 2 C‑Lizenz</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Offene Transfers</div>
+                    <div class="kpi-value">3</div>
+                    <div class="kpi-meta">1 Notfalltransfer, 2 regulär</div>
+                </div>
+            </div>
+
+            <!-- Two-column layout -->
+            <div class="grid-2">
+
+                <!-- Left column: Lizenzen & Events -->
+                <div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>Offene Lizenz- & Akkreditierungsfälle</h3>
+                            <span>Lizenzstelle · Übersicht</span>
+                        </div>
+                        <table class="panel-table">
+                            <thead>
+                                <tr>
+                                    <th>Athlet</th>
+                                    <th>Team</th>
+                                    <th>Lizenz</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Pingu Shen</td>
+                                    <td>Maximan Flyers</td>
+                                    <td>A‑Lizenz</td>
+                                    <td><span class="tag tag-warning">In Prüfung</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Kino von Patra</td>
+                                    <td>Raphael Eagles</td>
+                                    <td>A‑Lizenz</td>
+                                    <td><span class="tag tag-success">Gültig</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Rika Möller</td>
+                                    <td>MicroJump Talents</td>
+                                    <td>B‑Lizenz</td>
+                                    <td><span class="tag tag-warning">Unterlagen fehlen</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Pünki Train</td>
+                                    <td>Caesar Super Team</td>
+                                    <td>A‑Lizenz</td>
+                                    <td><span class="tag tag-info">Verlängerung anstehend</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>Bevorstehende Wettkämpfe</h3>
+                            <span>Kalender · Nächste 14 Tage</span>
+                        </div>
+                        <table class="panel-table">
+                            <thead>
+                                <tr>
+                                    <th>Event</th>
+                                    <th>Ort</th>
+                                    <th>Datum</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>SeaBar Trilogie – Event 2</td>
+                                    <td>SeaBar Arena</td>
+                                    <td>28. Juni 2026</td>
+                                    <td><span class="tag tag-info">Planung läuft</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Raphael Flugschanze – Einzel</td>
+                                    <td>Raphael Hill</td>
+                                    <td>30. Juni 2026</td>
+                                    <td><span class="tag tag-success">Startlisten freigegeben</span></td>
+                                </tr>
+                                <tr>
+                                    <td>MicroJump Series – Talente</td>
+                                    <td>MicroJump Park</td>
+                                    <td>3. Juli 2026</td>
+                                    <td><span class="tag tag-info">Qualifikation offen</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                </div>
+
+                <!-- Right column: Transfers & Audit -->
+                <div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>Aktuelle Transfers & Sperrfristen</h3>
+                            <span>Transferfenster · Status</span>
+                        </div>
+                        <table class="panel-table">
+                            <thead>
+                                <tr>
+                                    <th>Athlet</th>
+                                    <th>Von</th>
+                                    <th>Zu</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Pingu Shen</td>
+                                    <td>Maximan Flyers</td>
+                                    <td>Raphael Eagles</td>
+                                    <td><span class="tag tag-warning">In Verhandlung</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Rika Möller</td>
+                                    <td>MicroJump Talents</td>
+                                    <td>Maximan Flyers</td>
+                                    <td><span class="tag tag-danger">Sperrfrist aktiv</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Pünki Train</td>
+                                    <td>Caesar Super Team</td>
+                                    <td>Maximan Flyers</td>
+                                    <td><span class="tag tag-info">Notfalltransfer geprüft</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>Letzte Systemaktivitäten (Audit‑Log)</h3>
+                            <span>MSC Admin · Übersicht</span>
+                        </div>
+                        <table class="panel-table">
+                            <thead>
+                                <tr>
+                                    <th>Zeit</th>
+                                    <th>Benutzer</th>
+                                    <th>Aktion</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>19:12</td>
+                                    <td>admin.maximan</td>
+                                    <td>Punkte‑Regel „Double‑Points“ für SeaBar Trilogie angepasst</td>
+                                </tr>
+                                <tr>
+                                    <td>18:47</td>
+                                    <td>jury.raphael</td>
+                                    <td>Jury‑Entscheidung: Durchgang 2 wegen Wind abgebrochen</td>
+                                </tr>
+                                <tr>
+                                    <td>18:15</td>
+                                    <td>license.office</td>
+                                    <td>A‑Lizenz für Kino von Patra verlängert</td>
+                                </tr>
+                                <tr>
+                                    <td>17:50</td>
+                                    <td>team.maximan</td>
+                                    <td>Neues Teammitglied „Rika Möller“ registriert</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="portal-footer-note">
+                Hinweis: Dieses Dashboard zeigt nur eine Übersicht. Detailfunktionen finden Sie in den jeweiligen Modulen (Benutzer, Teams, Wettkämpfe, Punkte, Transfers, Reporting).
+            </div>
+
+        </div>
+    </main>
+</div>
+</body>
+</html>
