@@ -1579,3 +1579,25 @@ body {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+.msc-portal {
+    margin-left: 20px;
+}
+
+.msc-link {
+    background: #0055ff;
+    color: #fff;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.3s ease;
+}
+
+.msc-link i {
+    margin-right: 6px;
+}
+
+.msc-link:hover {
+    background: #003fcc;
+}
