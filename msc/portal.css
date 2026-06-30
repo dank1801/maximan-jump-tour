@@ -82,3 +82,19 @@
     font-size: 1.4rem;
     color: #fff;
 }
+
+#login-button {
+    width: 100%;
+    padding: 12px;
+    background: #0055ff;
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+#login-button:hover {
+    background: #003fcc;
+}
