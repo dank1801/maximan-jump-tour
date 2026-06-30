@@ -57,3 +57,29 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 });
+
+// Team-Modal öffnen
+const btnCreateTeam = document.getElementById("btn-create-team");
+const modalCreateTeam = document.getElementById("modal-create-team");
+const modalCloseTeam = document.getElementById("modal-close-team");
+
+if (btnCreateTeam) {
+    btnCreateTeam.addEventListener("click", () => {
+        modalCreateTeam.style.display = "flex";
+    });
+}
+
+if (modalCloseTeam) {
+    modalCloseTeam.addEventListener("click", () => {
+        modalCreateTeam.style.display = "none";
+    });
+}
+
+// Team speichern (später API)
+const btnSaveTeam = document.getElementById("btn-save-team");
+
+if (btnSaveTeam) {
+    btnSaveTeam.addEventListener("click", () => {
+        alert("Team wird später über API gespeichert.");
+    });
+}
