@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>MSC Portal – Teams & Lizenzen</title>
+
+<link rel="stylesheet" href="portal.css">
+</head>
+
+<body>
+<div class="portal-container">
+
+    <!-- Sidebar -->
+    <aside class="portal-sidebar">
+        <div class="portal-logo">
+            <h1>MSC Portal</h1>
+            <span>Maximanischer Sport Club – Administration</span>
+        </div>
+
+        <ul class="portal-nav">
+            <li><a href="dashboard.html">Dashboard</a></li>
+            <li><a href="users.html">Benutzer & Rollen</a></li>
+            <li><a href="teams.html" class="active">Teams & Lizenzen</a></li>
+            <li><a href="events.html">Wettkämpfe & Kalender</a></li>
+            <li><a href="points.html">Punkte & Wertungen</a></li>
+            <li><a href="transfers.html">Transfers & Verträge</a></li>
+            <li><a href="reporting.html">Reporting & Audit</a></li>
+            <li><a href="settings.html">Einstellungen</a></li>
+        </ul>
+    </aside>
+
+    <!-- Main -->
+    <main class="portal-main">
+
+        <!-- Topbar -->
+        <div class="portal-topbar">
+            <div class="portal-topbar-left">Teams & Lizenzen</div>
+            <div class="portal-topbar-right">
+                Eingeloggt als: <strong id="current-user">admin.maximan</strong>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="portal-content">
+
+            <div class="section-title">Teamverwaltung</div>
+            <div class="section-subtitle">
+                Verwalten Sie alle Teams, Organisationen und Lizenzstufen.
+            </div>
+
+            <!-- Button: Team anlegen -->
+            <button class="btn-primary" id="btn-create-team">Neues Team registrieren</button>
+
+            <!-- Teamübersicht -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>Teamübersicht</h3>
+                    <span>Alle registrierten Teams</span>
+                </div>
+
+                <table class="panel-table">
+                    <thead>
+                        <tr>
+                            <th>Teamname</th>
+                            <th>Organisation</th>
+                            <th>Lizenzstufe</th>
+                            <th>Teammanager</th>
+                            <th>Status</th>
+                            <th>Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="teams-table-body">
+
+                        <!-- Beispielteams (statisch) -->
+                        <tr>
+                            <td>Maximan Flyers</td>
+                            <td>Maximanischer Sport Club</td>
+                            <td><span class="tag tag-success">A‑Lizenz</span></td>
+                            <td>team.maximan</td>
+                            <td><span class="tag tag-success">Aktiv</span></td>
+                            <td>
+                                <button class="btn-small">Bearbeiten</button>
+                                <button class="btn-small btn-danger">Deaktivieren</button>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td>Raphael Eagles</td>
+                            <td>Raphael Sports Group</td>
+                            <td><span class="tag tag-success">A‑Lizenz</span></td>
+                            <td>team.raphael</td>
+                            <td><span class="tag tag-success">Aktiv</span></td>
+                            <td>
+                                <button class="btn-small">Bearbeiten</button>
+                                <button class="btn-small btn-danger">Deaktivieren</button>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td>MicroJump Talents</td>
+                            <td>MicroJump Academy</td>
+                            <td><span class="tag tag-info">B‑Lizenz</span></td>
+                            <td>team.microjump</td>
+                            <td><span class="tag tag-success">Aktiv</span></td>
+                            <td>
+                                <button class="btn-small">Bearbeiten</button>
+                                <button class="btn-small btn-danger">Deaktivieren</button>
+                            </td>
+                        </tr>
+
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Organisationsübersicht -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>Organisationen</h3>
+                    <span>Lizenzregeln pro Organisation</span>
+                </div>
+
+                <table class="panel-table">
+                    <thead>
+                        <tr>
+                            <th>Organisation</th>
+                            <th>A‑Team</th>
+                            <th>B‑Team</th>
+                            <th>C‑Team</th>
+                            <th>Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="org-table-body">
+
+                        <tr>
+                            <td>Maximanischer Sport Club</td>
+                            <td><span class="tag tag-success">Vorhanden</span></td>
+                            <td><span class="tag tag-info">Optional</span></td>
+                            <td><span class="tag tag-info">Optional</span></td>
+                            <td><button class="btn-small">Details</button></td>
+                        </tr>
+
+                        <tr>
+                            <td>Raphael Sports Group</td>
+                            <td><span class="tag tag-success">Vorhanden</span></td>
+                            <td><span class="tag tag-info">Optional</span></td>
+                            <td><span class="tag tag-info">Optional</span></td>
+                            <td><button class="btn-small">Details</button></td>
+                        </tr>
+
+                        <tr>
+                            <td>MicroJump Academy</td>
+                            <td><span class="tag tag-danger">Fehlt</span></td>
+                            <td><span class="tag tag-success">Vorhanden</span></td>
+                            <td><span class="tag tag-info">Optional</span></td>
+                            <td><button class="btn-small">Details</button></td>
+                        </tr>
+
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Modal: Team anlegen -->
+            <div class="modal" id="modal-create-team">
+                <div class="modal-content">
+                    <span class="modal-close" id="modal-close-team">&times;</span>
+
+                    <h3>Neues Team registrieren</h3>
+
+                    <label>Teamname</label>
+                    <input type="text" id="new-team-name" placeholder="z.B. SeaBar Jumpers">
+
+                    <label>Organisation</label>
+                    <select id="new-team-org">
+                        <option value="Maximanischer Sport Club">Maximanischer Sport Club</option>
+                        <option value="Raphael Sports Group">Raphael Sports Group</option>
+                        <option value="MicroJump Academy">MicroJump Academy</option>
+                    </select>
+
+                    <label>Lizenzstufe</label>
+                    <select id="new-team-license">
+                        <option value="A">A‑Lizenz (Pflicht)</option>
+                        <option value="B">B‑Lizenz</option>
+                        <option value="C">C‑Lizenz</option>
+                    </select>
+
+                    <label>Teammanager (Benutzerkennung)</label>
+                    <input type="text" id="new-team-manager" placeholder="z.B. team.seabar">
+
+                    <button class="btn-primary" id="btn-save-team">Team speichern</button>
+                </div>
+            </div>
+
+        </div>
+    </main>
+</div>
+
+<script src="portal.js"></script>
+</body>
+</html>
