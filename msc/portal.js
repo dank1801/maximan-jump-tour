@@ -5,10 +5,12 @@ if (btnCreateUser) {
     });
 }
 
-// Schließen des Modals
-document.getElementById('modal-close-create').addEventListener('click', () => {
-    document.getElementById('modal-create-user').style.display = 'none';
-});
+const modalCloseUser = document.getElementById("modal-close-create");
+if (modalCloseUser) {
+    modalCloseUser.addEventListener("click", () => {
+        modalCreateUser.style.display = "none";
+    });
+}
 
 // Speichern (später API)
 document.getElementById('btn-save-user').addEventListener('click', () => {
