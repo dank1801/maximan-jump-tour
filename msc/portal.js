@@ -1,77 +1,178 @@
-document.addEventListener("DOMContentLoaded", () => {
+const SESSION_KEY = "msc_portal_session";
+const DEMO_USER = {
+    username: "msc.admin",
+    password: "portal-2026",
+    role: "MSC Admin",
+    displayName: "MSC Systemadministrator"
+};
 
-    // -----------------------------------------
-    // LOGIN
-    // -----------------------------------------
-    const MSC_ADMIN_USER = "msc.admin";
-    const MSC_ADMIN_PASS = "Maximan2026!";
+function getPageName() {
+    return (window.location.pathname.split("/").pop() || "dashboard.html").toLowerCase();
+}
 
-    const loginBtn = document.getElementById("login-button");
-    if (loginBtn) {
-        loginBtn.addEventListener("click", () => {
-            const user = document.getElementById("login-username").value.trim();
-            const pass = document.getElementById("login-password").value.trim();
+function loadSession() {
+    try {
+        return JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null");
+    } catch {
+        return null;
+    }
+}
 
-            if (user === MSC_ADMIN_USER && pass === MSC_ADMIN_PASS) {
-                localStorage.setItem("msc_logged_in", "true");
-                localStorage.setItem("msc_user", MSC_ADMIN_USER);
-                localStorage.setItem("msc_role", "MSC Admin");
+function saveSession(session) {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+}
 
-                window.location.href = "dashboard.html";
-            } else {
-                alert("Ungültige Kennung oder Passwort.");
+function clearSession() {
+    sessionStorage.removeItem(SESSION_KEY);
+}
+
+function isLoginPage() {
+    return getPageName() === "login.html";
+}
+
+function setActiveNav() {
+    const page = getPageName();
+    document.querySelectorAll(".portal-nav a").forEach((link) => {
+        const target = (link.getAttribute("href") || "").toLowerCase();
+        link.classList.toggle("active", target === page);
+    });
+}
+
+function syncIdentity(session) {
+    const userNodes = document.querySelectorAll("[data-session-user]");
+    const roleNodes = document.querySelectorAll("[data-session-role]");
+
+    userNodes.forEach((node) => {
+        node.textContent = session?.displayName || session?.username || "Gast";
+    });
+
+    roleNodes.forEach((node) => {
+        node.textContent = session?.role || "—";
+    });
+}
+
+function protectPortal() {
+    if (isLoginPage()) {
+        return;
+    }
+
+    const session = loadSession();
+    if (!session) {
+        window.location.href = "login.html";
+        return;
+    }
+
+    syncIdentity(session);
+}
+
+function attachLogin() {
+    if (!isLoginPage()) {
+        return;
+    }
+
+    const existing = loadSession();
+    if (existing) {
+        window.location.href = "dashboard.html";
+        return;
+    }
+
+    const username = document.getElementById("login-username");
+    const password = document.getElementById("login-password");
+    const button = document.getElementById("login-button");
+    const message = document.getElementById("login-message");
+
+    const login = () => {
+        const userValue = username?.value.trim() || "";
+        const passValue = password?.value || "";
+
+        if (userValue === DEMO_USER.username && passValue === DEMO_USER.password) {
+            saveSession({
+                username: DEMO_USER.username,
+                role: DEMO_USER.role,
+                displayName: DEMO_USER.displayName
+            });
+            window.location.href = "dashboard.html";
+            return;
+        }
+
+        if (message) {
+            message.textContent = "Ungültige Zugangsdaten.";
+            message.classList.remove("hidden");
+        }
+    };
+
+    button?.addEventListener("click", login);
+    [username, password].forEach((field) => {
+        field?.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+                login();
             }
         });
-    }
+    });
+}
 
-    // -----------------------------------------
-    // DASHBOARD-SCHUTZ
-    // -----------------------------------------
-    if (window.location.pathname.includes("dashboard.html")) {
-        const loggedIn = localStorage.getItem("msc_logged_in");
-        if (!loggedIn) {
-            window.location.href = "login.html";
-        } else {
-            const userField = document.getElementById("current-user");
-            const roleField = document.getElementById("current-role");
+function attachLogout() {
+    const button = document.getElementById("logout-button");
+    button?.addEventListener("click", () => {
+        clearSession();
+        window.location.href = "login.html";
+    });
+}
 
-            if (userField) userField.innerText = localStorage.getItem("msc_user");
-            if (roleField) roleField.innerText = localStorage.getItem("msc_role");
+function attachTabs() {
+    document.querySelectorAll("[data-tab-group]").forEach((group) => {
+        const buttons = group.querySelectorAll("[data-tab-target]");
+        const panels = group.querySelectorAll("[data-tab-panel]");
+
+        const activate = (target) => {
+            buttons.forEach((button) => {
+                button.classList.toggle("active", button.getAttribute("data-tab-target") === target);
+            });
+
+            panels.forEach((panel) => {
+                panel.classList.toggle("active", panel.getAttribute("data-tab-panel") === target);
+            });
+        };
+
+        buttons.forEach((button) => {
+            button.addEventListener("click", () => activate(button.getAttribute("data-tab-target")));
+        });
+
+        const activeButton = group.querySelector("[data-tab-target].active") || buttons[0];
+        if (activeButton) {
+            activate(activeButton.getAttribute("data-tab-target"));
         }
-    }
+    });
+}
 
-    // -----------------------------------------
-    // BENUTZER-MODAL (users.html)
-    // -----------------------------------------
-    const btnCreateUser = document.getElementById("btn-create-user");
-    const modalCreateUser = document.getElementById("modal-create-user");
-    const modalCloseUser = document.getElementById("modal-close-create");
-
-    if (btnCreateUser && modalCreateUser && modalCloseUser) {
-        btnCreateUser.addEventListener("click", () => {
-            modalCreateUser.style.display = "flex";
+function attachModals() {
+    document.querySelectorAll("[data-open-modal]").forEach((trigger) => {
+        trigger.addEventListener("click", () => {
+            const target = document.getElementById(trigger.getAttribute("data-open-modal"));
+            target?.classList.remove("hidden");
         });
+    });
 
-        modalCloseUser.addEventListener("click", () => {
-            modalCreateUser.style.display = "none";
+    document.querySelectorAll("[data-close-modal]").forEach((trigger) => {
+        trigger.addEventListener("click", () => {
+            trigger.closest(".modal")?.classList.add("hidden");
         });
-    }
+    });
 
-    // -----------------------------------------
-    // TEAM-MODAL (teams.html)
-    // -----------------------------------------
-    const btnCreateTeam = document.getElementById("btn-create-team");
-    const modalCreateTeam = document.getElementById("modal-create-team");
-    const modalCloseTeam = document.getElementById("modal-close-team");
-
-    if (btnCreateTeam && modalCreateTeam && modalCloseTeam) {
-        btnCreateTeam.addEventListener("click", () => {
-            modalCreateTeam.style.display = "flex";
+    document.querySelectorAll(".modal").forEach((modal) => {
+        modal.addEventListener("click", (event) => {
+            if (event.target === modal) {
+                modal.classList.add("hidden");
+            }
         });
+    });
+}
 
-        modalCloseTeam.addEventListener("click", () => {
-            modalCreateTeam.style.display = "none";
-        });
-    }
-
+document.addEventListener("DOMContentLoaded", () => {
+    setActiveNav();
+    protectPortal();
+    attachLogin();
+    attachLogout();
+    attachTabs();
+    attachModals();
 });

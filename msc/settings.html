@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MSC Portal – Einstellungen</title>
+    <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+    <div class="portal-shell">
+        <aside class="portal-sidebar">
+            <div class="portal-brand">
+                <h1>MSC Portal</h1>
+                <p>Systemparameter, Sicherheit und Lizenzkategorien.</p>
+            </div>
+            <nav class="portal-nav">
+                <a href="dashboard.html">Dashboard <small>Start</small></a>
+                <a href="users.html">Benutzer & Rollen <small>RBAC</small></a>
+                <a href="teams.html">Teams & Lizenzen <small>Lizenzstatus</small></a>
+                <a href="events.html">Wettkämpfe & Kalender <small>Events</small></a>
+                <a href="points.html">Punkte & Wertungen <small>Ranking</small></a>
+                <a href="transfers.html">Transfers & Verträge <small>Fenster</small></a>
+                <a href="reporting.html">Reporting & Audit <small>Logs</small></a>
+                <a href="settings.html">Einstellungen <small>System</small></a>
+            </nav>
+        </aside>
+        <main class="portal-main">
+            <header class="portal-topbar">
+                <div class="portal-topbar-left">
+                    <span class="portal-kicker">Einstellungen</span>
+                    <div class="portal-topbar-title">Systemkonfiguration, Sicherheit und Lizenzregeln</div>
+                </div>
+                <div class="portal-topbar-right">
+                    <span class="portal-user-chip"><span data-session-user>MSC Systemadministrator</span></span>
+                    <button id="logout-button" class="btn-small">Logout</button>
+                </div>
+            </header>
+            <section class="portal-content">
+                <div class="page-hero">
+                    <div>
+                        <h2>Einstellungen</h2>
+                        <p>Globale Systemparameter, Sicherheitsrichtlinien und Lizenzkategorien werden hier zentral gepflegt.</p>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <h3>Systemkonfiguration</h3>
+                                <p>Zeitzone, Sprache und Standards.</p>
+                            </div>
+                        </div>
+                        <div class="form-grid">
+                            <div class="field"><label>Zeitzone</label><input type="text" value="Europe/Berlin"></div>
+                            <div class="field"><label>Sprache</label><input type="text" value="de-DE"></div>
+                            <div class="field"><label>Standard-Saison</label><input type="text" value="Sommer 2026"></div>
+                            <div class="field"><label>Default-Punkte-Schema</label><input type="text" value="Top-30 Weltcup"></div>
+                        </div>
+                    </section>
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <h3>Sicherheits-Einstellungen</h3>
+                                <p>Passwort-Policy, Sessions und spätere 2FA.</p>
+                            </div>
+                        </div>
+                        <div class="stack">
+                            <div class="module-card"><h3>Passwort-Policy</h3><p>Mindestens 12 Zeichen, Sonderzeichen, keine Wiederverwendung.</p></div>
+                            <div class="module-card"><h3>Session-Timeout</h3><p>30 Minuten Inaktivität.</p></div>
+                            <div class="module-card"><h3>2-Faktor</h3><p>Später per Server-Feature aktivierbar.</p></div>
+                        </div>
+                    </section>
+                </div>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <h3>Lizenz-Kategorien</h3>
+                            <p>A/B/C-Definitionen und Voraussetzungen.</p>
+                        </div>
+                    </div>
+                    <table class="panel-table">
+                        <thead><tr><th>Kategorie</th><th>Beschreibung</th><th>Voraussetzungen</th></tr></thead>
+                        <tbody>
+                            <tr><td>A</td><td>Wettkampffreigabe für Hauptserie</td><td>Mindestalter, gültige Unterlagen</td></tr>
+                            <tr><td>B</td><td>Für Nachwuchs- und Aufbauklasse</td><td>Training, Basisnachweis</td></tr>
+                            <tr><td>C</td><td>Einsteiger- und Sonderstatus</td><td>Vereinbarung, beschränkte Einsätze</td></tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <div class="grid-2">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <h3>Rollenrichtlinien</h3>
+                                <p>Welche Rollen welchen Bereich sehen dürfen.</p>
+                            </div>
+                        </div>
+                        <div class="timeline">
+                            <div class="timeline-item"><div class="timeline-time">Admin</div><div><strong>Root-Zugriff</strong><div>Alle Module, Audit und Konfiguration.</div></div></div>
+                            <div class="timeline-item"><div class="timeline-time">Manager</div><div><strong>Team-Scopes</strong><div>Nur eigenes Team plus relevante Events.</div></div></div>
+                            <div class="timeline-item"><div class="timeline-time">Reporter</div><div><strong>Read-Only</strong><div>Live-Werte und Export.</div></div></div>
+                        </div>
+                    </section>
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <h3>Änderungen speichern</h3>
+                                <p>Spätere Backend-Anbindung mit Audit-Ticket.</p>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn">Konfiguration speichern</button>
+                            <button class="btn-secondary">Audit-Vorschau</button>
+                        </div>
+                    </section>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="portal.js"></script>
+</body>
+</html>

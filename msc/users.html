@@ -1,158 +1,145 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<title>MSC Portal – Benutzer & Rollen</title>
-
-<!-- Externe CSS -->
-<link rel="stylesheet" href="portal.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MSC Portal – Benutzer & Rollen</title>
+    <link rel="stylesheet" href="portal.css">
 </head>
-
 <body>
-<div class="portal-container">
-
-    <!-- Sidebar -->
-    <aside class="portal-sidebar">
-        <div class="portal-logo">
-            <h1>MSC Portal</h1>
-            <span>Maximanischer Sport Club – Administration</span>
-        </div>
-
-        <ul class="portal-nav">
-            <li><a href="dashboard.html">Dashboard</a></li>
-            <li><a href="users.html" class="active">Benutzer & Rollen</a></li>
-            <li><a href="teams.html">Teams & Lizenzen</a></li>
-            <li><a href="events.html">Wettkämpfe & Kalender</a></li>
-            <li><a href="points.html">Punkte & Wertungen</a></li>
-            <li><a href="transfers.html">Transfers & Verträge</a></li>
-            <li><a href="reporting.html">Reporting & Audit</a></li>
-            <li><a href="settings.html">Einstellungen</a></li>
-        </ul>
-    </aside>
-
-    <!-- Main -->
-    <main class="portal-main">
-
-        <!-- Topbar -->
-        <div class="portal-topbar">
-            <div class="portal-topbar-left">Benutzerverwaltung</div>
-            <div class="portal-topbar-right">
-                Eingeloggt als: <strong id="current-user">admin.maximan</strong>
+    <div class="portal-shell">
+        <aside class="portal-sidebar">
+            <div class="portal-brand">
+                <h1>MSC Portal</h1>
+                <p>Rollenverwaltung, Benutzerlebenszyklus und Zugriffskontrolle.</p>
             </div>
-        </div>
+            <nav class="portal-nav">
+                <a href="dashboard.html">Dashboard <small>Start</small></a>
+                <a href="users.html">Benutzer & Rollen <small>RBAC</small></a>
+                <a href="teams.html">Teams & Lizenzen <small>Lizenzstatus</small></a>
+                <a href="events.html">Wettkämpfe & Kalender <small>Events</small></a>
+                <a href="points.html">Punkte & Wertungen <small>Ranking</small></a>
+                <a href="transfers.html">Transfers & Verträge <small>Fenster</small></a>
+                <a href="reporting.html">Reporting & Audit <small>Logs</small></a>
+                <a href="settings.html">Einstellungen <small>System</small></a>
+            </nav>
+        </aside>
+        <main class="portal-main">
+            <header class="portal-topbar">
+                <div class="portal-topbar-left">
+                    <span class="portal-kicker">Benutzerverwaltung</span>
+                    <div class="portal-topbar-title">Rollen, Konten und Berechtigungen</div>
+                </div>
+                <div class="portal-topbar-right">
+                    <span class="portal-user-chip"><span data-session-user>MSC Systemadministrator</span></span>
+                    <button id="logout-button" class="btn-small">Logout</button>
+                </div>
+            </header>
 
-        <!-- Content -->
-        <div class="portal-content">
-
-            <div class="section-title">Benutzer & Rollen</div>
-            <div class="section-subtitle">
-                Verwalten Sie alle Benutzer des MSC Portals. Rollen bestimmen die Berechtigungen.
-            </div>
-
-            <!-- Button: Neuen Benutzer anlegen -->
-            <button class="btn-primary" id="btn-create-user">Neuen Benutzer anlegen</button>
-
-            <!-- Benutzerliste -->
-            <div class="panel">
-                <div class="panel-header">
-                    <h3>Benutzerübersicht</h3>
-                    <span>Alle registrierten Portalbenutzer</span>
+            <section class="portal-content">
+                <div class="page-hero">
+                    <div>
+                        <h2>Benutzer & Rollen</h2>
+                        <p>Konten werden serverseitig geprüft, Rollen definieren die Sichtbarkeit und jede Änderung landet im Audit-Log.</p>
+                    </div>
+                    <div class="hero-actions">
+                        <button class="btn" data-open-modal="user-modal">Neuen Benutzer anlegen</button>
+                        <button class="btn-secondary">Rollenmatrix exportieren</button>
+                    </div>
                 </div>
 
-                <table class="panel-table">
-                    <thead>
-                        <tr>
-                            <th>Benutzerkennung</th>
-                            <th>Name</th>
-                            <th>Rolle</th>
-                            <th>Status</th>
-                            <th>Aktionen</th>
-                        </tr>
-                    </thead>
-                    <tbody id="users-table-body">
-                        <!-- später dynamisch -->
-                        <tr>
-                            <td>admin.maximan</td>
-                            <td>MSC Systemadministrator</td>
-                            <td><span class="tag tag-success">MSC Admin</span></td>
-                            <td><span class="tag tag-success">Aktiv</span></td>
-                            <td>
-                                <button class="btn-small">Bearbeiten</button>
-                                <button class="btn-small btn-danger">Deaktivieren</button>
-                            </td>
-                        </tr>
+                <div class="grid-kpis">
+                    <article class="kpi-card"><div class="kpi-label">Aktive Benutzer</div><div class="kpi-value">24</div><div class="kpi-meta">18 mit Portalzugriff</div></article>
+                    <article class="kpi-card"><div class="kpi-label">Admin-Rollen</div><div class="kpi-value">5</div><div class="kpi-meta">MSC Admin, Jury, Lizenzstelle</div></article>
+                    <article class="kpi-card"><div class="kpi-label">Gesperrte Konten</div><div class="kpi-value">2</div><div class="kpi-meta">wegen Frist / Sicherheit</div></article>
+                    <article class="kpi-card"><div class="kpi-label">Letzter Login</div><div class="kpi-value">12m</div><div class="kpi-meta">vor 12 Minuten</div></article>
+                </div>
 
-                        <tr>
-                            <td>team.maximan</td>
-                            <td>Teammanager Maximan Flyers</td>
-                            <td><span class="tag tag-info">Teammanager</span></td>
-                            <td><span class="tag tag-success">Aktiv</span></td>
-                            <td>
-                                <button class="btn-small">Bearbeiten</button>
-                                <button class="btn-small btn-danger">Deaktivieren</button>
-                            </td>
-                        </tr>
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <h3>Benutzerliste</h3>
+                            <p>Konten mit Rolle, Status und letzten Zugriffen.</p>
+                        </div>
+                        <span class="tag tag-info">Audit aktiv</span>
+                    </div>
+                    <table class="panel-table">
+                        <thead><tr><th>Benutzerkennung</th><th>Name</th><th>Rolle</th><th>Status</th><th>Letzter Login</th><th>Aktionen</th></tr></thead>
+                        <tbody>
+                            <tr><td>admin.maximan</td><td>MSC Systemadministrator</td><td><span class="tag tag-success">MSC Admin</span></td><td><span class="tag tag-success">Aktiv</span></td><td>Heute, 19:10</td><td><button class="btn-small">Bearbeiten</button> <button class="btn-small btn-danger">Sperren</button></td></tr>
+                            <tr><td>team.maximan</td><td>Teammanager Maximan Flyers</td><td><span class="tag tag-info">Teammanager</span></td><td><span class="tag tag-success">Aktiv</span></td><td>Heute, 17:52</td><td><button class="btn-small">Bearbeiten</button> <button class="btn-small btn-danger">Sperren</button></td></tr>
+                            <tr><td>jury.raphael</td><td>Jury – Raphael Flugschanze</td><td><span class="tag tag-warning">Jury</span></td><td><span class="tag tag-success">Aktiv</span></td><td>Heute, 16:22</td><td><button class="btn-small">Bearbeiten</button> <button class="btn-small btn-danger">Sperren</button></td></tr>
+                            <tr><td>license.office</td><td>Lizenzstelle Maximania</td><td><span class="tag tag-info">Lizenzstelle</span></td><td><span class="tag tag-success">Aktiv</span></td><td>Heute, 15:40</td><td><button class="btn-small">Bearbeiten</button> <button class="btn-small btn-danger">Sperren</button></td></tr>
+                            <tr><td>report.live</td><td>Reporting Staff</td><td><span class="tag tag-neutral">Reporter</span></td><td><span class="tag tag-warning">2FA ausstehend</span></td><td>Gestern</td><td><button class="btn-small">Bearbeiten</button> <button class="btn-small btn-danger">Sperren</button></td></tr>
+                        </tbody>
+                    </table>
+                </section>
 
-                        <tr>
-                            <td>jury.raphael</td>
-                            <td>Jury – Raphael Flugschanze</td>
-                            <td><span class="tag tag-warning">Jury</span></td>
-                            <td><span class="tag tag-success">Aktiv</span></td>
-                            <td>
-                                <button class="btn-small">Bearbeiten</button>
-                                <button class="btn-small btn-danger">Deaktivieren</button>
-                            </td>
-                        </tr>
+                <div class="grid-2">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <h3>Rollen & Berechtigungen</h3>
+                                <p>Wer darf was sehen und bearbeiten.</p>
+                            </div>
+                        </div>
+                        <table class="panel-table">
+                            <thead><tr><th>Rolle</th><th>Teams</th><th>Events</th><th>Punkte</th><th>Audit</th></tr></thead>
+                            <tbody>
+                                <tr><td>MSC Admin</td><td><span class="tag tag-success">Vollzugriff</span></td><td><span class="tag tag-success">Vollzugriff</span></td><td><span class="tag tag-success">Vollzugriff</span></td><td><span class="tag tag-success">Vollzugriff</span></td></tr>
+                                <tr><td>Teammanager</td><td><span class="tag tag-success">Eigenes Team</span></td><td><span class="tag tag-info">Anmeldungen</span></td><td><span class="tag tag-neutral">Lesen</span></td><td><span class="tag tag-neutral">Lesen</span></td></tr>
+                                <tr><td>Jury</td><td><span class="tag tag-neutral">Lesen</span></td><td><span class="tag tag-success">Bearbeiten</span></td><td><span class="tag tag-success">Korrekturen</span></td><td><span class="tag tag-info">Protokoll</span></td></tr>
+                            </tbody>
+                        </table>
+                    </section>
 
-                        <tr>
-                            <td>license.office</td>
-                            <td>Lizenzstelle Maximania</td>
-                            <td><span class="tag tag-info">Lizenzstelle</span></td>
-                            <td><span class="tag tag-success">Aktiv</span></td>
-                            <td>
-                                <button class="btn-small">Bearbeiten</button>
-                                <button class="btn-small btn-danger">Deaktivieren</button>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <h3>Neuen Benutzer anlegen</h3>
+                                <p>Passwort wird später gehasht gespeichert, hier nur die Eingabe.</p>
+                            </div>
+                        </div>
+                        <div class="form-grid">
+                            <div class="field"><label for="new-user-login">Benutzerkennung</label><input id="new-user-login" type="text" placeholder="team.seabar"></div>
+                            <div class="field"><label for="new-user-name">Name</label><input id="new-user-name" type="text" placeholder="Vor- und Nachname"></div>
+                            <div class="field"><label for="new-user-email">E-Mail</label><input id="new-user-email" type="email" placeholder="name@msc.example"></div>
+                            <div class="field"><label for="new-user-role">Rolle</label><select id="new-user-role"><option>MSC Admin</option><option>Teammanager</option><option>Jury</option><option>Lizenzstelle</option><option>Reporter</option></select></div>
+                            <div class="field"><label for="new-user-pass">Passwort</label><input id="new-user-pass" type="password" placeholder="••••••••"></div>
+                            <div class="field"><label for="new-user-pass-repeat">Bestätigung</label><input id="new-user-pass-repeat" type="password" placeholder="••••••••"></div>
+                        </div>
+                        <div class="form-actions" style="margin-top: 14px;">
+                            <button class="btn">Benutzer speichern</button>
+                            <button class="btn-secondary">Passwort-Policy prüfen</button>
+                        </div>
+                    </section>
+                </div>
+            </section>
+        </main>
+    </div>
 
-            <!-- Modal: Benutzer anlegen (statisch, später JS) -->
-            <div class="modal" id="modal-create-user">
-                <div class="modal-content">
-                    <span class="modal-close" id="modal-close-create">&times;</span>
-
+    <div id="user-modal" class="modal hidden">
+        <div class="login-card" style="width:min(100%,520px);">
+            <div class="panel-header">
+                <div>
                     <h3>Neuen Benutzer anlegen</h3>
-
-                    <label>Benutzerkennung</label>
-                    <input type="text" id="new-username" placeholder="z.B. team.seabar">
-
-                    <label>Name</label>
-                    <input type="text" id="new-name" placeholder="Vollständiger Name">
-
-                    <label>Rolle</label>
-                    <select id="new-role">
-                        <option value="MSC Admin">MSC Admin</option>
-                        <option value="Teammanager">Teammanager</option>
-                        <option value="Jury">Jury</option>
-                        <option value="Lizenzstelle">Lizenzstelle</option>
-                        <option value="Reporter">Reporter</option>
-                    </select>
-
-                    <label>Passwort</label>
-                    <input type="password" id="new-password" placeholder="••••••••">
-
-                    <button class="btn-primary" id="btn-save-user">Benutzer speichern</button>
+                    <p>Dialog für spätere serverseitige Anbindung.</p>
                 </div>
+                <button class="btn-small" data-close-modal>&times;</button>
             </div>
-
+            <div class="form-grid">
+                <div class="field"><label>Benutzerkennung</label><input type="text" placeholder="licensing.office"></div>
+                <div class="field"><label>Name</label><input type="text" placeholder="Vollständiger Name"></div>
+                <div class="field"><label>Rolle</label><select><option>MSC Admin</option><option>Teammanager</option><option>Jury</option><option>Lizenzstelle</option><option>Reporter</option></select></div>
+                <div class="field"><label>Passwort</label><input type="password" placeholder="••••••••"></div>
+            </div>
+            <div class="form-actions" style="margin-top: 14px;">
+                <button class="btn">Speichern</button>
+                <button class="btn-secondary" data-close-modal>Abbrechen</button>
+            </div>
         </div>
-    </main>
-</div>
+    </div>
 
-<!-- Externe JS -->
-<script src="portal.js"></script>
-
+    <script src="portal.js"></script>
 </body>
 </html>
