@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MSC Portal – Reporting & Audit</title>
+    <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+    <div class="portal-shell">
+        <aside class="portal-sidebar">
+            <div class="portal-brand">
+                <h1>MSC Portal</h1>
+                <p>Live-Ergebnisse, Historie, Audit-Logs und Veröffentlichungen.</p>
+            </div>
+            <nav class="portal-nav">
+                <a href="dashboard.html">Dashboard <small>Start</small></a>
+                <a href="users.html">Benutzer & Rollen <small>RBAC</small></a>
+                <a href="teams.html">Teams & Lizenzen <small>Lizenzstatus</small></a>
+                <a href="events.html">Wettkämpfe & Kalender <small>Events</small></a>
+                <a href="points.html">Punkte & Wertungen <small>Ranking</small></a>
+                <a href="transfers.html">Transfers & Verträge <small>Fenster</small></a>
+                <a href="reporting.html">Reporting & Audit <small>Logs</small></a>
+                <a href="settings.html">Einstellungen <small>System</small></a>
+            </nav>
+        </aside>
+        <main class="portal-main">
+            <header class="portal-topbar">
+                <div class="portal-topbar-left">
+                    <span class="portal-kicker">Reporting & Audit</span>
+                    <div class="portal-topbar-title">Ergebnisexport, Verlauf und Veröffentlichungen</div>
+                </div>
+                <div class="portal-topbar-right">
+                    <span class="portal-user-chip"><span data-session-user>MSC Systemadministrator</span></span>
+                    <button id="logout-button" class="btn-small">Logout</button>
+                </div>
+            </header>
+            <section class="portal-content">
+                <div class="page-hero">
+                    <div>
+                        <h2>Reporting & Audit</h2>
+                        <p>Reporting liefert Live-Ergebnisse, Historien und PDF/CSV-Export. Das Audit zeigt jede sicherheitsrelevante Aktion.</p>
+                    </div>
+                    <div class="hero-actions">
+                        <button class="btn">CSV exportieren</button>
+                        <button class="btn-secondary">JSON exportieren</button>
+                    </div>
+                </div>
+
+                <div class="grid-kpis">
+                    <article class="kpi-card"><div class="kpi-label">Live-Events</div><div class="kpi-value">2</div><div class="kpi-meta">mit Ergebnisfeed</div></article>
+                    <article class="kpi-card"><div class="kpi-label">Audit-Einträge</div><div class="kpi-value">14</div><div class="kpi-meta">heute erfasst</div></article>
+                    <article class="kpi-card"><div class="kpi-label">Exports</div><div class="kpi-value">6</div><div class="kpi-meta">heute vorbereitet</div></article>
+                    <article class="kpi-card"><div class="kpi-label">Publikationen</div><div class="kpi-value">3</div><div class="kpi-meta">Entwurf / veröffentlicht</div></article>
+                </div>
+
+                <div class="grid-2">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <h3>Live-Ergebnisse</h3>
+                                <p>Aktuelle Durchgänge mit Zwischenständen.</p>
+                            </div>
+                        </div>
+                        <table class="panel-table">
+                            <thead><tr><th>Event</th><th>Durchgang</th><th>Spitze</th><th>Status</th></tr></thead>
+                            <tbody>
+                                <tr><td>SeaBar Trilogie</td><td>Wertung 1</td><td>Pingu Shen</td><td><span class="tag tag-success">Live</span></td></tr>
+                                <tr><td>Raphael Flugschanze</td><td>Training</td><td>Rika Möller</td><td><span class="tag tag-info">Aktualisiert</span></td></tr>
+                            </tbody>
+                        </table>
+                    </section>
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <h3>Verlauf & Trends</h3>
+                                <p>Punktehistorie für Athleten und Teams.</p>
+                            </div>
+                        </div>
+                        <div class="timeline">
+                            <div class="timeline-item"><div class="timeline-time">Heute</div><div><strong>Pingu Shen</strong><div>+100 Punkte, neue Saisonbestleistung.</div></div></div>
+                            <div class="timeline-item"><div class="timeline-time">Gestern</div><div><strong>Maximan Flyers</strong><div>Teamwertung steigt um 40 Punkte.</div></div></div>
+                        </div>
+                    </section>
+                </div>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <h3>Audit-Logs</h3>
+                            <p>Wer, was und wann - inklusive Kontext.</p>
+                        </div>
+                    </div>
+                    <table class="panel-table">
+                        <thead><tr><th>Zeit</th><th>Benutzer</th><th>Aktion</th><th>Objekt</th></tr></thead>
+                        <tbody>
+                            <tr><td>19:12</td><td>admin.maximan</td><td>Punkte-Regel geändert</td><td>SeaBar Trilogie</td></tr>
+                            <tr><td>18:47</td><td>jury.raphael</td><td>Jury-Entscheid protokolliert</td><td>Wertung 2</td></tr>
+                            <tr><td>18:15</td><td>license.office</td><td>Lizenz freigegeben</td><td>Kino von Patra</td></tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <div class="grid-2">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <h3>Veröffentlichungen</h3>
+                                <p>Offizielle Ergebnislisten und Presse-Dokumente.</p>
+                            </div>
+                        </div>
+                        <table class="panel-table">
+                            <thead><tr><th>Dokument</th><th>Status</th><th>Datum</th></tr></thead>
+                            <tbody>
+                                <tr><td>Ergebnisliste SeaBar</td><td><span class="tag tag-warning">Entwurf</span></td><td>Heute</td></tr>
+                                <tr><td>Presse-PDF Sommerblock</td><td><span class="tag tag-success">Veröffentlicht</span></td><td>Gestern</td></tr>
+                                <tr><td>Team-Ranking</td><td><span class="tag tag-success">Veröffentlicht</span></td><td>Gestern</td></tr>
+                            </tbody>
+                        </table>
+                    </section>
+                    <section class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <h3>Export-Ziele</h3>
+                                <p>Externe Systeme und Formate.</p>
+                            </div>
+                        </div>
+                        <div class="stack">
+                            <div class="module-card"><h3>CSV</h3><p>Für Tabellenkalkulation und Massenexport.</p></div>
+                            <div class="module-card"><h3>JSON</h3><p>Für Web- und API-Integrationen.</p></div>
+                            <div class="module-card"><h3>PDF</h3><p>Für offizielle Publikationen.</p></div>
+                        </div>
+                    </section>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="portal.js"></script>
+</body>
+</html>
