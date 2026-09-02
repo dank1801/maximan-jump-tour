@@ -212,6 +212,10 @@ function scheduleLiveRefresh() {
                 await loadTransfers();
             } else if (page === "reporting.html") {
                 await loadAuditLog();
+            } else if (page === "operations.html") {
+                if (typeof window.refreshOperationsPage === "function") {
+                    await window.refreshOperationsPage();
+                }
             }
         } catch (error) {
             // Keep UI stable even if one refresh request fails.
@@ -563,7 +567,23 @@ const PERMISSION_LABELS = {
     "publications.write": "Publikationen verwalten",
     "audit.read": "Audit-Logs lesen",
     "settings.read": "Einstellungen lesen",
-    "settings.write": "Einstellungen verwalten"
+    "settings.write": "Einstellungen verwalten",
+    "venues.read": "Schanzen lesen",
+    "venues.write": "Schanzen verwalten",
+    "competition_engine.read": "Wettkampf-Engine lesen",
+    "competition_engine.write": "Wettkampf-Engine verwalten",
+    "medical.read": "Medical lesen",
+    "medical.write": "Medical verwalten",
+    "material.read": "Materialkontrolle lesen",
+    "material.write": "Materialkontrolle verwalten",
+    "discipline.read": "Disziplinarfälle lesen",
+    "discipline.write": "Disziplinarfälle verwalten",
+    "finance.read": "Finanzen lesen",
+    "finance.write": "Finanzen verwalten",
+    "accreditation.read": "Akkreditierungen lesen",
+    "accreditation.write": "Akkreditierungen verwalten",
+    "public_api.read": "Public API lesen",
+    "workflows.execute": "Workflows ausführen"
 };
 
 const usersPageState = {
@@ -1073,6 +1093,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 await loadTransfers();
             } else if (page === "reporting.html") {
                 await loadAuditLog();
+            } else if (page === "operations.html") {
+                if (typeof window.refreshOperationsPage === "function") {
+                    await window.refreshOperationsPage();
+                }
             }
         }
     }

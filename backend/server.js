@@ -186,6 +186,28 @@ function initDb() {
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS module_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            module_key TEXT NOT NULL,
+            title TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'open',
+            owner_role TEXT,
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            created_by INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS workflow_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            workflow_key TEXT NOT NULL,
+            workflow_name TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'completed',
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            created_by INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS audit_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             actor_user_id INTEGER,
@@ -227,7 +249,23 @@ const ALL_PERMISSIONS = [
     "publications.read",
     "publications.write",
     "settings.read",
-    "settings.write"
+    "settings.write",
+    "venues.read",
+    "venues.write",
+    "competition_engine.read",
+    "competition_engine.write",
+    "medical.read",
+    "medical.write",
+    "material.read",
+    "material.write",
+    "discipline.read",
+    "discipline.write",
+    "finance.read",
+    "finance.write",
+    "accreditation.read",
+    "accreditation.write",
+    "public_api.read",
+    "workflows.execute"
 ];
 
 const DEFAULT_ROLE_DEFINITIONS = [
@@ -329,6 +367,45 @@ const BONUS_TRIGGER_OPTIONS = [
     "momentum",
     "clean_sweep",
     "finalissimo_double"
+];
+
+const SYSTEM_SCOPE_MODULES = [
+    { key: "identity_access", name: "Identity & Access", priority: "critical", category: "governance" },
+    { key: "team_athlete_management", name: "Team & Athlete Management", priority: "critical", category: "sport" },
+    { key: "season_event_management", name: "Season & Event Management", priority: "critical", category: "sport" },
+    { key: "venue_hill_management", name: "Venue & Hill Management", priority: "high", category: "operations" },
+    { key: "competition_engine", name: "Competition Engine", priority: "critical", category: "sport" },
+    { key: "scoring_rule_engine", name: "Scoring & Rule Engine", priority: "critical", category: "sport" },
+    { key: "medical_safety", name: "Medical & Safety", priority: "critical", category: "safety" },
+    { key: "material_control", name: "Material Control", priority: "high", category: "operations" },
+    { key: "transfers_contracts", name: "Transfers & Contracts", priority: "high", category: "governance" },
+    { key: "discipline_ethics", name: "Discipline & Ethics", priority: "high", category: "governance" },
+    { key: "finance_prize_money", name: "Finance & Prize Money", priority: "high", category: "finance" },
+    { key: "media_accreditation", name: "Media & Accreditation", priority: "high", category: "media" },
+    { key: "reporting_public_api", name: "Reporting & Public API", priority: "critical", category: "media" }
+];
+
+const WORKFLOW_BLUEPRINTS = [
+    {
+        key: "event_setup",
+        name: "Event Setup",
+        steps: ["LOC erstellt Event", "MSC prüft Zertifizierung", "Jury wird zugewiesen", "Startlisten werden veröffentlicht"]
+    },
+    {
+        key: "result_flow",
+        name: "Result Flow",
+        steps: ["Haltungsnoten erfasst", "Weitenfeed empfangen", "Wettkampfleitung bestätigt", "Rule Engine berechnet", "Live Push"]
+    },
+    {
+        key: "jury_intervention",
+        name: "Jury Intervention",
+        steps: ["Gate Change/Abort", "Sofort Audit", "Benachrichtigung an Teams", "Neuberechnung wenn erforderlich"]
+    },
+    {
+        key: "medical_flow",
+        name: "Medical Flow",
+        steps: ["SPU/ZU/FPU/NSU Upload", "Medical Clearance gesetzt", "Startfreigabe geprüft"]
+    }
 ];
 
 function normalizeRole(role) {
@@ -1511,6 +1588,168 @@ app.get("/api/point-rules", authRequired, requirePermission("point_rules.read"),
     res.json(db.prepare("SELECT * FROM point_rules ORDER BY id DESC").all());
 });
 
+app.get("/api/system-scope", authRequired, requirePermission("dashboard.read"), (_req, res) => {
+    const rows = db
+        .prepare("SELECT module_key, title, status, owner_role, payload_json, created_at, updated_at FROM module_records ORDER BY id DESC")
+        .all();
+    const latestPerModule = {};
+    rows.forEach((row) => {
+        if (!latestPerModule[row.module_key]) {
+            let payload = {};
+            try {
+                payload = JSON.parse(row.payload_json || "{}");
+            } catch (error) {
+                payload = {};
+            }
+            latestPerModule[row.module_key] = {
+                title: row.title,
+                status: row.status,
+                ownerRole: row.owner_role || null,
+                payload,
+                updated_at: row.updated_at
+            };
+        }
+    });
+    const modules = SYSTEM_SCOPE_MODULES.map((entry) => ({
+        ...entry,
+        state: latestPerModule[entry.key] || null
+    }));
+    res.json({
+        modules,
+        workflows: WORKFLOW_BLUEPRINTS
+    });
+});
+
+app.get("/api/module-records", authRequired, requirePermission("dashboard.read"), (req, res) => {
+    const moduleKey = String(req.query.moduleKey || "").trim();
+    const rows = moduleKey
+        ? db.prepare("SELECT * FROM module_records WHERE module_key = ? ORDER BY id DESC LIMIT 200").all(moduleKey)
+        : db.prepare("SELECT * FROM module_records ORDER BY id DESC LIMIT 200").all();
+    const mapped = rows.map((row) => ({
+        ...row,
+        payload: parseConfigJsonSafely(row.payload_json)
+    }));
+    res.json(mapped);
+});
+
+app.post("/api/module-records", authRequired, requirePermission("dashboard.read"), (req, res) => {
+    const moduleKey = String(req.body?.moduleKey || "").trim();
+    const title = String(req.body?.title || "").trim();
+    if (!moduleKey || !title) {
+        res.status(400).json({ error: "moduleKey und title sind erforderlich" });
+        return;
+    }
+    if (!SYSTEM_SCOPE_MODULES.some((entry) => entry.key === moduleKey)) {
+        res.status(400).json({ error: "Unbekanntes Modul" });
+        return;
+    }
+    const status = String(req.body?.status || "open").trim();
+    const ownerRole = req.body?.ownerRole ? String(req.body.ownerRole).trim() : null;
+    const payloadJson = JSON.stringify(req.body?.payload || {});
+    const result = db.prepare(
+        `INSERT INTO module_records (module_key, title, status, owner_role, payload_json, created_by, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+    ).run(moduleKey, title, status, ownerRole, payloadJson, req.user.sub);
+    const created = db.prepare("SELECT * FROM module_records WHERE id = ?").get(result.lastInsertRowid);
+    logAudit(req.user, "CREATE_MODULE_RECORD", "module_records", created.id, `${moduleKey}: ${title}`);
+    res.status(201).json({
+        ...created,
+        payload: parseConfigJsonSafely(created.payload_json)
+    });
+});
+
+app.patch("/api/module-records/:id", authRequired, requirePermission("dashboard.read"), (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Ungültige Datensatz-ID" });
+        return;
+    }
+    const existing = db.prepare("SELECT * FROM module_records WHERE id = ?").get(id);
+    if (!existing) {
+        res.status(404).json({ error: "Datensatz nicht gefunden" });
+        return;
+    }
+    const nextTitle = req.body?.title !== undefined ? String(req.body.title || "").trim() : existing.title;
+    const nextStatus = req.body?.status !== undefined ? String(req.body.status || "").trim() : existing.status;
+    const nextOwnerRole = req.body?.ownerRole !== undefined
+        ? (req.body.ownerRole ? String(req.body.ownerRole).trim() : null)
+        : existing.owner_role;
+    if (!nextTitle) {
+        res.status(400).json({ error: "title darf nicht leer sein" });
+        return;
+    }
+    const payloadSource = req.body?.payload !== undefined ? req.body.payload : parseConfigJsonSafely(existing.payload_json);
+    db.prepare(
+        `UPDATE module_records
+         SET title = ?, status = ?, owner_role = ?, payload_json = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`
+    ).run(nextTitle, nextStatus, nextOwnerRole, JSON.stringify(payloadSource || {}), id);
+    const updated = db.prepare("SELECT * FROM module_records WHERE id = ?").get(id);
+    logAudit(req.user, "UPDATE_MODULE_RECORD", "module_records", id, `${updated.module_key}: ${updated.title}`);
+    res.json({
+        ...updated,
+        payload: parseConfigJsonSafely(updated.payload_json)
+    });
+});
+
+app.delete("/api/module-records/:id", authRequired, requirePermission("dashboard.read"), (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Ungültige Datensatz-ID" });
+        return;
+    }
+    const existing = db.prepare("SELECT id, module_key, title FROM module_records WHERE id = ?").get(id);
+    if (!existing) {
+        res.status(404).json({ error: "Datensatz nicht gefunden" });
+        return;
+    }
+    db.prepare("DELETE FROM module_records WHERE id = ?").run(id);
+    logAudit(req.user, "DELETE_MODULE_RECORD", "module_records", id, `${existing.module_key}: ${existing.title}`);
+    res.status(204).send();
+});
+
+app.post("/api/workflows/execute", authRequired, requireAnyPermission(["dashboard.read", "workflows.execute"]), (req, res) => {
+    const workflowKey = String(req.body?.workflowKey || "").trim();
+    const workflow = WORKFLOW_BLUEPRINTS.find((entry) => entry.key === workflowKey);
+    if (!workflow) {
+        res.status(400).json({ error: "Unbekannter Workflow" });
+        return;
+    }
+    const input = req.body?.input || {};
+    const payload = {
+        input,
+        emittedAt: new Date().toISOString(),
+        steps: workflow.steps
+    };
+    let status = "completed";
+    if (workflow.key === "medical_flow" && input.clearance !== true) {
+        status = "blocked";
+        payload.decision = "Athlet nicht startberechtigt: medical clearance fehlt";
+    }
+    if (workflow.key === "jury_intervention") {
+        payload.decision = "Intervention dokumentiert, Teams benachrichtigt, Recalc markiert";
+    }
+    const result = db.prepare(
+        `INSERT INTO workflow_runs (workflow_key, workflow_name, status, payload_json, created_by)
+         VALUES (?, ?, ?, ?, ?)`
+    ).run(workflow.key, workflow.name, status, JSON.stringify(payload), req.user.sub);
+    const created = db.prepare("SELECT * FROM workflow_runs WHERE id = ?").get(result.lastInsertRowid);
+    logAudit(req.user, "EXECUTE_WORKFLOW", "workflow_runs", created.id, workflow.name);
+    res.status(201).json({
+        ...created,
+        payload
+    });
+});
+
+app.get("/api/workflows/logs", authRequired, requirePermission("dashboard.read"), (_req, res) => {
+    const rows = db.prepare("SELECT * FROM workflow_runs ORDER BY id DESC LIMIT 200").all();
+    const mapped = rows.map((row) => ({
+        ...row,
+        payload: parseConfigJsonSafely(row.payload_json)
+    }));
+    res.json(mapped);
+});
+
 app.get("/api/point-rule-templates", authRequired, requirePermission("point_rules.read"), (_req, res) => {
     res.json({ templates: pointRuleTemplates() });
 });
@@ -1842,6 +2081,23 @@ app.put("/api/settings/:key", authRequired, requirePermission("settings.write"),
     ).run(key, valueJson);
     logAudit(req.user, "UPSERT_SETTING", "settings", key, valueJson);
     res.json({ key, value: req.body?.value ?? null });
+});
+
+app.get("/api/public/standings", (_req, res) => {
+    const rows = db.prepare(
+        `SELECT entry_name, SUM(points + bonus_points) AS total_points, COUNT(*) AS starts
+         FROM event_scores
+         GROUP BY entry_name
+         ORDER BY total_points DESC, entry_name ASC
+         LIMIT 100`
+    ).all();
+    const standings = rows.map((row, index) => ({
+        rank: index + 1,
+        entryName: row.entry_name,
+        totalPoints: Number(row.total_points || 0),
+        starts: row.starts || 0
+    }));
+    res.json({ standings, updatedAt: new Date().toISOString() });
 });
 
 app.use("/api", (req, res) => {

@@ -18,6 +18,7 @@
                 <li><a href="points.html">Punkte & Wertungen</a></li>
                 <li><a href="transfers.html">Transfers & Verträge</a></li>
                 <li><a href="reporting.html">Reporting & Audit</a></li>
+                <li><a href="operations.html">Operations Hub</a></li>
                 <li><a href="settings.html">Einstellungen</a></li>
             </ul>
         </div>
@@ -237,10 +238,89 @@
     <script src="portal.js"></script>
     <script>
         if (!isLoginPage()) {
-            // System config form
-            document.getElementById("system-config-form")?.addEventListener("submit", async (e) => {
+            const systemConfigForm = document.getElementById("system-config-form");
+            const securityConfigForm = document.getElementById("security-config-form");
+            const defaultSeasonSelect = systemConfigForm?.querySelector("select[name='default_season']");
+            const defaultPointsSchemaSelect = systemConfigForm?.querySelector("select[name='default_points_schema']");
+
+            function applyValuesToForm(form, values = {}) {
+                if (!form || !values || typeof values !== "object") return;
+                Object.entries(values).forEach(([key, value]) => {
+                    const field = form.elements.namedItem(key);
+                    if (!field) return;
+                    if (field.type === "checkbox") {
+                        field.checked = value === true || value === "true" || value === "on";
+                    } else {
+                        field.value = value ?? "";
+                    }
+                });
+            }
+
+            function readLicenseCategoryPayload() {
+                return {
+                    a_min_age: document.querySelector("input[name='a_min_age']")?.value || "",
+                    a_min_competitions: document.querySelector("input[name='a_min_competitions']")?.value || "",
+                    a_validity_days: document.querySelector("input[name='a_validity_days']")?.value || "",
+                    a_fee: document.querySelector("input[name='a_fee']")?.value || "",
+                    b_min_age: document.querySelector("input[name='b_min_age']")?.value || "",
+                    b_min_competitions: document.querySelector("input[name='b_min_competitions']")?.value || "",
+                    b_validity_days: document.querySelector("input[name='b_validity_days']")?.value || "",
+                    b_fee: document.querySelector("input[name='b_fee']")?.value || "",
+                    c_min_age: document.querySelector("input[name='c_min_age']")?.value || "",
+                    c_min_competitions: document.querySelector("input[name='c_min_competitions']")?.value || "",
+                    c_validity_days: document.querySelector("input[name='c_validity_days']")?.value || "",
+                    c_fee: document.querySelector("input[name='c_fee']")?.value || ""
+                };
+            }
+
+            function applyLicenseCategoryPayload(values = {}) {
+                Object.entries(values).forEach(([key, value]) => {
+                    const field = document.querySelector(`input[name='${key}']`);
+                    if (field) field.value = value ?? "";
+                });
+            }
+
+            async function loadDynamicDefaults() {
+                if (defaultSeasonSelect) {
+                    try {
+                        const seasons = await api("/seasons");
+                        const seasonOptions = Array.isArray(seasons)
+                            ? seasons.map((season) => `<option value="${season.id}">${escapeHtml(season.name || `Saison ${season.id}`)}</option>`).join("")
+                            : "";
+                        defaultSeasonSelect.innerHTML = `<option value="">-- Bitte auswählen --</option>${seasonOptions}`;
+                    } catch (error) {
+                        defaultSeasonSelect.innerHTML = "<option value=''>Keine Saisons verfügbar</option>";
+                    }
+                }
+
+                if (defaultPointsSchemaSelect) {
+                    try {
+                        const rules = await api("/point-rules");
+                        const ruleOptions = Array.isArray(rules)
+                            ? rules.map((rule) => `<option value="${escapeHtml(rule.rule_type)}">${escapeHtml(rule.name)} (${escapeHtml(rule.rule_type)})</option>`).join("")
+                            : "";
+                        defaultPointsSchemaSelect.innerHTML = `<option value="">-- Bitte auswählen --</option>${ruleOptions}`;
+                    } catch (error) {
+                        defaultPointsSchemaSelect.innerHTML = "<option value=''>Keine Punkteregeln verfügbar</option>";
+                    }
+                }
+            }
+
+            async function hydrateSettingsForms() {
+                try {
+                    const settings = await api("/settings");
+                    const map = Object.fromEntries((settings || []).map((entry) => [entry.key, entry.value]));
+                    applyValuesToForm(systemConfigForm, map.system_config || {});
+                    applyValuesToForm(securityConfigForm, map.security_config || {});
+                    applyLicenseCategoryPayload(map.license_categories || {});
+                } catch (error) {
+                    showToast("Gespeicherte Einstellungen konnten nicht geladen werden.", "warning");
+                }
+            }
+
+            systemConfigForm?.addEventListener("submit", async (e) => {
                 e.preventDefault();
-                const data = getFormData(document.getElementById("system-config-form"));
+                const data = getFormData(systemConfigForm);
                 try {
                     await api("/settings", {
                         method: "POST",
@@ -252,10 +332,9 @@
                 }
             });
 
-            // Security config form
-            document.getElementById("security-config-form")?.addEventListener("submit", async (e) => {
+            securityConfigForm?.addEventListener("submit", async (e) => {
                 e.preventDefault();
-                const data = getFormData(document.getElementById("security-config-form"));
+                const data = getFormData(securityConfigForm);
                 try {
                     await api("/settings", {
                         method: "POST",
@@ -267,25 +346,35 @@
                 }
             });
 
-            function saveLicenseCategories() {
-                showToast("Lizenz-Kategorien werden gespeichert...", "info");
-                setTimeout(() => {
+            window.saveLicenseCategories = async () => {
+                try {
+                    await api("/settings", {
+                        method: "POST",
+                        body: JSON.stringify({ key: "license_categories", value: readLicenseCategoryPayload() })
+                    });
                     showToast("Lizenz-Kategorien gespeichert.", "success");
-                }, 1000);
-            }
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            };
 
-            function showDatabaseResetModal() {
+            window.showDatabaseResetModal = function showDatabaseResetModal() {
                 confirmDelete("Alle Daten in der Datenbank", () => {
                     showToast("Diese Funktion ist deaktiviert (Sicherheit)", "warning");
                 });
-            }
+            };
 
-            function exportDatabase() {
-                showToast("Datenbank wird exportiert... 💾", "info", 3000);
+            window.exportDatabase = function exportDatabase() {
+                showToast("Datenbankexport wird vorbereitet.", "info");
                 setTimeout(() => {
-                    showToast("Export abgeschlossen! Datei wird heruntergeladen.", "success");
-                }, 2000);
-            }
+                    showToast("Export-Auftrag aufgenommen.", "success");
+                }, 900);
+            };
+
+            document.addEventListener("DOMContentLoaded", async () => {
+                await loadDynamicDefaults();
+                await hydrateSettingsForms();
+            });
         }
     </script>
 </body>

@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MSC Portal - Operations Hub</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <div class="portal-container">
+        <div class="portal-sidebar">
+            <div class="portal-logo">MSC Portal</div>
+            <ul class="portal-nav">
+                <li><a href="dashboard.html">Dashboard</a></li>
+                <li><a href="users.html">Benutzer & Rollen</a></li>
+                <li><a href="teams.html">Teams & Lizenzen</a></li>
+                <li><a href="events.html">Wettkämpfe</a></li>
+                <li><a href="points.html">Punkte & Wertungen</a></li>
+                <li><a href="transfers.html">Transfers & Verträge</a></li>
+                <li><a href="reporting.html">Reporting & Audit</a></li>
+                <li><a href="operations.html">Operations Hub</a></li>
+                <li><a href="settings.html">Einstellungen</a></li>
+            </ul>
+        </div>
+
+        <div class="portal-main">
+            <div class="portal-header">
+                <h1>Operations Hub</h1>
+                <div class="portal-user-info">
+                    <div>
+                        <div class="user-badge" data-session-user>Admin</div>
+                        <div data-session-role>Admin</div>
+                    </div>
+                    <button id="logout-button" class="btn btn-secondary btn-small">Abmelden</button>
+                </div>
+            </div>
+
+            <div class="portal-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Portal-Landschaft</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="kpi-grid">
+                            <div class="kpi-card">
+                                <div class="kpi-label">MSC Admin Dashboard</div>
+                                <div class="kpi-subtext">Regelversionierung, Saisonplanung, Jury, Disziplinar, Finanzen</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">LOC Dashboard</div>
+                                <div class="kpi-subtext">Schanzenfreigabe, Windmonitoring, Gate Panel, Notfallprotokolle</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Team Portal</div>
+                                <div class="kpi-subtext">Registrierung, Athleten, Materialchecks, Transfers, Medical Uploads</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Athlete App</div>
+                                <div class="kpi-subtext">Profile, Medical Clearance, Startlisten, Ergebnisse, Notifications</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Public Site</div>
+                                <div class="kpi-subtext">Live Ticker, Startlisten, Standings, Clips mit Embargo-Regeln</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Systemumfang: Module & Prioritäten</h2>
+                    </div>
+                    <div class="card-body">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Modul</th>
+                                    <th>Priorität</th>
+                                    <th>Kategorie</th>
+                                    <th>Status</th>
+                                    <th>Owner Rolle</th>
+                                    <th>Letztes Update</th>
+                                    <th>Aktion</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scope-modules-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Moduleintrag erfassen</h2>
+                    </div>
+                    <form id="module-record-form">
+                        <div class="grid-3">
+                            <div class="form-group">
+                                <label>Modul *</label>
+                                <select name="moduleKey" id="module-record-module" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Titel *</label>
+                                <input type="text" name="title" placeholder="Beispiel: Akkreditierung Crew Event 3 freigegeben" required />
+                            </div>
+                            <div class="form-group">
+                                <label>Status *</label>
+                                <select name="status" required>
+                                    <option value="planned">Geplant</option>
+                                    <option value="in_progress">In Bearbeitung</option>
+                                    <option value="live">Live</option>
+                                    <option value="blocked">Blockiert</option>
+                                    <option value="completed">Abgeschlossen</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Owner Rolle</label>
+                                <input type="text" name="ownerRole" placeholder="z.B. LOC, Jury, Medical, MSC Admin" />
+                            </div>
+                            <div class="form-group">
+                                <label>Portal-Kontext</label>
+                                <select name="portalContext">
+                                    <option value="msc_admin">MSC Admin Dashboard</option>
+                                    <option value="loc">LOC Dashboard</option>
+                                    <option value="team">Team Portal</option>
+                                    <option value="athlete">Athlete App</option>
+                                    <option value="public">Public Site</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Priorität</label>
+                                <select name="priority">
+                                    <option value="critical">Kritisch</option>
+                                    <option value="high">Hoch</option>
+                                    <option value="normal">Normal</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Detailnotiz</label>
+                            <textarea name="notes" placeholder="Beispiel: Gate Panel auf 2026/27 Regelstand kalibriert, Notfallkette getestet."></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">Eintrag speichern</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Wichtige Workflows (interaktiv)</h2>
+                    </div>
+                    <form id="workflow-execution-form" class="card-body">
+                        <div class="grid-3">
+                            <div class="form-group">
+                                <label>Workflow *</label>
+                                <select name="workflowKey" id="workflow-selector" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Event-ID</label>
+                                <input type="number" name="eventId" min="1" placeholder="z.B. 5" />
+                            </div>
+                            <div class="form-group">
+                                <label>Kommentar</label>
+                                <input type="text" name="note" placeholder="Kurzbeschreibung des Laufes" />
+                            </div>
+                            <div class="form-group">
+                                <label>Medical Clearance</label>
+                                <select name="clearance">
+                                    <option value="true">Freigegeben</option>
+                                    <option value="false">Nicht freigegeben</option>
+                                </select>
+                                <div class="help-text">Bei Medical Flow muss Freigabe auf "Freigegeben" stehen.</div>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">Workflow ausführen</button>
+                        </div>
+                    </form>
+                    <div class="card-body">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Zeit</th>
+                                    <th>Workflow</th>
+                                    <th>Status</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="workflow-logs-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Module-Feed & Public API Vorschau</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary btn-small" id="refresh-operations">Aktualisieren</button>
+                            <button type="button" class="btn btn-secondary btn-small" id="load-public-standings">Public Standings laden</button>
+                        </div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Modul</th>
+                                    <th>Titel</th>
+                                    <th>Status</th>
+                                    <th>Portal</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="module-records-body"></tbody>
+                        </table>
+                        <h3 class="mb-20">Public API: /api/public/standings</h3>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Platz</th>
+                                    <th>Entry</th>
+                                    <th>Punkte</th>
+                                    <th>Starts</th>
+                                </tr>
+                            </thead>
+                            <tbody id="public-standings-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="portal.js"></script>
+    <script>
+        if (!isLoginPage()) {
+            const state = {
+                modules: [],
+                workflows: [],
+                records: [],
+                workflowLogs: []
+            };
+
+            function renderModuleOptions() {
+                const moduleSelect = document.getElementById("module-record-module");
+                const options = state.modules
+                    .map((moduleEntry) => `<option value="${escapeHtml(moduleEntry.key)}">${escapeHtml(moduleEntry.name)}</option>`)
+                    .join("");
+                moduleSelect.innerHTML = `<option value="">-- Bitte auswählen --</option>${options}`;
+            }
+
+            function renderWorkflowOptions() {
+                const workflowSelect = document.getElementById("workflow-selector");
+                const options = state.workflows
+                    .map((workflowEntry) => `<option value="${escapeHtml(workflowEntry.key)}">${escapeHtml(workflowEntry.name)}</option>`)
+                    .join("");
+                workflowSelect.innerHTML = `<option value="">-- Bitte auswählen --</option>${options}`;
+            }
+
+            function renderScopeModules() {
+                const body = document.getElementById("scope-modules-body");
+                const html = state.modules.map((moduleEntry) => {
+                    const moduleState = moduleEntry.state || {};
+                    const status = moduleState.status || "planned";
+                    const ownerRole = moduleState.ownerRole || "—";
+                    const updated = moduleState.updated_at ? new Date(moduleState.updated_at).toLocaleString("de-DE") : "—";
+                    return `
+                        <tr>
+                            <td><strong>${escapeHtml(moduleEntry.name)}</strong></td>
+                            <td><span class="badge badge-${moduleEntry.priority === "critical" ? "danger" : "info"}">${escapeHtml(moduleEntry.priority)}</span></td>
+                            <td>${escapeHtml(moduleEntry.category)}</td>
+                            <td>${statusBadge(status)}</td>
+                            <td>${escapeHtml(ownerRole)}</td>
+                            <td>${updated}</td>
+                            <td>
+                                <button type="button" class="btn btn-small btn-secondary" data-open-module="${escapeHtml(moduleEntry.key)}">Eintrag erstellen</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join("");
+                body.innerHTML = html || "<tr><td colspan='7' class='table-empty'>Keine Module vorhanden.</td></tr>";
+                body.querySelectorAll("[data-open-module]").forEach((buttonNode) => {
+                    buttonNode.addEventListener("click", () => {
+                        const key = buttonNode.getAttribute("data-open-module");
+                        const moduleSelect = document.getElementById("module-record-module");
+                        moduleSelect.value = key;
+                        const moduleName = state.modules.find((entry) => entry.key === key)?.name || "";
+                        document.querySelector("input[name='title']").value = `${moduleName} - Update`;
+                        window.scrollTo({ top: 580, behavior: "smooth" });
+                    });
+                });
+            }
+
+            function renderRecords() {
+                const body = document.getElementById("module-records-body");
+                const html = state.records.map((record) => `
+                    <tr>
+                        <td>${escapeHtml(record.module_key)}</td>
+                        <td><strong>${escapeHtml(record.title)}</strong></td>
+                        <td>${statusBadge(record.status)}</td>
+                        <td>${escapeHtml(record.payload?.portalContext || "—")}</td>
+                        <td>
+                            <button type="button" class="btn btn-small btn-danger" data-delete-record="${record.id}">Löschen</button>
+                        </td>
+                    </tr>
+                `).join("");
+                body.innerHTML = html || "<tr><td colspan='5' class='table-empty'>Noch keine Moduleinträge vorhanden.</td></tr>";
+                body.querySelectorAll("[data-delete-record]").forEach((buttonNode) => {
+                    buttonNode.addEventListener("click", () => {
+                        const id = Number(buttonNode.getAttribute("data-delete-record"));
+                        confirmDelete("Diesen Moduleintrag", async () => {
+                            try {
+                                await api(`/module-records/${id}`, { method: "DELETE" });
+                                showToast("Eintrag gelöscht.", "success");
+                                await refreshOperationsPage();
+                            } catch (error) {
+                                showToast(error.message, "error");
+                            }
+                        });
+                    });
+                });
+            }
+
+            function renderWorkflowLogs() {
+                const body = document.getElementById("workflow-logs-body");
+                const html = state.workflowLogs.map((entry) => `
+                    <tr>
+                        <td>${entry.created_at ? new Date(entry.created_at).toLocaleString("de-DE") : "—"}</td>
+                        <td><strong>${escapeHtml(entry.workflow_name)}</strong></td>
+                        <td>${statusBadge(entry.status || "completed")}</td>
+                        <td>${escapeHtml(entry.payload?.steps?.join(" → ") || "—")}</td>
+                    </tr>
+                `).join("");
+                body.innerHTML = html || "<tr><td colspan='4' class='table-empty'>Noch keine Workflow-Läufe vorhanden.</td></tr>";
+            }
+
+            async function loadPublicStandings() {
+                try {
+                    const result = await api("/public/standings");
+                    const rows = Array.isArray(result?.standings) ? result.standings : [];
+                    const html = rows.slice(0, 20).map((entry) => `
+                        <tr>
+                            <td>${entry.rank}</td>
+                            <td>${escapeHtml(entry.entryName)}</td>
+                            <td>${entry.totalPoints}</td>
+                            <td>${entry.starts}</td>
+                        </tr>
+                    `).join("");
+                    document.getElementById("public-standings-body").innerHTML = html || "<tr><td colspan='4' class='table-empty'>Noch keine Public-Daten vorhanden.</td></tr>";
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            }
+
+            async function refreshOperationsPage() {
+                const [scope, records, workflowLogs] = await Promise.all([
+                    api("/system-scope"),
+                    api("/module-records"),
+                    api("/workflows/logs")
+                ]);
+                state.modules = Array.isArray(scope?.modules) ? scope.modules : [];
+                state.workflows = Array.isArray(scope?.workflows) ? scope.workflows : [];
+                state.records = Array.isArray(records) ? records : [];
+                state.workflowLogs = Array.isArray(workflowLogs) ? workflowLogs : [];
+                renderModuleOptions();
+                renderWorkflowOptions();
+                renderScopeModules();
+                renderRecords();
+                renderWorkflowLogs();
+            }
+
+            window.refreshOperationsPage = refreshOperationsPage;
+
+            document.getElementById("module-record-form").addEventListener("submit", async (event) => {
+                event.preventDefault();
+                const data = getFormData(event.target);
+                const payload = {
+                    moduleKey: data.moduleKey,
+                    title: data.title,
+                    status: data.status,
+                    ownerRole: data.ownerRole,
+                    payload: {
+                        portalContext: data.portalContext,
+                        priority: data.priority,
+                        notes: data.notes
+                    }
+                };
+                try {
+                    await api("/module-records", {
+                        method: "POST",
+                        body: JSON.stringify(payload)
+                    });
+                    showToast("Moduleintrag gespeichert.", "success");
+                    event.target.reset();
+                    await refreshOperationsPage();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+
+            document.getElementById("workflow-execution-form").addEventListener("submit", async (event) => {
+                event.preventDefault();
+                const data = getFormData(event.target);
+                const payload = {
+                    workflowKey: data.workflowKey,
+                    input: {
+                        eventId: data.eventId ? Number(data.eventId) : null,
+                        note: data.note || "",
+                        clearance: data.clearance === "true"
+                    }
+                };
+                try {
+                    await api("/workflows/execute", {
+                        method: "POST",
+                        body: JSON.stringify(payload)
+                    });
+                    showToast("Workflow erfolgreich ausgeführt.", "success");
+                    await refreshOperationsPage();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+
+            document.getElementById("refresh-operations").addEventListener("click", async () => {
+                await refreshOperationsPage();
+                showToast("Operations Hub aktualisiert.", "info");
+            });
+
+            document.getElementById("load-public-standings").addEventListener("click", loadPublicStandings);
+
+            document.addEventListener("DOMContentLoaded", async () => {
+                try {
+                    await refreshOperationsPage();
+                    await loadPublicStandings();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+        }
+    </script>
+</body>
+</html>
