@@ -10,27 +10,35 @@
     <main class="login-shell">
         <section class="login-card">
             <span class="portal-badge">MSC Portal</span>
-            <h1>Portal Login</h1>
-            <p>Ohne vordefinierte Daten. Zugang und Inhalte konfigurierst du selbst.</p>
-            <div class="stack">
+            <h1>Login</h1>
+            <p>Authentifizierung über das Backend mit Rollen und Audit-Log.</p>
+
+            <div id="login-message" class="login-note hidden"></div>
+
+            <form id="login-form" class="stack">
                 <div class="field">
                     <label for="login-username">Benutzerkennung</label>
-                    <input id="login-username" type="text" autocomplete="username">
+                    <input id="login-username" name="username" type="text" autocomplete="username" required>
                 </div>
                 <div class="field">
                     <label for="login-password">Passwort</label>
-                    <input id="login-password" type="password" autocomplete="current-password">
+                    <input id="login-password" name="password" type="password" autocomplete="current-password" required>
                 </div>
-                <div class="field">
-                    <label for="login-role">Rolle</label>
-                    <input id="login-role" type="text" placeholder="Optional">
-                </div>
-                <button id="login-button" class="btn-primary">Anmelden</button>
-            </div>
-            <div id="login-message" class="login-note hidden"></div>
-            <div class="login-links">
-                <span>Passwort-Reset folgt später mit Backend.</span>
-                <a href="../index.html">Zur Website</a>
+                <button class="btn-primary" type="submit">Anmelden</button>
+            </form>
+
+            <hr style="border-color: rgba(255,255,255,.15); margin: 20px 0;">
+
+            <div id="bootstrap-section" class="hidden">
+                <h3 style="margin-top:0;">Erstkonfiguration</h3>
+                <p class="login-note">Es gibt noch keinen Admin. Lege jetzt den ersten MSC-Admin an.</p>
+                <form id="bootstrap-form" class="stack">
+                    <div class="field"><label for="bootstrap-username">Benutzerkennung</label><input id="bootstrap-username" name="username" type="text" required></div>
+                    <div class="field"><label for="bootstrap-name">Name</label><input id="bootstrap-name" name="name" type="text" required></div>
+                    <div class="field"><label for="bootstrap-email">E-Mail</label><input id="bootstrap-email" name="email" type="email" required></div>
+                    <div class="field"><label for="bootstrap-password">Passwort</label><input id="bootstrap-password" name="password" type="password" required></div>
+                    <button class="btn-secondary" type="submit">Admin erstellen</button>
+                </form>
             </div>
         </section>
     </main>

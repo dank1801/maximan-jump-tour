@@ -9,10 +9,7 @@
 <body>
     <div class="portal-shell">
         <aside class="portal-sidebar">
-            <div class="portal-brand">
-                <h1>MSC Portal</h1>
-                <p>Team- und Lizenzverwaltung ohne Seed-Daten.</p>
-            </div>
+            <div class="portal-brand"><h1>MSC Portal</h1><p>Teams, Mitglieder und Lizenzen.</p></div>
             <nav class="portal-nav">
                 <a href="dashboard.html">Dashboard <small>Start</small></a>
                 <a href="users.html">Benutzer & Rollen <small>RBAC</small></a>
@@ -26,59 +23,51 @@
         </aside>
         <main class="portal-main">
             <header class="portal-topbar">
-                <div class="portal-topbar-left">
-                    <span class="portal-kicker">Teams & Lizenzen</span>
-                    <div class="portal-topbar-title">Teamstruktur</div>
-                </div>
-                <div class="portal-topbar-right">
-                    <span class="portal-user-chip"><span data-session-user>Nicht gesetzt</span></span>
-                    <button id="logout-button" class="btn-small">Logout</button>
-                </div>
+                <div class="portal-topbar-left"><span class="portal-kicker">Teams & Lizenzen</span><div class="portal-topbar-title">Teamverwaltung</div></div>
+                <div class="portal-topbar-right"><span class="portal-user-chip"><span data-session-user></span></span><span class="portal-user-chip"><span data-session-role></span></span><button id="logout-button" class="btn-small">Logout</button></div>
             </header>
             <section class="portal-content">
-                <div class="page-hero">
-                    <div>
-                        <h2>Teams & Lizenzen</h2>
-                        <p>Alle Team- und Lizenzdaten legst du selbst an.</p>
-                    </div>
-                    <div class="hero-actions">
-                        <button class="btn" data-open-modal="team-modal">Team anlegen</button>
-                    </div>
+                <div id="page-message" class="login-note hidden"></div>
+                <div class="grid-2">
+                    <section class="panel">
+                        <div class="panel-header"><div><h3>Team anlegen</h3></div></div>
+                        <form id="team-form" class="form-grid">
+                            <div class="field"><label>Teamname</label><input name="name" required></div>
+                            <div class="field"><label>Nation</label><input name="nation"></div>
+                            <div class="field"><label>Kategorie</label><input name="category"></div>
+                            <div class="field"><label>Manager User ID</label><input name="managerUserId" type="number"></div>
+                            <div class="field" style="align-self:end;"><button class="btn" type="submit">Team speichern</button></div>
+                        </form>
+                    </section>
+                    <section class="panel">
+                        <div class="panel-header"><div><h3>Mitglied/Lizenz anlegen</h3></div></div>
+                        <form id="team-member-form" class="form-grid">
+                            <div class="field"><label>Team ID</label><input name="teamId" type="number" required></div>
+                            <div class="field"><label>Name</label><input name="name" required></div>
+                            <div class="field"><label>Rolle</label><input name="memberRole" required></div>
+                            <div class="field"><label>Lizenztyp</label><input name="licenseType"></div>
+                            <div class="field"><label>Lizenz gültig bis</label><input name="licenseValidUntil" type="date"></div>
+                            <div class="field"><label>Lizenzstatus</label><input name="licenseStatus" placeholder="valid / in_review / expired"></div>
+                            <div class="field" style="align-self:end;"><button class="btn" type="submit">Mitglied speichern</button></div>
+                        </form>
+                    </section>
                 </div>
-
                 <section class="panel">
-                    <div class="panel-header"><div><h3>Teamübersicht</h3></div></div>
+                    <div class="panel-header"><div><h3>Teams</h3></div></div>
                     <table class="panel-table">
-                        <thead><tr><th>Team</th><th>Nation</th><th>Kategorie</th><th>Teammanager</th><th>Status</th><th>Aktionen</th></tr></thead>
-                        <tbody><tr><td colspan="6" class="empty-state">Keine Teams vorhanden.</td></tr></tbody>
+                        <thead><tr><th>ID</th><th>Name</th><th>Nation</th><th>Kategorie</th><th>Manager</th><th>Status</th><th>Aktion</th></tr></thead>
+                        <tbody id="teams-table"></tbody>
                     </table>
                 </section>
-
                 <section class="panel">
-                    <div class="panel-header"><div><h3>Lizenzhistorie</h3></div></div>
-                    <div class="empty-state">Keine Lizenzentscheidungen vorhanden.</div>
+                    <div class="panel-header"><div><h3>Mitglieder / Lizenzen</h3></div></div>
+                    <table class="panel-table">
+                        <thead><tr><th>ID</th><th>Team ID</th><th>Name</th><th>Rolle</th><th>Lizenz</th><th>Gültig bis</th><th>Status</th><th>Aktion</th></tr></thead>
+                        <tbody id="team-members-table"></tbody>
+                    </table>
                 </section>
             </section>
         </main>
-    </div>
-
-    <div id="team-modal" class="modal hidden">
-        <div class="login-card" style="width:min(100%,540px);">
-            <div class="panel-header">
-                <div><h3>Neues Team</h3><p>Leeren Teamdatensatz anlegen.</p></div>
-                <button class="btn-small" data-close-modal>&times;</button>
-            </div>
-            <div class="form-grid">
-                <div class="field"><label>Teamname</label><input type="text"></div>
-                <div class="field"><label>Nation</label><input type="text"></div>
-                <div class="field"><label>Kategorie</label><input type="text"></div>
-                <div class="field"><label>Teammanager</label><input type="text"></div>
-            </div>
-            <div class="form-actions" style="margin-top: 14px;">
-                <button class="btn">Speichern</button>
-                <button class="btn-secondary" data-close-modal>Abbrechen</button>
-            </div>
-        </div>
     </div>
     <script src="portal.js"></script>
 </body>

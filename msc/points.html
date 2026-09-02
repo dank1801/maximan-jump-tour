@@ -9,7 +9,7 @@
 <body>
     <div class="portal-shell">
         <aside class="portal-sidebar">
-            <div class="portal-brand"><h1>MSC Portal</h1><p>Punktemodul ohne vordefinierte Regeln.</p></div>
+            <div class="portal-brand"><h1>MSC Portal</h1><p>Punktelogik und Ergebnisse.</p></div>
             <nav class="portal-nav">
                 <a href="dashboard.html">Dashboard <small>Start</small></a>
                 <a href="users.html">Benutzer & Rollen <small>RBAC</small></a>
@@ -23,14 +23,43 @@
         </aside>
         <main class="portal-main">
             <header class="portal-topbar">
-                <div class="portal-topbar-left"><span class="portal-kicker">Punkte & Wertungen</span><div class="portal-topbar-title">Regelsystem</div></div>
-                <div class="portal-topbar-right"><span class="portal-user-chip"><span data-session-user>Nicht gesetzt</span></span><button id="logout-button" class="btn-small">Logout</button></div>
+                <div class="portal-topbar-left"><span class="portal-kicker">Punkte & Wertungen</span><div class="portal-topbar-title">Regeln und Ergebnisse</div></div>
+                <div class="portal-topbar-right"><span class="portal-user-chip"><span data-session-user></span></span><span class="portal-user-chip"><span data-session-role></span></span><button id="logout-button" class="btn-small">Logout</button></div>
             </header>
             <section class="portal-content">
-                <div class="page-hero"><div><h2>Punkte & Wertungen</h2><p>Regeldefinitionen, Eventwertungen und Gesamtstände sind leer.</p></div></div>
-                <section class="panel"><div class="panel-header"><div><h3>Punkte-Regelsystem</h3></div></div><div class="empty-state">Keine Regeln konfiguriert.</div></section>
-                <section class="panel"><div class="panel-header"><div><h3>Event-Wertungen</h3></div></div><table class="panel-table"><thead><tr><th>Rang</th><th>Name</th><th>Event</th><th>Punkte</th><th>Bonus</th><th>Kommentar</th></tr></thead><tbody><tr><td colspan="6" class="empty-state">Keine Wertungen vorhanden.</td></tr></tbody></table></section>
-                <section class="panel"><div class="panel-header"><div><h3>Gesamtwertungen</h3></div></div><table class="panel-table"><thead><tr><th>Rang</th><th>Name</th><th>Punkte</th><th>Status</th></tr></thead><tbody><tr><td colspan="4" class="empty-state">Keine Gesamtwertungen vorhanden.</td></tr></tbody></table></section>
+                <div id="page-message" class="login-note hidden"></div>
+                <div class="grid-2">
+                    <section class="panel">
+                        <div class="panel-header"><div><h3>Punktregel anlegen</h3></div></div>
+                        <form id="point-rule-form" class="form-grid">
+                            <div class="field"><label>Name</label><input name="name" required></div>
+                            <div class="field"><label>Typ</label><input name="ruleType" required></div>
+                            <div class="field" style="grid-column:1/-1;"><label>Konfiguration (JSON)</label><textarea name="configJson">{}</textarea></div>
+                            <div class="field"><label>Aktiv</label><select name="active"><option value="1">Ja</option><option value="0">Nein</option></select></div>
+                            <div class="field" style="align-self:end;"><button class="btn" type="submit">Regel speichern</button></div>
+                        </form>
+                    </section>
+                    <section class="panel">
+                        <div class="panel-header"><div><h3>Eventwertung anlegen</h3></div></div>
+                        <form id="event-score-form" class="form-grid">
+                            <div class="field"><label>Event ID</label><input name="eventId" type="number"></div>
+                            <div class="field"><label>Name</label><input name="entryName" required></div>
+                            <div class="field"><label>Rang</label><input name="rankPosition" type="number"></div>
+                            <div class="field"><label>Punkte</label><input name="points" type="number" step="0.01"></div>
+                            <div class="field"><label>Bonus</label><input name="bonusPoints" type="number" step="0.01"></div>
+                            <div class="field" style="grid-column:1/-1;"><label>Notiz</label><textarea name="notes"></textarea></div>
+                            <div class="field" style="align-self:end;"><button class="btn" type="submit">Wertung speichern</button></div>
+                        </form>
+                    </section>
+                </div>
+                <section class="panel">
+                    <div class="panel-header"><div><h3>Punktregeln</h3></div></div>
+                    <table class="panel-table"><thead><tr><th>ID</th><th>Name</th><th>Typ</th><th>Aktiv</th><th>Konfiguration</th><th>Aktion</th></tr></thead><tbody id="point-rules-table"></tbody></table>
+                </section>
+                <section class="panel">
+                    <div class="panel-header"><div><h3>Eventwertungen</h3></div></div>
+                    <table class="panel-table"><thead><tr><th>ID</th><th>Event</th><th>Name</th><th>Rang</th><th>Punkte</th><th>Bonus</th><th>Notiz</th><th>Aktion</th></tr></thead><tbody id="event-scores-table"></tbody></table>
+                </section>
             </section>
         </main>
     </div>

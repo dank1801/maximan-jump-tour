@@ -9,7 +9,7 @@
 <body>
     <div class="portal-shell">
         <aside class="portal-sidebar">
-            <div class="portal-brand"><h1>MSC Portal</h1><p>Systemeinstellungen ohne vordefinierte Werte.</p></div>
+            <div class="portal-brand"><h1>MSC Portal</h1><p>System-, Sicherheits- und Lizenzsettings.</p></div>
             <nav class="portal-nav">
                 <a href="dashboard.html">Dashboard <small>Start</small></a>
                 <a href="users.html">Benutzer & Rollen <small>RBAC</small></a>
@@ -23,38 +23,36 @@
         </aside>
         <main class="portal-main">
             <header class="portal-topbar">
-                <div class="portal-topbar-left"><span class="portal-kicker">Einstellungen</span><div class="portal-topbar-title">Systemparameter</div></div>
-                <div class="portal-topbar-right"><span class="portal-user-chip"><span data-session-user>Nicht gesetzt</span></span><button id="logout-button" class="btn-small">Logout</button></div>
+                <div class="portal-topbar-left"><span class="portal-kicker">Einstellungen</span><div class="portal-topbar-title">Systemkonfiguration</div></div>
+                <div class="portal-topbar-right"><span class="portal-user-chip"><span data-session-user></span></span><span class="portal-user-chip"><span data-session-role></span></span><button id="logout-button" class="btn-small">Logout</button></div>
             </header>
             <section class="portal-content">
-                <div class="page-hero"><div><h2>Einstellungen</h2><p>Alle Konfigurationsfelder sind leer und können frei gesetzt werden.</p></div></div>
-
+                <div id="page-message" class="login-note hidden"></div>
                 <section class="panel">
-                    <div class="panel-header"><div><h3>Systemkonfiguration</h3></div></div>
-                    <div class="form-grid">
-                        <div class="field"><label>Zeitzone</label><input type="text"></div>
-                        <div class="field"><label>Sprache</label><input type="text"></div>
-                        <div class="field"><label>Standard-Saison</label><input type="text"></div>
-                        <div class="field"><label>Default-Punkte-Schema</label><input type="text"></div>
-                    </div>
+                    <div class="panel-header"><div><h3>System & Sicherheit speichern</h3></div></div>
+                    <form id="settings-form" class="form-grid">
+                        <div class="field"><label>Zeitzone</label><input name="timezone"></div>
+                        <div class="field"><label>Sprache</label><input name="language"></div>
+                        <div class="field"><label>Standard-Saison</label><input name="defaultSeason"></div>
+                        <div class="field"><label>Default-Punkteschema</label><input name="defaultPointsSchema"></div>
+                        <div class="field"><label>Passwort-Mindestlänge</label><input name="passwordMinLength" type="number"></div>
+                        <div class="field"><label>Session-Timeout (Min)</label><input name="sessionTimeoutMinutes" type="number"></div>
+                        <div class="field"><label>2FA-Modus</label><input name="twoFactorMode"></div>
+                        <div class="field" style="align-self:end;"><button class="btn" type="submit">Settings speichern</button></div>
+                    </form>
                 </section>
-
                 <section class="panel">
-                    <div class="panel-header"><div><h3>Sicherheit</h3></div></div>
-                    <div class="form-grid">
-                        <div class="field"><label>Passwort-Mindestlänge</label><input type="text"></div>
-                        <div class="field"><label>Session-Timeout</label><input type="text"></div>
-                        <div class="field"><label>2FA-Modus</label><input type="text"></div>
-                        <div class="field"><label>Aktivierungsdatum</label><input type="text"></div>
-                    </div>
+                    <div class="panel-header"><div><h3>Lizenzkategorie anlegen</h3></div></div>
+                    <form id="license-category-form" class="form-grid">
+                        <div class="field"><label>Kürzel</label><input name="code" required></div>
+                        <div class="field"><label>Beschreibung</label><input name="description" required></div>
+                        <div class="field" style="grid-column:1/-1;"><label>Voraussetzungen</label><textarea name="requirements" required></textarea></div>
+                        <div class="field" style="align-self:end;"><button class="btn" type="submit">Kategorie speichern</button></div>
+                    </form>
                 </section>
-
                 <section class="panel">
                     <div class="panel-header"><div><h3>Lizenzkategorien</h3></div></div>
-                    <table class="panel-table">
-                        <thead><tr><th>Kategorie</th><th>Beschreibung</th><th>Voraussetzungen</th></tr></thead>
-                        <tbody><tr><td colspan="3" class="empty-state">Keine Lizenzdefinitionen vorhanden.</td></tr></tbody>
-                    </table>
+                    <table class="panel-table"><thead><tr><th>Kürzel</th><th>Beschreibung</th><th>Voraussetzungen</th></tr></thead><tbody id="license-categories-table"></tbody></table>
                 </section>
             </section>
         </main>

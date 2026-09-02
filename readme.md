@@ -63,24 +63,24 @@ git clone https://github.com/yourusername/maximan-jump-tour.git
 cd maximan-jump-tour
 ```
 
-2. **Live Server starten**
+2. **Dependencies installieren**
 ```bash
-# Mit Python 3
-python -m http.server 8000
-
-# Mit Node.js (http-server)
-npm install -g http-server
-http-server
+npm install
 ```
 
-3. **Browser öffnen**
+3. **Backend + Website starten**
+```bash
+npm run start
 ```
-http://localhost:8000
+
+4. **Browser öffnen**
+```
+http://localhost:3000
 ```
 
 ### Anforderungen
 - Moderner Webbrowser (Chrome, Firefox, Safari, Edge)
-- Keine zusätzlichen Dependencies erforderlich!
+- Node.js 20+
 
 ## 🎯 Seiten & Funktionen
 
@@ -206,6 +206,20 @@ Small:    360px - 479px
 - XSS-Protection durch sanitized inputs
 - CSRF-Token ready (für Backend)
 - Datenschutz-konform
+
+## 🏁 MSC Portal Backend
+
+Das MSC Portal unter `msc/` läuft jetzt mit echtem Backend:
+
+- Node.js + Express
+- SQLite (lokal unter `.runtime/msc-portal.db`)
+- JWT Login
+- Rollenbasierte Berechtigungen
+- Audit-Logs für Änderungen
+
+### Erststart (Bootstrap Admin)
+
+Beim ersten Aufruf von `msc/login.html` erscheint automatisch die Erstkonfiguration für den ersten MSC-Admin.
 
 ## 🐛 Troubleshooting
 

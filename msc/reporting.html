@@ -9,7 +9,7 @@
 <body>
     <div class="portal-shell">
         <aside class="portal-sidebar">
-            <div class="portal-brand"><h1>MSC Portal</h1><p>Reporting- und Auditmodul ohne Beispieldaten.</p></div>
+            <div class="portal-brand"><h1>MSC Portal</h1><p>Reporting, Publikationen und Audit-Log.</p></div>
             <nav class="portal-nav">
                 <a href="dashboard.html">Dashboard <small>Start</small></a>
                 <a href="users.html">Benutzer & Rollen <small>RBAC</small></a>
@@ -23,14 +23,35 @@
         </aside>
         <main class="portal-main">
             <header class="portal-topbar">
-                <div class="portal-topbar-left"><span class="portal-kicker">Reporting & Audit</span><div class="portal-topbar-title">Auswertung</div></div>
-                <div class="portal-topbar-right"><span class="portal-user-chip"><span data-session-user>Nicht gesetzt</span></span><button id="logout-button" class="btn-small">Logout</button></div>
+                <div class="portal-topbar-left"><span class="portal-kicker">Reporting & Audit</span><div class="portal-topbar-title">Auswertungen</div></div>
+                <div class="portal-topbar-right"><span class="portal-user-chip"><span data-session-user></span></span><span class="portal-user-chip"><span data-session-role></span></span><button id="logout-button" class="btn-small">Logout</button></div>
             </header>
             <section class="portal-content">
-                <div class="page-hero"><div><h2>Reporting & Audit</h2><p>Live-Daten, Historien, Logs und Veröffentlichungen startklar ohne vorgegebene Datensätze.</p></div></div>
-                <section class="panel"><div class="panel-header"><div><h3>Live-Ergebnisse</h3></div></div><div class="empty-state">Keine Live-Ergebnisse vorhanden.</div></section>
-                <section class="panel"><div class="panel-header"><div><h3>Audit-Logs</h3></div></div><table class="panel-table"><thead><tr><th>Zeit</th><th>Benutzer</th><th>Aktion</th><th>Objekt</th></tr></thead><tbody><tr><td colspan="4" class="empty-state">Keine Audit-Einträge vorhanden.</td></tr></tbody></table></section>
-                <section class="panel"><div class="panel-header"><div><h3>Veröffentlichungen</h3></div></div><table class="panel-table"><thead><tr><th>Dokument</th><th>Status</th><th>Datum</th></tr></thead><tbody><tr><td colspan="3" class="empty-state">Keine Veröffentlichungen vorhanden.</td></tr></tbody></table></section>
+                <div id="page-message" class="login-note hidden"></div>
+                <section class="panel">
+                    <div class="panel-header"><div><h3>Veröffentlichung anlegen</h3></div></div>
+                    <form id="publication-form" class="form-grid">
+                        <div class="field"><label>Titel</label><input name="title" required></div>
+                        <div class="field"><label>Format</label><input name="format" placeholder="CSV / JSON / PDF" required></div>
+                        <div class="field"><label>Status</label><input name="status" placeholder="draft / published"></div>
+                        <div class="field"><label>Veröffentlicht am</label><input name="publishedAt" type="date"></div>
+                        <div class="field" style="align-self:end;"><button class="btn" type="submit">Speichern</button></div>
+                    </form>
+                </section>
+                <div class="grid-2">
+                    <section class="panel">
+                        <div class="panel-header"><div><h3>Live-Ergebnisse (Event Scores)</h3></div></div>
+                        <table class="panel-table"><thead><tr><th>ID</th><th>Event</th><th>Name</th><th>Rang</th><th>Punkte</th><th>Bonus</th></tr></thead><tbody id="reporting-live-table"></tbody></table>
+                    </section>
+                    <section class="panel">
+                        <div class="panel-header"><div><h3>Veröffentlichungen</h3></div></div>
+                        <table class="panel-table"><thead><tr><th>ID</th><th>Titel</th><th>Format</th><th>Status</th><th>Datum</th><th>Aktion</th></tr></thead><tbody id="publications-table"></tbody></table>
+                    </section>
+                </div>
+                <section class="panel">
+                    <div class="panel-header"><div><h3>Audit-Logs</h3></div></div>
+                    <table class="panel-table"><thead><tr><th>Zeit</th><th>Benutzer</th><th>Aktion</th><th>Entity</th><th>Details</th></tr></thead><tbody id="reporting-audit-table"></tbody></table>
+                </section>
             </section>
         </main>
     </div>

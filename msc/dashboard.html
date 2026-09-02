@@ -9,10 +9,7 @@
 <body>
     <div class="portal-shell">
         <aside class="portal-sidebar">
-            <div class="portal-brand">
-                <h1>MSC Portal</h1>
-                <p>Leeres Grundgerüst ohne voreingestellte Inhalte.</p>
-            </div>
+            <div class="portal-brand"><h1>MSC Portal</h1><p>Backend-gestütztes Adminsystem.</p></div>
             <nav class="portal-nav">
                 <a href="dashboard.html">Dashboard <small>Start</small></a>
                 <a href="users.html">Benutzer & Rollen <small>RBAC</small></a>
@@ -26,40 +23,43 @@
         </aside>
         <main class="portal-main">
             <header class="portal-topbar">
-                <div class="portal-topbar-left">
-                    <span class="portal-kicker">Dashboard</span>
-                    <div class="portal-topbar-title">Konfigurationsstatus</div>
-                </div>
+                <div class="portal-topbar-left"><span class="portal-kicker">Dashboard</span><div class="portal-topbar-title">Live-Status</div></div>
                 <div class="portal-topbar-right">
-                    <span class="portal-user-chip"><span data-session-user>Nicht gesetzt</span></span>
-                    <span class="portal-user-chip"><span data-session-role>Nicht gesetzt</span></span>
+                    <span class="portal-user-chip"><span data-session-user></span></span>
+                    <span class="portal-user-chip"><span data-session-role></span></span>
                     <button id="logout-button" class="btn-small">Logout</button>
                 </div>
             </header>
-
             <section class="portal-content">
-                <div class="page-hero">
-                    <div>
-                        <h2>Dashboard</h2>
-                        <p>Alle Module sind vorbereitet. Inhalte, Regeln und Datensätze kannst du jetzt vollständig selbst einpflegen.</p>
-                    </div>
-                </div>
-
+                <div id="page-message" class="login-note hidden"></div>
                 <div class="grid-kpis">
-                    <article class="kpi-card"><div class="kpi-label">Offene Lizenzanträge</div><div class="kpi-value">—</div><div class="kpi-meta">Nicht konfiguriert</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Bevorstehende Events</div><div class="kpi-value">—</div><div class="kpi-meta">Nicht konfiguriert</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Aktive Teams</div><div class="kpi-value">—</div><div class="kpi-meta">Nicht konfiguriert</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Audit-Einträge</div><div class="kpi-value">—</div><div class="kpi-meta">Nicht konfiguriert</div></article>
+                    <article class="kpi-card"><div class="kpi-label">Aktive Benutzer</div><div id="kpi-users" class="kpi-value">0</div></article>
+                    <article class="kpi-card"><div class="kpi-label">Aktive Teams</div><div id="kpi-teams" class="kpi-value">0</div></article>
+                    <article class="kpi-card"><div class="kpi-label">Events</div><div id="kpi-events" class="kpi-value">0</div></article>
+                    <article class="kpi-card"><div class="kpi-label">Offene Transfers</div><div id="kpi-transfers" class="kpi-value">0</div></article>
                 </div>
-
+                <div class="grid-2">
+                    <section class="panel">
+                        <div class="panel-header"><div><h3>Nächste Events</h3></div></div>
+                        <table class="panel-table">
+                            <thead><tr><th>Name</th><th>Ort</th><th>Datum</th><th>Status</th></tr></thead>
+                            <tbody id="dashboard-events-table"></tbody>
+                        </table>
+                    </section>
+                    <section class="panel">
+                        <div class="panel-header"><div><h3>Offene Lizenzen</h3></div></div>
+                        <table class="panel-table">
+                            <thead><tr><th>Name</th><th>Team</th><th>Lizenz</th><th>Status</th></tr></thead>
+                            <tbody id="dashboard-licenses-table"></tbody>
+                        </table>
+                    </section>
+                </div>
                 <section class="panel">
-                    <div class="panel-header">
-                        <div>
-                            <h3>Hinweis</h3>
-                            <p>Es sind keine Standarddaten mehr vorhanden.</p>
-                        </div>
-                    </div>
-                    <div class="empty-state">Lege Benutzer, Teams, Events, Punkte und Transfers in den jeweiligen Modulen an.</div>
+                    <div class="panel-header"><div><h3>Letzte Audit-Einträge</h3></div></div>
+                    <table class="panel-table">
+                        <thead><tr><th>Zeit</th><th>Benutzer</th><th>Aktion</th><th>Objekt</th></tr></thead>
+                        <tbody id="dashboard-audit-table"></tbody>
+                    </table>
                 </section>
             </section>
         </main>

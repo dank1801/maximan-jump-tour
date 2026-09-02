@@ -9,10 +9,7 @@
 <body>
     <div class="portal-shell">
         <aside class="portal-sidebar">
-            <div class="portal-brand">
-                <h1>MSC Portal</h1>
-                <p>Benutzer und Rollen ohne vordefinierte Datensätze.</p>
-            </div>
+            <div class="portal-brand"><h1>MSC Portal</h1><p>Benutzerverwaltung mit Rollenmodell.</p></div>
             <nav class="portal-nav">
                 <a href="dashboard.html">Dashboard <small>Start</small></a>
                 <a href="users.html">Benutzer & Rollen <small>RBAC</small></a>
@@ -26,65 +23,31 @@
         </aside>
         <main class="portal-main">
             <header class="portal-topbar">
-                <div class="portal-topbar-left">
-                    <span class="portal-kicker">Benutzer & Rollen</span>
-                    <div class="portal-topbar-title">Kontenverwaltung</div>
-                </div>
-                <div class="portal-topbar-right">
-                    <span class="portal-user-chip"><span data-session-user>Nicht gesetzt</span></span>
-                    <button id="logout-button" class="btn-small">Logout</button>
-                </div>
+                <div class="portal-topbar-left"><span class="portal-kicker">Benutzer & Rollen</span><div class="portal-topbar-title">Konten und Berechtigungen</div></div>
+                <div class="portal-topbar-right"><span class="portal-user-chip"><span data-session-user></span></span><span class="portal-user-chip"><span data-session-role></span></span><button id="logout-button" class="btn-small">Logout</button></div>
             </header>
-
             <section class="portal-content">
-                <div class="page-hero">
-                    <div>
-                        <h2>Benutzer & Rollen</h2>
-                        <p>Alle Listen sind leer. Du definierst Benutzer, Rollen und Rechte selbst.</p>
-                    </div>
-                    <div class="hero-actions">
-                        <button class="btn" data-open-modal="user-modal">Benutzer anlegen</button>
-                    </div>
-                </div>
-
+                <div id="page-message" class="login-note hidden"></div>
+                <section class="panel">
+                    <div class="panel-header"><div><h3>Neuen Benutzer erstellen</h3></div></div>
+                    <form id="user-form" class="form-grid">
+                        <div class="field"><label>Benutzerkennung</label><input name="username" required></div>
+                        <div class="field"><label>Name</label><input name="name" required></div>
+                        <div class="field"><label>E-Mail</label><input name="email" type="email" required></div>
+                        <div class="field"><label>Rolle</label><input name="role" placeholder="MSC Admin / Teammanager / Jury ..." required></div>
+                        <div class="field"><label>Passwort</label><input name="password" type="password" required></div>
+                        <div class="field" style="align-self:end;"><button class="btn" type="submit">Speichern</button></div>
+                    </form>
+                </section>
                 <section class="panel">
                     <div class="panel-header"><div><h3>Benutzerliste</h3></div></div>
                     <table class="panel-table">
-                        <thead><tr><th>Benutzerkennung</th><th>Name</th><th>Rolle</th><th>Status</th><th>Letzter Login</th><th>Aktionen</th></tr></thead>
-                        <tbody><tr><td colspan="6" class="empty-state">Keine Benutzer vorhanden.</td></tr></tbody>
-                    </table>
-                </section>
-
-                <section class="panel">
-                    <div class="panel-header"><div><h3>Rollenmatrix</h3></div></div>
-                    <table class="panel-table">
-                        <thead><tr><th>Rolle</th><th>Teams</th><th>Events</th><th>Punkte</th><th>Audit</th></tr></thead>
-                        <tbody><tr><td colspan="5" class="empty-state">Keine Rollen konfiguriert.</td></tr></tbody>
+                        <thead><tr><th>ID</th><th>Benutzer</th><th>Name</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th>Letzter Login</th><th>Aktion</th></tr></thead>
+                        <tbody id="users-table"></tbody>
                     </table>
                 </section>
             </section>
         </main>
-    </div>
-
-    <div id="user-modal" class="modal hidden">
-        <div class="login-card" style="width:min(100%,520px);">
-            <div class="panel-header">
-                <div><h3>Benutzer anlegen</h3><p>Neuen Datensatz anlegen.</p></div>
-                <button class="btn-small" data-close-modal>&times;</button>
-            </div>
-            <div class="form-grid">
-                <div class="field"><label>Benutzerkennung</label><input type="text"></div>
-                <div class="field"><label>Name</label><input type="text"></div>
-                <div class="field"><label>E-Mail</label><input type="email"></div>
-                <div class="field"><label>Rolle</label><input type="text"></div>
-                <div class="field"><label>Passwort</label><input type="password"></div>
-                <div class="field"><label>Passwort bestätigen</label><input type="password"></div>
-            </div>
-            <div class="form-actions" style="margin-top: 14px;">
-                <button class="btn">Speichern</button>
-                <button class="btn-secondary" data-close-modal>Abbrechen</button>
-            </div>
-        </div>
     </div>
     <script src="portal.js"></script>
 </body>

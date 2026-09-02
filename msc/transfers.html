@@ -9,7 +9,7 @@
 <body>
     <div class="portal-shell">
         <aside class="portal-sidebar">
-            <div class="portal-brand"><h1>MSC Portal</h1><p>Transfermodul ohne Default-Einträge.</p></div>
+            <div class="portal-brand"><h1>MSC Portal</h1><p>Transfers und Vertragsablage.</p></div>
             <nav class="portal-nav">
                 <a href="dashboard.html">Dashboard <small>Start</small></a>
                 <a href="users.html">Benutzer & Rollen <small>RBAC</small></a>
@@ -24,13 +24,44 @@
         <main class="portal-main">
             <header class="portal-topbar">
                 <div class="portal-topbar-left"><span class="portal-kicker">Transfers & Verträge</span><div class="portal-topbar-title">Transfersteuerung</div></div>
-                <div class="portal-topbar-right"><span class="portal-user-chip"><span data-session-user>Nicht gesetzt</span></span><button id="logout-button" class="btn-small">Logout</button></div>
+                <div class="portal-topbar-right"><span class="portal-user-chip"><span data-session-user></span></span><span class="portal-user-chip"><span data-session-role></span></span><button id="logout-button" class="btn-small">Logout</button></div>
             </header>
             <section class="portal-content">
-                <div class="page-hero"><div><h2>Transfers & Verträge</h2><p>Fenster, Sperrfristen, Anträge und Dokumente sind leer.</p></div></div>
-                <section class="panel"><div class="panel-header"><div><h3>Transferfenster</h3></div></div><div class="empty-state">Keine Fenster konfiguriert.</div></section>
-                <section class="panel"><div class="panel-header"><div><h3>Transferübersicht</h3></div></div><table class="panel-table"><thead><tr><th>Athlet</th><th>Von</th><th>Zu</th><th>Status</th><th>Sperrfrist</th><th>Aktionen</th></tr></thead><tbody><tr><td colspan="6" class="empty-state">Keine Transfers vorhanden.</td></tr></tbody></table></section>
-                <section class="panel"><div class="panel-header"><div><h3>Vertragsdokumente</h3></div></div><table class="panel-table"><thead><tr><th>Datei</th><th>Bezug</th><th>Status</th></tr></thead><tbody><tr><td colspan="3" class="empty-state">Keine Dokumente vorhanden.</td></tr></tbody></table></section>
+                <div id="page-message" class="login-note hidden"></div>
+                <div class="grid-2">
+                    <section class="panel">
+                        <div class="panel-header"><div><h3>Transfer anlegen</h3></div></div>
+                        <form id="transfer-form" class="form-grid">
+                            <div class="field"><label>Athlet</label><input name="athleteName" required></div>
+                            <div class="field"><label>Von Team ID</label><input name="fromTeamId" type="number"></div>
+                            <div class="field"><label>Zu Team ID</label><input name="toTeamId" type="number"></div>
+                            <div class="field"><label>Status</label><input name="status" placeholder="requested / approved / rejected"></div>
+                            <div class="field"><label>Sperrfrist bis</label><input name="lockUntil" type="date"></div>
+                            <div class="field"><label>Notfall</label><select name="isEmergency"><option value="0">Nein</option><option value="1">Ja</option></select></div>
+                            <div class="field" style="grid-column:1/-1;"><label>Notiz</label><textarea name="notes"></textarea></div>
+                            <div class="field" style="align-self:end;"><button class="btn" type="submit">Transfer speichern</button></div>
+                        </form>
+                    </section>
+                    <section class="panel">
+                        <div class="panel-header"><div><h3>Vertragsdokument anlegen</h3></div></div>
+                        <form id="contract-form" class="form-grid">
+                            <div class="field"><label>Dateiname</label><input name="fileName" required></div>
+                            <div class="field"><label>Entity Typ</label><input name="entityType" placeholder="athlete / team" required></div>
+                            <div class="field"><label>Entity ID</label><input name="entityId" type="number"></div>
+                            <div class="field"><label>Status</label><input name="status" placeholder="in_review / valid / expired"></div>
+                            <div class="field"><label>Gültig bis</label><input name="expiresAt" type="date"></div>
+                            <div class="field" style="align-self:end;"><button class="btn" type="submit">Dokument speichern</button></div>
+                        </form>
+                    </section>
+                </div>
+                <section class="panel">
+                    <div class="panel-header"><div><h3>Transfers</h3></div></div>
+                    <table class="panel-table"><thead><tr><th>ID</th><th>Athlet</th><th>Von</th><th>Zu</th><th>Status</th><th>Sperrfrist</th><th>Notfall</th><th>Aktion</th></tr></thead><tbody id="transfers-table"></tbody></table>
+                </section>
+                <section class="panel">
+                    <div class="panel-header"><div><h3>Vertragsdokumente</h3></div></div>
+                    <table class="panel-table"><thead><tr><th>ID</th><th>Datei</th><th>Entity</th><th>Status</th><th>Gültig bis</th><th>Aktion</th></tr></thead><tbody id="contracts-table"></tbody></table>
+                </section>
             </section>
         </main>
     </div>
