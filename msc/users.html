@@ -66,6 +66,11 @@
                                     <select id="create-user-role" name="role" required></select>
                                 </div>
                                 <div class="form-group">
+                                    <label for="create-user-team">Verknüpftes Team (für Teammanager)</label>
+                                    <select id="create-user-team" name="managedTeamId"></select>
+                                    <div class="help-text">Pflichtfeld bei Rolle „Teammanager“.</div>
+                                </div>
+                                <div class="form-group">
                                     <label for="create-user-password">Passwort</label>
                                     <input id="create-user-password" type="password" name="password" required placeholder="Mindestens 8 Zeichen empfohlen" />
                                 </div>
@@ -89,6 +94,7 @@
                                             <th>Benutzerkennung</th>
                                             <th>E-Mail</th>
                                             <th>Rolle</th>
+                                            <th>Team</th>
                                             <th>Status</th>
                                             <th>Letzter Login</th>
                                             <th>Aktion</th>

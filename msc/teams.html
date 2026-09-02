@@ -61,8 +61,11 @@
                                 <input type="text" name="nation" placeholder="z.B. Deutschland" />
                             </div>
                             <div class="form-group">
-                                <label>Kontaktperson</label>
-                                <input type="text" name="contact_person" placeholder="Name des Managers" />
+                                <label>Teammanager</label>
+                                <select id="create-team-manager" name="managerUserId">
+                                    <option value="">-- Kein Teammanager zuweisen --</option>
+                                </select>
+                                <div class="help-text">Nur Benutzer mit Rolle „Teammanager“ werden angezeigt.</div>
                             </div>
                         </div>
                         <div class="form-actions">
@@ -145,6 +148,7 @@
                             });
                             showToast(`Team ${data.name} wurde erstellt.`, "success");
                             form.reset();
+                            await loadTeamManagerOptions();
                             loadTeams();
                         } catch (error) {
                             showToast(error.message, "error");
@@ -152,6 +156,28 @@
                     });
                 }
             });
+
+            async function loadTeamManagerOptions() {
+                const select = document.getElementById("create-team-manager");
+                if (!select) return;
+                try {
+                    const [users, teams] = await Promise.all([api("/users"), api("/teams")]);
+                    const assigned = new Set(
+                        (Array.isArray(teams) ? teams : [])
+                            .map((team) => team.manager_username)
+                            .filter(Boolean)
+                    );
+                    const managerOptions = (Array.isArray(users) ? users : [])
+                        .filter((user) => String(user.role || "").trim().toLowerCase() === "teammanager")
+                        .filter((user) => String(user.status || "").trim().toLowerCase() === "active")
+                        .filter((user) => !assigned.has(user.username))
+                        .map((user) => `<option value="${user.id}">${escapeHtml(user.name)} (${escapeHtml(user.username)})</option>`)
+                        .join("");
+                    select.innerHTML = `<option value="">-- Kein Teammanager zuweisen --</option>${managerOptions}`;
+                } catch (error) {
+                    select.innerHTML = "<option value=''>Teammanager konnten nicht geladen werden</option>";
+                }
+            }
 
             async function loadTeams() {
                 try {
@@ -161,7 +187,7 @@
                             <td><strong>${t.name}</strong></td>
                             <td><span class="badge badge-primary">${t.category || "—"}</span></td>
                             <td>${t.nation || "—"}</td>
-                            <td>${t.contact_person || "—"}</td>
+                            <td>${t.manager_username || "—"}</td>
                             <td>${statusBadge(t.status)}</td>
                             <td>
                                 <button class="btn btn-small btn-secondary" onclick="editTeam(${t.id})">Bearbeiten</button>
@@ -215,6 +241,7 @@
             }
 
             document.addEventListener("DOMContentLoaded", () => {
+                loadTeamManagerOptions();
                 loadTeams();
                 loadLicenses();
             });

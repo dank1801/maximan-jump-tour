@@ -641,6 +641,7 @@ const usersPageState = {
     users: [],
     roles: [],
     permissions: [],
+    teams: [],
     editingRoleId: null
 };
 
@@ -660,6 +661,38 @@ function renderCreateUserRoleSelect() {
     const select = document.getElementById("create-user-role");
     if (!select) return;
     select.innerHTML = renderRoleSelectOptions();
+}
+
+function isTeamManagerRole(roleName) {
+    return String(roleName || "").trim().toLowerCase() === "teammanager";
+}
+
+function renderTeamSelectOptions(selectedId = "") {
+    const normalizedSelected = String(selectedId || "").trim();
+    const options = usersPageState.teams
+        .filter((team) => team.status !== "inactive")
+        .map((team) => {
+            const value = String(team.id);
+            const selected = normalizedSelected && value === normalizedSelected ? "selected" : "";
+            return `<option value="${escapeHtml(value)}" ${selected}>${escapeHtml(team.name)}</option>`;
+        })
+        .join("");
+    return `<option value="" ${normalizedSelected ? "" : "selected"}>Kein Team ausgewählt</option>${options}`;
+}
+
+function updateManagedTeamFieldState(roleValue, teamSelect) {
+    if (!teamSelect) return;
+    const required = isTeamManagerRole(roleValue);
+    teamSelect.required = required;
+    teamSelect.disabled = false;
+}
+
+function renderCreateUserTeamSelect(selectedId = "") {
+    const select = document.getElementById("create-user-team");
+    if (!select) return;
+    select.innerHTML = renderTeamSelectOptions(selectedId);
+    const roleSelect = document.getElementById("create-user-role");
+    updateManagedTeamFieldState(roleSelect?.value, select);
 }
 
 function permissionGroupName(permission) {
@@ -741,10 +774,16 @@ function fillRoleForm(role) {
 }
 
 async function loadRolesAndPermissions() {
-    const [roles, permissionPayload] = await Promise.all([api("/roles"), api("/permissions")]);
+    const [roles, permissionPayload, teamsResult] = await Promise.all([
+        api("/roles"),
+        api("/permissions"),
+        api("/teams").catch(() => [])
+    ]);
     usersPageState.roles = Array.isArray(roles) ? roles : [];
     usersPageState.permissions = Array.isArray(permissionPayload?.permissions) ? permissionPayload.permissions : [];
+    usersPageState.teams = Array.isArray(teamsResult) ? teamsResult : [];
     renderCreateUserRoleSelect();
+    renderCreateUserTeamSelect();
     renderPermissionMatrix([]);
     renderRolesTable();
 }
@@ -812,6 +851,7 @@ async function loadUsers() {
             <td><code>${escapeHtml(user.username)}</code></td>
             <td>${escapeHtml(user.email || "—")}</td>
             <td><span class="badge badge-info">${escapeHtml(user.role || "—")}</span></td>
+            <td>${escapeHtml(user.managed_team_name || "—")}</td>
             <td>${statusBadge(user.status)}</td>
             <td>${user.last_login_at ? new Date(user.last_login_at).toLocaleDateString("de-DE") : "—"}</td>
             <td>
@@ -821,7 +861,7 @@ async function loadUsers() {
         </tr>
     `).join("");
 
-    container.innerHTML = html || `<tr><td colspan="7" class="table-empty">Keine Benutzer vorhanden</td></tr>`;
+    container.innerHTML = html || `<tr><td colspan="8" class="table-empty">Keine Benutzer vorhanden</td></tr>`;
 
     document.querySelectorAll("[data-edit-user]").forEach((buttonNode) => {
         buttonNode.addEventListener("click", () => {
@@ -855,6 +895,7 @@ async function showEditUserModal(user) {
         await loadRolesAndPermissions();
     }
     const roleOptions = renderRoleSelectOptions(user.role);
+    const managedTeamOptions = renderTeamSelectOptions(user.managed_team_id || "");
     const content = `
         <form id="edit-user-form">
             <div class="form-group">
@@ -872,6 +913,10 @@ async function showEditUserModal(user) {
             <div class="form-group">
                 <label>Rolle</label>
                 <select name="role" required>${roleOptions}</select>
+            </div>
+            <div class="form-group">
+                <label>Verknüpftes Team (für Teammanager)</label>
+                <select name="managedTeamId">${managedTeamOptions}</select>
             </div>
             <div class="form-group">
                 <label>Status</label>
@@ -896,6 +941,14 @@ async function showEditUserModal(user) {
             handler: async () => {
                 const form = document.getElementById("edit-user-form");
                 const data = getFormData(form);
+                const teamSelect = form.querySelector("select[name='managedTeamId']");
+                if (isTeamManagerRole(data.role) && !data.managedTeamId) {
+                    showToast("Teammanager muss einem Team zugeordnet sein.", "error");
+                    return;
+                }
+                if (!isTeamManagerRole(data.role)) {
+                    data.managedTeamId = "";
+                }
                 if (!data.password) delete data.password;
                 try {
                     await api(`/users/${user.id}`, {
@@ -910,18 +963,38 @@ async function showEditUserModal(user) {
             }
         }
     ]);
+    const editForm = document.getElementById("edit-user-form");
+    const roleField = editForm?.querySelector("select[name='role']");
+    const teamField = editForm?.querySelector("select[name='managedTeamId']");
+    updateManagedTeamFieldState(roleField?.value, teamField);
+    roleField?.addEventListener("change", () => {
+        updateManagedTeamFieldState(roleField.value, teamField);
+    });
 }
 
 async function setupUsersPage() {
     const createUserForm = document.getElementById("create-user-form");
     if (createUserForm) {
+        const roleSelect = document.getElementById("create-user-role");
+        const teamSelect = document.getElementById("create-user-team");
+        roleSelect?.addEventListener("change", () => {
+            updateManagedTeamFieldState(roleSelect.value, teamSelect);
+        });
         createUserForm.addEventListener("submit", async (event) => {
             event.preventDefault();
             const data = getFormData(createUserForm);
+            if (isTeamManagerRole(data.role) && !data.managedTeamId) {
+                showToast("Teammanager muss einem Team zugeordnet sein.", "error");
+                return;
+            }
+            if (!isTeamManagerRole(data.role)) {
+                data.managedTeamId = "";
+            }
             try {
                 await api("/users", { method: "POST", body: JSON.stringify(data) });
                 createUserForm.reset();
                 renderCreateUserRoleSelect();
+                renderCreateUserTeamSelect();
                 showToast("Benutzer erstellt", "success");
                 await loadUsers();
             } catch (error) {

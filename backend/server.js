@@ -955,6 +955,45 @@ function resolveActiveRoleName(roleName) {
     return row?.name || null;
 }
 
+function isTeamManagerRole(roleName) {
+    return normalizeRole(roleName) === "teammanager";
+}
+
+function getUserById(userId) {
+    return db
+        .prepare("SELECT id, username, role, status FROM users WHERE id = ?")
+        .get(userId);
+}
+
+function getTeamById(teamId) {
+    return db
+        .prepare("SELECT id, name, status, manager_user_id FROM teams WHERE id = ?")
+        .get(teamId);
+}
+
+function findTeamManagedByUser(userId, exceptTeamId = null) {
+    if (!userId) return null;
+    if (exceptTeamId) {
+        return db
+            .prepare("SELECT id, name FROM teams WHERE manager_user_id = ? AND id != ? AND status != 'inactive' LIMIT 1")
+            .get(userId, exceptTeamId);
+    }
+    return db
+        .prepare("SELECT id, name FROM teams WHERE manager_user_id = ? AND status != 'inactive' LIMIT 1")
+        .get(userId);
+}
+
+function parseOptionalIdStrict(value) {
+    if (value === undefined) {
+        return { provided: false, value: null, valid: true };
+    }
+    if (value === null || String(value).trim() === "") {
+        return { provided: true, value: null, valid: true };
+    }
+    const parsed = parseId(value);
+    return { provided: true, value: parsed, valid: Boolean(parsed) };
+}
+
 const app = express();
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
@@ -1279,15 +1318,17 @@ app.get("/api/audit-logs", authRequired, requirePermission("audit.read"), (req, 
 
 app.get("/api/users", authRequired, requirePermission("users.read"), (req, res) => {
     const rows = db.prepare(
-        `SELECT id, username, name, email, role, status, last_login_at, created_at
-         FROM users
-         ORDER BY id DESC`
+        `SELECT u.id, u.username, u.name, u.email, u.role, u.status, u.last_login_at, u.created_at,
+                (SELECT t.id FROM teams t WHERE t.manager_user_id = u.id AND t.status != 'inactive' ORDER BY t.id ASC LIMIT 1) AS managed_team_id,
+                (SELECT t.name FROM teams t WHERE t.manager_user_id = u.id AND t.status != 'inactive' ORDER BY t.id ASC LIMIT 1) AS managed_team_name
+         FROM users u
+         ORDER BY u.id DESC`
     ).all();
     res.json(rows);
 });
 
 app.post("/api/users", authRequired, requirePermission("users.write"), (req, res) => {
-    const { username, name, email, role, password, status } = req.body || {};
+    const { username, name, email, role, password, status, managedTeamId } = req.body || {};
     if (!requireFields(res, req.body || {}, ["username", "name", "email", "role", "password"])) return;
     if (!isDuplicateEmailAllowed() && findUserByEmail(email)) {
         res.status(409).json({ error: "Diese E-Mail-Adresse ist bereits vergeben." });
@@ -1298,9 +1339,34 @@ app.post("/api/users", authRequired, requirePermission("users.write"), (req, res
         res.status(400).json({ error: "Unknown or inactive role" });
         return;
     }
+    const parsedManagedTeam = parseOptionalIdStrict(managedTeamId);
+    if (!parsedManagedTeam.valid) {
+        res.status(400).json({ error: "Ungültige Team-ID für Teammanager-Zuordnung." });
+        return;
+    }
+    if (isTeamManagerRole(resolvedRole) && !parsedManagedTeam.value) {
+        res.status(400).json({ error: "Teammanager muss einem Team zugeordnet sein." });
+        return;
+    }
+    if (!isTeamManagerRole(resolvedRole) && parsedManagedTeam.provided && parsedManagedTeam.value) {
+        res.status(400).json({ error: "Nur Teammanager dürfen mit einem Team verknüpft werden." });
+        return;
+    }
+    if (parsedManagedTeam.value) {
+        const targetTeam = getTeamById(parsedManagedTeam.value);
+        if (!targetTeam || targetTeam.status === "inactive") {
+            res.status(404).json({ error: "Ausgewähltes Team wurde nicht gefunden." });
+            return;
+        }
+        if (targetTeam.manager_user_id) {
+            res.status(409).json({ error: "Dieses Team hat bereits einen Teammanager." });
+            return;
+        }
+    }
+
     const hash = bcrypt.hashSync(password, 12);
     let result;
-    try {
+    const createUserWithAssignment = db.transaction(() => {
         result = db
             .prepare(
                 `INSERT INTO users (username, name, email, role, password_hash, status)
@@ -1314,6 +1380,13 @@ app.post("/api/users", authRequired, requirePermission("users.write"), (req, res
                 hash,
                 status === "inactive" ? "inactive" : "active"
             );
+        if (parsedManagedTeam.value) {
+            db.prepare("UPDATE teams SET manager_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+                .run(result.lastInsertRowid, parsedManagedTeam.value);
+        }
+    });
+    try {
+        createUserWithAssignment();
     } catch (error) {
         const userMessage = mapUserWriteError(error);
         if (userMessage) {
@@ -1322,7 +1395,13 @@ app.post("/api/users", authRequired, requirePermission("users.write"), (req, res
         }
         throw error;
     }
-    const created = db.prepare("SELECT id, username, name, email, role, status, created_at FROM users WHERE id = ?").get(result.lastInsertRowid);
+    const created = db.prepare(
+        `SELECT u.id, u.username, u.name, u.email, u.role, u.status, u.created_at,
+                (SELECT t.id FROM teams t WHERE t.manager_user_id = u.id AND t.status != 'inactive' ORDER BY t.id ASC LIMIT 1) AS managed_team_id,
+                (SELECT t.name FROM teams t WHERE t.manager_user_id = u.id AND t.status != 'inactive' ORDER BY t.id ASC LIMIT 1) AS managed_team_name
+         FROM users u
+         WHERE u.id = ?`
+    ).get(result.lastInsertRowid);
     logAudit(req.user, "CREATE_USER", "users", created.id, `${created.username} (${created.role})`);
     res.status(201).json(created);
 });
@@ -1333,7 +1412,7 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
         res.status(400).json({ error: "Invalid user id" });
         return;
     }
-    const existing = db.prepare("SELECT id FROM users WHERE id = ?").get(id);
+    const existing = db.prepare("SELECT id, role FROM users WHERE id = ?").get(id);
     if (!existing) {
         res.status(404).json({ error: "User not found" });
         return;
@@ -1343,6 +1422,7 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
     const updates = [];
     const values = [];
     let invalidRole = false;
+    let nextRole = existing.role;
     if (req.body.email !== undefined && !isDuplicateEmailAllowed() && findUserByEmail(req.body.email, id)) {
         res.status(409).json({ error: "Diese E-Mail-Adresse ist bereits vergeben." });
         return;
@@ -1355,6 +1435,7 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
                     invalidRole = true;
                     return;
                 }
+                nextRole = resolvedRole;
                 updates.push(`${field} = ?`);
                 values.push(resolvedRole);
                 return;
@@ -1367,18 +1448,66 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
         res.status(400).json({ error: "Unknown or inactive role" });
         return;
     }
+    const currentManagedTeam = findTeamManagedByUser(id);
+    const parsedManagedTeam = parseOptionalIdStrict(req.body.managedTeamId);
+    if (!parsedManagedTeam.valid) {
+        res.status(400).json({ error: "Ungültige Team-ID für Teammanager-Zuordnung." });
+        return;
+    }
+    const finalManagedTeamId = parsedManagedTeam.provided
+        ? parsedManagedTeam.value
+        : (currentManagedTeam?.id || null);
+
+    if (isTeamManagerRole(nextRole)) {
+        if (!finalManagedTeamId) {
+            res.status(400).json({ error: "Teammanager muss einem Team zugeordnet sein." });
+            return;
+        }
+        const targetTeam = getTeamById(finalManagedTeamId);
+        if (!targetTeam || targetTeam.status === "inactive") {
+            res.status(404).json({ error: "Ausgewähltes Team wurde nicht gefunden." });
+            return;
+        }
+        if (targetTeam.manager_user_id && targetTeam.manager_user_id !== id) {
+            res.status(409).json({ error: "Dieses Team hat bereits einen anderen Teammanager." });
+            return;
+        }
+    } else if (parsedManagedTeam.provided && finalManagedTeamId) {
+        res.status(400).json({ error: "Nur Teammanager dürfen mit einem Team verknüpft werden." });
+        return;
+    }
+
     if (req.body.password) {
         updates.push("password_hash = ?");
         values.push(bcrypt.hashSync(String(req.body.password), 12));
     }
-    if (updates.length === 0) {
+    if (updates.length === 0 && !parsedManagedTeam.provided && normalizeRole(nextRole) === normalizeRole(existing.role)) {
         res.status(400).json({ error: "No updatable fields provided" });
         return;
     }
-    updates.push("updated_at = CURRENT_TIMESTAMP");
-    values.push(id);
+    if (updates.length > 0) {
+        updates.push("updated_at = CURRENT_TIMESTAMP");
+        values.push(id);
+    }
+
+    const updateUserAndAssignments = db.transaction(() => {
+        if (updates.length > 0) {
+            db.prepare(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`).run(...values);
+        }
+        if (isTeamManagerRole(nextRole)) {
+            if (currentManagedTeam && currentManagedTeam.id !== finalManagedTeamId) {
+                db.prepare("UPDATE teams SET manager_user_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+                    .run(currentManagedTeam.id);
+            }
+            db.prepare("UPDATE teams SET manager_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+                .run(id, finalManagedTeamId);
+        } else if (currentManagedTeam) {
+            db.prepare("UPDATE teams SET manager_user_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE manager_user_id = ?")
+                .run(id);
+        }
+    });
     try {
-        db.prepare(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`).run(...values);
+        updateUserAndAssignments();
     } catch (error) {
         const userMessage = mapUserWriteError(error);
         if (userMessage) {
@@ -1387,7 +1516,13 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
         }
         throw error;
     }
-    const updated = db.prepare("SELECT id, username, name, email, role, status, last_login_at FROM users WHERE id = ?").get(id);
+    const updated = db.prepare(
+        `SELECT u.id, u.username, u.name, u.email, u.role, u.status, u.last_login_at,
+                (SELECT t.id FROM teams t WHERE t.manager_user_id = u.id AND t.status != 'inactive' ORDER BY t.id ASC LIMIT 1) AS managed_team_id,
+                (SELECT t.name FROM teams t WHERE t.manager_user_id = u.id AND t.status != 'inactive' ORDER BY t.id ASC LIMIT 1) AS managed_team_name
+         FROM users u
+         WHERE u.id = ?`
+    ).get(id);
     logAudit(req.user, "UPDATE_USER", "users", id, JSON.stringify(req.body));
     res.json(updated);
 });
@@ -1420,7 +1555,28 @@ app.get("/api/teams", authRequired, requirePermission("teams.read"), (_, res) =>
 app.post("/api/teams", authRequired, requirePermission("teams.write"), (req, res) => {
     const { name, nation, category, managerUserId } = req.body || {};
     if (!requireFields(res, req.body || {}, ["name"])) return;
-    const managerId = managerUserId ? parseId(managerUserId) : null;
+    const parsedManager = parseOptionalIdStrict(managerUserId);
+    if (!parsedManager.valid) {
+        res.status(400).json({ error: "Ungültige Teammanager-ID." });
+        return;
+    }
+    const managerId = parsedManager.value;
+    if (managerId) {
+        const managerUser = getUserById(managerId);
+        if (!managerUser || managerUser.status !== "active") {
+            res.status(404).json({ error: "Teammanager nicht gefunden oder inaktiv." });
+            return;
+        }
+        if (!isTeamManagerRole(managerUser.role)) {
+            res.status(400).json({ error: "Ausgewählter Benutzer hat nicht die Rolle Teammanager." });
+            return;
+        }
+        const managedTeam = findTeamManagedByUser(managerId);
+        if (managedTeam) {
+            res.status(409).json({ error: `Teammanager ist bereits mit Team "${managedTeam.name}" verknüpft.` });
+            return;
+        }
+    }
     const result = db
         .prepare(
             `INSERT INTO teams (name, nation, category, manager_user_id, status)
@@ -1446,13 +1602,46 @@ app.patch("/api/teams/:id", authRequired, requirePermission("teams.write"), (req
     const allowed = ["name", "nation", "category", "status", "manager_user_id"];
     const updates = [];
     const values = [];
+    let managerValidationError = null;
+    let managerValidationStatus = 400;
     allowed.forEach((field) => {
         const requestKey = field === "manager_user_id" ? "managerUserId" : field;
         if (req.body[requestKey] !== undefined) {
+            if (field === "manager_user_id") {
+                const parsedManager = parseOptionalIdStrict(req.body[requestKey]);
+                if (!parsedManager.valid) {
+                    managerValidationError = "Ungültige Teammanager-ID.";
+                    return;
+                }
+                if (parsedManager.value) {
+                    const managerUser = getUserById(parsedManager.value);
+                    if (!managerUser || managerUser.status !== "active") {
+                        managerValidationError = "Teammanager nicht gefunden oder inaktiv.";
+                        return;
+                    }
+                    if (!isTeamManagerRole(managerUser.role)) {
+                        managerValidationError = "Ausgewählter Benutzer hat nicht die Rolle Teammanager.";
+                        return;
+                    }
+                    const managedTeam = findTeamManagedByUser(parsedManager.value, id);
+                    if (managedTeam) {
+                        managerValidationError = `Teammanager ist bereits mit Team "${managedTeam.name}" verknüpft.`;
+                        managerValidationStatus = 409;
+                        return;
+                    }
+                }
+                updates.push(`${field} = ?`);
+                values.push(parsedManager.value);
+                return;
+            }
             updates.push(`${field} = ?`);
-            values.push(field === "manager_user_id" ? parseId(req.body[requestKey]) : String(req.body[requestKey]).trim());
+            values.push(String(req.body[requestKey]).trim());
         }
     });
+    if (managerValidationError) {
+        res.status(managerValidationStatus).json({ error: managerValidationError });
+        return;
+    }
     if (updates.length === 0) {
         res.status(400).json({ error: "No updatable fields provided" });
         return;
