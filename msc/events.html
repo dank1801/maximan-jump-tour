@@ -9,10 +9,7 @@
 <body>
     <div class="portal-shell">
         <aside class="portal-sidebar">
-            <div class="portal-brand">
-                <h1>MSC Portal</h1>
-                <p>Saisonblöcke, Events, Startlisten und Jury-Entscheidungen.</p>
-            </div>
+            <div class="portal-brand"><h1>MSC Portal</h1><p>Eventmodul ohne Standardbelegung.</p></div>
             <nav class="portal-nav">
                 <a href="dashboard.html">Dashboard <small>Start</small></a>
                 <a href="users.html">Benutzer & Rollen <small>RBAC</small></a>
@@ -26,134 +23,14 @@
         </aside>
         <main class="portal-main">
             <header class="portal-topbar">
-                <div class="portal-topbar-left">
-                    <span class="portal-kicker">Wettkämpfe & Kalender</span>
-                    <div class="portal-topbar-title">Saisonplanung, Startlisten und Jury-Protokolle</div>
-                </div>
-                <div class="portal-topbar-right">
-                    <span class="portal-user-chip"><span data-session-user>MSC Systemadministrator</span></span>
-                    <button id="logout-button" class="btn-small">Logout</button>
-                </div>
+                <div class="portal-topbar-left"><span class="portal-kicker">Wettkämpfe & Kalender</span><div class="portal-topbar-title">Eventplanung</div></div>
+                <div class="portal-topbar-right"><span class="portal-user-chip"><span data-session-user>Nicht gesetzt</span></span><button id="logout-button" class="btn-small">Logout</button></div>
             </header>
             <section class="portal-content">
-                <div class="page-hero">
-                    <div>
-                        <h2>Wettkämpfe & Kalender</h2>
-                        <p>Events werden pro Saisonblock geplant, Startlisten veröffentlicht und Jury-Entscheidungen revisionssicher dokumentiert.</p>
-                    </div>
-                    <div class="hero-actions">
-                        <button class="btn">Event anlegen</button>
-                        <button class="btn-secondary">Kalender exportieren</button>
-                    </div>
-                </div>
-
-                <div class="grid-kpis">
-                    <article class="kpi-card"><div class="kpi-label">Saisonblöcke</div><div class="kpi-value">2</div><div class="kpi-meta">Sommer 2026 / Winter 2026-27</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Geplante Events</div><div class="kpi-value">29</div><div class="kpi-meta">inkl. Team und Super-Team</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Laufende Durchgänge</div><div class="kpi-value">3</div><div class="kpi-meta">1 Training, 2 Wertung</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Jury-Entscheidungen</div><div class="kpi-value">6</div><div class="kpi-meta">heute protokolliert</div></article>
-                </div>
-
-                <div class="grid-2">
-                    <section class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Saisonübersicht</h3>
-                                <p>Blöcke mit Regelsatz und aktivem Status.</p>
-                            </div>
-                        </div>
-                        <table class="panel-table">
-                            <thead><tr><th>Saisonblock</th><th>Zeitraum</th><th>Punkte-Logik</th><th>Status</th></tr></thead>
-                            <tbody>
-                                <tr><td>Sommer 2026</td><td>Mai - September</td><td>Standard + Bonus</td><td><span class="tag tag-success">Aktiv</span></td></tr>
-                                <tr><td>Winter 2026/27</td><td>Oktober - März</td><td>Double Points im Finale</td><td><span class="tag tag-warning">In Planung</span></td></tr>
-                            </tbody>
-                        </table>
-                    </section>
-                    <section class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Kalender-Status</h3>
-                                <p>Freigaben für Startlisten und Qualifikationen.</p>
-                            </div>
-                        </div>
-                        <div class="timeline">
-                            <div class="timeline-item"><div class="timeline-time">Nächste Woche</div><div><strong>SeaBar Trilogie</strong><div>Startlisten offen, Jury-Setup in Prüfung.</div></div></div>
-                            <div class="timeline-item"><div class="timeline-time">In 10 Tagen</div><div><strong>Raphael Flugschanze</strong><div>Qualifikation veröffentlicht.</div></div></div>
-                            <div class="timeline-item"><div class="timeline-time">In 2 Wochen</div><div><strong>MicroJump Series</strong><div>Wettkampfdurchgänge vorbereitet.</div></div></div>
-                        </div>
-                    </section>
-                </div>
-
-                <section class="panel">
-                    <div class="panel-header">
-                        <div>
-                            <h3>Eventliste</h3>
-                            <p>Planung, Ort, Status und Aktionen.</p>
-                        </div>
-                    </div>
-                    <table class="panel-table">
-                        <thead><tr><th>Event</th><th>Ort</th><th>Datum</th><th>Typ</th><th>Status</th><th>Aktionen</th></tr></thead>
-                        <tbody>
-                            <tr><td>SeaBar Trilogie</td><td>SeaBar Arena</td><td>28.06.2026</td><td>Einzel + Team</td><td><span class="tag tag-warning">Planung</span></td><td><button class="btn-small">Bearbeiten</button> <button class="btn-small">Startlisten</button></td></tr>
-                            <tr><td>Raphael Flugschanze</td><td>Raphael Hill</td><td>30.06.2026</td><td>Einzel</td><td><span class="tag tag-success">Freigegeben</span></td><td><button class="btn-small">Bearbeiten</button> <button class="btn-small">Startlisten</button></td></tr>
-                            <tr><td>Super-Team Finale</td><td>Kaiser Maximus</td><td>03.07.2026</td><td>Super Team</td><td><span class="tag tag-info">Jury offen</span></td><td><button class="btn-small">Bearbeiten</button> <button class="btn-small">Startlisten</button></td></tr>
-                        </tbody>
-                    </table>
-                </section>
-
-                <div class="grid-2">
-                    <section class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Eventdetails</h3>
-                                <p>Tabs für Startlisten, Durchgänge und Jury-Entscheidungen.</p>
-                            </div>
-                        </div>
-                        <div class="tab-row" data-tab-group="event-details">
-                            <button class="tab-btn active" data-tab-target="start">Startlisten</button>
-                            <button class="tab-btn" data-tab-target="rounds">Durchgänge</button>
-                            <button class="tab-btn" data-tab-target="jury">Jury</button>
-                        </div>
-                        <div class="tab-panel active" data-tab-panel="start">
-                            <table class="panel-table">
-                                <thead><tr><th>Athlet/Team</th><th>Startnummer</th><th>Quali</th></tr></thead>
-                                <tbody><tr><td>Pingu Shen</td><td>17</td><td><span class="tag tag-success">Qualifiziert</span></td></tr><tr><td>Rika Möller</td><td>21</td><td><span class="tag tag-warning">Offen</span></td></tr><tr><td>Maximan Flyers</td><td>4</td><td><span class="tag tag-success">Qualifiziert</span></td></tr></tbody>
-                            </table>
-                        </div>
-                        <div class="tab-panel" data-tab-panel="rounds">
-                            <table class="panel-table">
-                                <thead><tr><th>Durchgang</th><th>Typ</th><th>Status</th></tr></thead>
-                                <tbody><tr><td>Training 1</td><td>Probeflug</td><td><span class="tag tag-success">Abgeschlossen</span></td></tr><tr><td>Wertung 1</td><td>Einzel</td><td><span class="tag tag-warning">In Auswertung</span></td></tr><tr><td>Wertung 2</td><td>Team</td><td><span class="tag tag-info">Geplant</span></td></tr></tbody>
-                            </table>
-                        </div>
-                        <div class="tab-panel" data-tab-panel="jury">
-                            <div class="timeline">
-                                <div class="timeline-item"><div class="timeline-time">19:12</div><div><strong>Windabbruch</strong><div>Durchgang 2 wurde gestoppt und wird wiederholt.</div></div></div>
-                                <div class="timeline-item"><div class="timeline-time">18:35</div><div><strong>Ersatzformat</strong><div>Teamwertung auf verkürztes Format umgestellt.</div></div></div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Kalenderansicht</h3>
-                                <p>Filterbare Monatsansicht als Platzhalter für den späteren Live-Kalender.</p>
-                            </div>
-                        </div>
-                        <div class="stack">
-                            <div class="info-card module-card">
-                                <h3>Juni 2026</h3>
-                                <p>3 Events, 2 Teamstarts, 1 Super-Team-Finale.</p>
-                            </div>
-                            <div class="info-card module-card">
-                                <h3>Juli 2026</h3>
-                                <p>8 Wettbewerbe, Fokus auf Serienwertungen und Jury-Protokolle.</p>
-                            </div>
-                        </div>
-                    </section>
-                </div>
+                <div class="page-hero"><div><h2>Wettkämpfe & Kalender</h2><p>Saisonblöcke, Eventlisten und Juryentscheidungen sind leer und bereit zur eigenen Pflege.</p></div></div>
+                <section class="panel"><div class="panel-header"><div><h3>Saisonübersicht</h3></div></div><div class="empty-state">Keine Saisonblöcke vorhanden.</div></section>
+                <section class="panel"><div class="panel-header"><div><h3>Eventliste</h3></div></div><table class="panel-table"><thead><tr><th>Event</th><th>Ort</th><th>Datum</th><th>Typ</th><th>Status</th><th>Aktionen</th></tr></thead><tbody><tr><td colspan="6" class="empty-state">Keine Events vorhanden.</td></tr></tbody></table></section>
+                <section class="panel"><div class="panel-header"><div><h3>Jury-Entscheidungen</h3></div></div><div class="empty-state">Keine Jury-Protokolle vorhanden.</div></section>
             </section>
         </main>
     </div>

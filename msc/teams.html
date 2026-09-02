@@ -11,7 +11,7 @@
         <aside class="portal-sidebar">
             <div class="portal-brand">
                 <h1>MSC Portal</h1>
-                <p>Teamstruktur, Kategorien, Mitglieder und Lizenzstatus pro Team.</p>
+                <p>Team- und Lizenzverwaltung ohne Seed-Daten.</p>
             </div>
             <nav class="portal-nav">
                 <a href="dashboard.html">Dashboard <small>Start</small></a>
@@ -28,109 +28,36 @@
             <header class="portal-topbar">
                 <div class="portal-topbar-left">
                     <span class="portal-kicker">Teams & Lizenzen</span>
-                    <div class="portal-topbar-title">Teamarchitektur, Mitglieder und Lizenzkontrolle</div>
+                    <div class="portal-topbar-title">Teamstruktur</div>
                 </div>
                 <div class="portal-topbar-right">
-                    <span class="portal-user-chip"><span data-session-user>MSC Systemadministrator</span></span>
+                    <span class="portal-user-chip"><span data-session-user>Nicht gesetzt</span></span>
                     <button id="logout-button" class="btn-small">Logout</button>
                 </div>
             </header>
-
             <section class="portal-content">
                 <div class="page-hero">
                     <div>
                         <h2>Teams & Lizenzen</h2>
-                        <p>Teams werden über Stammdaten, Mitglieder, Staff und Freigaben geführt. Lizenzentscheidungen bleiben revisionssicher dokumentiert.</p>
+                        <p>Alle Team- und Lizenzdaten legst du selbst an.</p>
                     </div>
                     <div class="hero-actions">
-                        <button class="btn" data-open-modal="team-modal">Neues Team registrieren</button>
-                        <button class="btn-secondary">Lizenzhistorie öffnen</button>
+                        <button class="btn" data-open-modal="team-modal">Team anlegen</button>
                     </div>
-                </div>
-
-                <div class="grid-kpis">
-                    <article class="kpi-card"><div class="kpi-label">Registrierte Teams</div><div class="kpi-value">18</div><div class="kpi-meta">12 aktiv, 6 archiviert</div></article>
-                    <article class="kpi-card"><div class="kpi-label">A-Lizenzen</div><div class="kpi-value">12</div><div class="kpi-meta">inkl. Pflichtstatus</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Lizenzen in Prüfung</div><div class="kpi-value">5</div><div class="kpi-meta">Unterlagen fehlend</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Offene Teamwechsel</div><div class="kpi-value">3</div><div class="kpi-meta">transferrelevant</div></article>
                 </div>
 
                 <section class="panel">
-                    <div class="panel-header">
-                        <div>
-                            <h3>Teamübersicht</h3>
-                            <p>Alle registrierten Teams mit Kategorie und Status.</p>
-                        </div>
-                    </div>
+                    <div class="panel-header"><div><h3>Teamübersicht</h3></div></div>
                     <table class="panel-table">
                         <thead><tr><th>Team</th><th>Nation</th><th>Kategorie</th><th>Teammanager</th><th>Status</th><th>Aktionen</th></tr></thead>
-                        <tbody>
-                            <tr><td>Maximan Flyers</td><td>MSC</td><td><span class="tag tag-success">A</span></td><td>team.maximan</td><td><span class="tag tag-success">Aktiv</span></td><td><button class="btn-small">Bearbeiten</button> <button class="btn-small btn-danger">Deaktivieren</button></td></tr>
-                            <tr><td>Raphael Eagles</td><td>RSG</td><td><span class="tag tag-success">A</span></td><td>team.raphael</td><td><span class="tag tag-success">Aktiv</span></td><td><button class="btn-small">Bearbeiten</button> <button class="btn-small btn-danger">Deaktivieren</button></td></tr>
-                            <tr><td>MicroJump Talents</td><td>MJA</td><td><span class="tag tag-info">B</span></td><td>team.microjump</td><td><span class="tag tag-success">Aktiv</span></td><td><button class="btn-small">Bearbeiten</button> <button class="btn-small btn-danger">Deaktivieren</button></td></tr>
-                        </tbody>
+                        <tbody><tr><td colspan="6" class="empty-state">Keine Teams vorhanden.</td></tr></tbody>
                     </table>
                 </section>
 
-                <div class="grid-2">
-                    <section class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Teamdetails</h3>
-                                <p>Stammdaten, Mitglieder und Lizenzstände in Tabs.</p>
-                            </div>
-                        </div>
-                        <div class="tab-row" data-tab-group="team-details">
-                            <button class="tab-btn active" data-tab-target="master">Stammdaten</button>
-                            <button class="tab-btn" data-tab-target="members">Mitglieder</button>
-                            <button class="tab-btn" data-tab-target="licenses">Lizenzen</button>
-                        </div>
-                        <div class="tab-panel active" data-tab-panel="master">
-                            <table class="panel-table">
-                                <tbody>
-                                    <tr><th>Team</th><td>Maximan Flyers</td></tr>
-                                    <tr><th>Nation</th><td>MSC</td></tr>
-                                    <tr><th>Kontakt</th><td>team.maximan@msc.example</td></tr>
-                                    <tr><th>Teammanager</th><td>team.maximan</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="tab-panel" data-tab-panel="members">
-                            <table class="panel-table">
-                                <thead><tr><th>Name</th><th>Rolle</th><th>Status</th></tr></thead>
-                                <tbody>
-                                    <tr><td>Pingu Shen</td><td>Athlet</td><td><span class="tag tag-success">Aktiv</span></td></tr>
-                                    <tr><td>Rika Möller</td><td>Athletin</td><td><span class="tag tag-warning">In Prüfung</span></td></tr>
-                                    <tr><td>Max Tuner</td><td>Trainer</td><td><span class="tag tag-success">Aktiv</span></td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="tab-panel" data-tab-panel="licenses">
-                            <table class="panel-table">
-                                <thead><tr><th>Mitglied</th><th>Typ</th><th>Gültig bis</th><th>Status</th></tr></thead>
-                                <tbody>
-                                    <tr><td>Pingu Shen</td><td>A</td><td>30.09.2026</td><td><span class="tag tag-success">Gültig</span></td></tr>
-                                    <tr><td>Rika Möller</td><td>B</td><td>15.08.2026</td><td><span class="tag tag-warning">Läuft aus</span></td></tr>
-                                    <tr><td>Max Tuner</td><td>C</td><td>31.12.2026</td><td><span class="tag tag-success">Gültig</span></td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
-
-                    <section class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Lizenz-Historie</h3>
-                                <p>Zuordnung und Freigabe mit Audit-Spur.</p>
-                            </div>
-                        </div>
-                        <div class="timeline">
-                            <div class="timeline-item"><div class="timeline-time">Heute</div><div><strong>license.office</strong><div>A-Lizenz für Pingu Shen freigegeben.</div></div></div>
-                            <div class="timeline-item"><div class="timeline-time">Gestern</div><div><strong>license.office</strong><div>B-Lizenz von Rika Möller in Prüfung gesetzt.</div></div></div>
-                            <div class="timeline-item"><div class="timeline-time">Letzte Woche</div><div><strong>admin.maximan</strong><div>Teammanager für Maximan Flyers neu zugewiesen.</div></div></div>
-                        </div>
-                    </section>
-                </div>
+                <section class="panel">
+                    <div class="panel-header"><div><h3>Lizenzhistorie</h3></div></div>
+                    <div class="empty-state">Keine Lizenzentscheidungen vorhanden.</div>
+                </section>
             </section>
         </main>
     </div>
@@ -138,17 +65,14 @@
     <div id="team-modal" class="modal hidden">
         <div class="login-card" style="width:min(100%,540px);">
             <div class="panel-header">
-                <div>
-                    <h3>Neues Team registrieren</h3>
-                    <p>Teamanlage mit Lizenzklasse und Managerzuordnung.</p>
-                </div>
+                <div><h3>Neues Team</h3><p>Leeren Teamdatensatz anlegen.</p></div>
                 <button class="btn-small" data-close-modal>&times;</button>
             </div>
             <div class="form-grid">
-                <div class="field"><label>Teamname</label><input type="text" placeholder="SeaBar Jumpers"></div>
-                <div class="field"><label>Nation</label><input type="text" placeholder="MSC"></div>
-                <div class="field"><label>Kategorie</label><select><option>A</option><option>B</option><option>C</option></select></div>
-                <div class="field"><label>Teammanager</label><input type="text" placeholder="team.seabar"></div>
+                <div class="field"><label>Teamname</label><input type="text"></div>
+                <div class="field"><label>Nation</label><input type="text"></div>
+                <div class="field"><label>Kategorie</label><input type="text"></div>
+                <div class="field"><label>Teammanager</label><input type="text"></div>
             </div>
             <div class="form-actions" style="margin-top: 14px;">
                 <button class="btn">Speichern</button>
@@ -156,7 +80,6 @@
             </div>
         </div>
     </div>
-
     <script src="portal.js"></script>
 </body>
 </html>

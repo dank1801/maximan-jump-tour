@@ -10,28 +10,27 @@
     <main class="login-shell">
         <section class="login-card">
             <span class="portal-badge">MSC Portal</span>
-            <h1>Maximanischer Sport Club</h1>
-            <p>Zentraler Zugang zu Benutzern, Teams, Wettkämpfen, Punkten, Transfers, Reporting und Einstellungen.</p>
-
+            <h1>Portal Login</h1>
+            <p>Ohne vordefinierte Daten. Zugang und Inhalte konfigurierst du selbst.</p>
             <div class="stack">
                 <div class="field">
                     <label for="login-username">Benutzerkennung</label>
-                    <input id="login-username" type="text" placeholder="msc.admin" autocomplete="username">
+                    <input id="login-username" type="text" autocomplete="username">
                 </div>
                 <div class="field">
                     <label for="login-password">Passwort</label>
-                    <input id="login-password" type="password" placeholder="portal-2026" autocomplete="current-password">
+                    <input id="login-password" type="password" autocomplete="current-password">
+                </div>
+                <div class="field">
+                    <label for="login-role">Rolle</label>
+                    <input id="login-role" type="text" placeholder="Optional">
                 </div>
                 <button id="login-button" class="btn-primary">Anmelden</button>
             </div>
-
             <div id="login-message" class="login-note hidden"></div>
-            <div class="login-note">
-                Demo-Zugang: <strong>msc.admin</strong> / <strong>portal-2026</strong>
-            </div>
             <div class="login-links">
-                <span>Passwort vergessen? Später im Backend-Flow.</span>
-                <a href="../index.html">Zur öffentlichen Seite</a>
+                <span>Passwort-Reset folgt später mit Backend.</span>
+                <a href="../index.html">Zur Website</a>
             </div>
         </section>
     </main>

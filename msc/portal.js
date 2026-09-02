@@ -1,10 +1,4 @@
 const SESSION_KEY = "msc_portal_session";
-const DEMO_USER = {
-    username: "msc.admin",
-    password: "portal-2026",
-    role: "MSC Admin",
-    displayName: "MSC Systemadministrator"
-};
 
 function getPageName() {
     return (window.location.pathname.split("/").pop() || "dashboard.html").toLowerCase();
@@ -43,32 +37,26 @@ function syncIdentity(session) {
     const roleNodes = document.querySelectorAll("[data-session-role]");
 
     userNodes.forEach((node) => {
-        node.textContent = session?.displayName || session?.username || "Gast";
+        node.textContent = session?.displayName || session?.username || "Nicht gesetzt";
     });
 
     roleNodes.forEach((node) => {
-        node.textContent = session?.role || "—";
+        node.textContent = session?.role || "Nicht gesetzt";
     });
 }
 
 function protectPortal() {
-    if (isLoginPage()) {
-        return;
-    }
-
+    if (isLoginPage()) return;
     const session = loadSession();
     if (!session) {
         window.location.href = "login.html";
         return;
     }
-
     syncIdentity(session);
 }
 
 function attachLogin() {
-    if (!isLoginPage()) {
-        return;
-    }
+    if (!isLoginPage()) return;
 
     const existing = loadSession();
     if (existing) {
@@ -78,35 +66,35 @@ function attachLogin() {
 
     const username = document.getElementById("login-username");
     const password = document.getElementById("login-password");
+    const role = document.getElementById("login-role");
     const button = document.getElementById("login-button");
     const message = document.getElementById("login-message");
 
     const login = () => {
         const userValue = username?.value.trim() || "";
         const passValue = password?.value || "";
+        const roleValue = role?.value.trim() || "Nicht gesetzt";
 
-        if (userValue === DEMO_USER.username && passValue === DEMO_USER.password) {
-            saveSession({
-                username: DEMO_USER.username,
-                role: DEMO_USER.role,
-                displayName: DEMO_USER.displayName
-            });
-            window.location.href = "dashboard.html";
+        if (!userValue || !passValue) {
+            if (message) {
+                message.textContent = "Bitte Benutzerkennung und Passwort eingeben.";
+                message.classList.remove("hidden");
+            }
             return;
         }
 
-        if (message) {
-            message.textContent = "Ungültige Zugangsdaten.";
-            message.classList.remove("hidden");
-        }
+        saveSession({
+            username: userValue,
+            displayName: userValue,
+            role: roleValue
+        });
+        window.location.href = "dashboard.html";
     };
 
     button?.addEventListener("click", login);
     [username, password].forEach((field) => {
         field?.addEventListener("keydown", (event) => {
-            if (event.key === "Enter") {
-                login();
-            }
+            if (event.key === "Enter") login();
         });
     });
 }
@@ -123,25 +111,19 @@ function attachTabs() {
     document.querySelectorAll("[data-tab-group]").forEach((group) => {
         const buttons = group.querySelectorAll("[data-tab-target]");
         const panels = group.querySelectorAll("[data-tab-panel]");
-
         const activate = (target) => {
             buttons.forEach((button) => {
                 button.classList.toggle("active", button.getAttribute("data-tab-target") === target);
             });
-
             panels.forEach((panel) => {
                 panel.classList.toggle("active", panel.getAttribute("data-tab-panel") === target);
             });
         };
-
         buttons.forEach((button) => {
             button.addEventListener("click", () => activate(button.getAttribute("data-tab-target")));
         });
-
         const activeButton = group.querySelector("[data-tab-target].active") || buttons[0];
-        if (activeButton) {
-            activate(activeButton.getAttribute("data-tab-target"));
-        }
+        if (activeButton) activate(activeButton.getAttribute("data-tab-target"));
     });
 }
 
@@ -161,9 +143,7 @@ function attachModals() {
 
     document.querySelectorAll(".modal").forEach((modal) => {
         modal.addEventListener("click", (event) => {
-            if (event.target === modal) {
-                modal.classList.add("hidden");
-            }
+            if (event.target === modal) modal.classList.add("hidden");
         });
     });
 }

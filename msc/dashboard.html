@@ -11,7 +11,7 @@
         <aside class="portal-sidebar">
             <div class="portal-brand">
                 <h1>MSC Portal</h1>
-                <p>Maximanischer Sport Club – Administration, Audit und Wettbewerbskontrolle.</p>
+                <p>Leeres Grundgerüst ohne voreingestellte Inhalte.</p>
             </div>
             <nav class="portal-nav">
                 <a href="dashboard.html">Dashboard <small>Start</small></a>
@@ -28,11 +28,11 @@
             <header class="portal-topbar">
                 <div class="portal-topbar-left">
                     <span class="portal-kicker">Dashboard</span>
-                    <div class="portal-topbar-title">Kontrollzentrum für Rollen, Wettkämpfe und Audit-Spuren</div>
+                    <div class="portal-topbar-title">Konfigurationsstatus</div>
                 </div>
                 <div class="portal-topbar-right">
-                    <span class="portal-user-chip"><span data-session-user>MSC Systemadministrator</span></span>
-                    <span class="portal-user-chip"><span data-session-role>MSC Admin</span></span>
+                    <span class="portal-user-chip"><span data-session-user>Nicht gesetzt</span></span>
+                    <span class="portal-user-chip"><span data-session-role>Nicht gesetzt</span></span>
                     <button id="logout-button" class="btn-small">Logout</button>
                 </div>
             </header>
@@ -41,91 +41,26 @@
                 <div class="page-hero">
                     <div>
                         <h2>Dashboard</h2>
-                        <p>Ein auditierbarer Überblick über Lizenzfälle, Eventstatus, Transferfenster und die letzten Eingriffe im System.</p>
-                    </div>
-                    <div class="hero-actions">
-                        <button class="btn">Offene Fälle prüfen</button>
-                        <button class="btn-secondary">Audit-Log exportieren</button>
+                        <p>Alle Module sind vorbereitet. Inhalte, Regeln und Datensätze kannst du jetzt vollständig selbst einpflegen.</p>
                     </div>
                 </div>
 
                 <div class="grid-kpis">
-                    <article class="kpi-card"><div class="kpi-label">Offene Lizenzanträge</div><div class="kpi-value">7</div><div class="kpi-meta">3 A, 4 B in Prüfung</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Bevorstehende Events</div><div class="kpi-value">4</div><div class="kpi-meta">nächste 14 Tage</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Aktive Teams</div><div class="kpi-value">18</div><div class="kpi-meta">davon 12 mit A-Lizenz</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Offene Transfers</div><div class="kpi-value">3</div><div class="kpi-meta">1 Notfalltransfer</div></article>
+                    <article class="kpi-card"><div class="kpi-label">Offene Lizenzanträge</div><div class="kpi-value">—</div><div class="kpi-meta">Nicht konfiguriert</div></article>
+                    <article class="kpi-card"><div class="kpi-label">Bevorstehende Events</div><div class="kpi-value">—</div><div class="kpi-meta">Nicht konfiguriert</div></article>
+                    <article class="kpi-card"><div class="kpi-label">Aktive Teams</div><div class="kpi-value">—</div><div class="kpi-meta">Nicht konfiguriert</div></article>
+                    <article class="kpi-card"><div class="kpi-label">Audit-Einträge</div><div class="kpi-value">—</div><div class="kpi-meta">Nicht konfiguriert</div></article>
                 </div>
 
-                <div class="grid-2">
-                    <section class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Offene Lizenz- & Akkreditierungsfälle</h3>
-                                <p>Vorgänge für Teammanager und Lizenzstelle.</p>
-                            </div>
-                            <span class="tag tag-warning">Priorität hoch</span>
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <h3>Hinweis</h3>
+                            <p>Es sind keine Standarddaten mehr vorhanden.</p>
                         </div>
-                        <table class="panel-table">
-                            <thead><tr><th>Person</th><th>Team</th><th>Typ</th><th>Status</th></tr></thead>
-                            <tbody>
-                                <tr><td>Pingu Shen</td><td>Maximan Flyers</td><td>A-Lizenz</td><td><span class="tag tag-warning">In Prüfung</span></td></tr>
-                                <tr><td>Rika Möller</td><td>MicroJump Talents</td><td>B-Lizenz</td><td><span class="tag tag-info">Unterlagen fehlen</span></td></tr>
-                                <tr><td>Pünki Train</td><td>Caesar Super Team</td><td>A-Lizenz</td><td><span class="tag tag-success">Verlängerung geplant</span></td></tr>
-                            </tbody>
-                        </table>
-                    </section>
-
-                    <section class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Letzte Systemaktivitäten</h3>
-                                <p>Audit-relevante Eingriffe der letzten Stunden.</p>
-                            </div>
-                        </div>
-                        <div class="timeline">
-                            <div class="timeline-item"><div class="timeline-time">19:12</div><div><strong>admin.maximan</strong><div>Punkte-Regel für SeaBar Trilogie angepasst.</div></div></div>
-                            <div class="timeline-item"><div class="timeline-time">18:47</div><div><strong>jury.raphael</strong><div>Durchgang 2 wegen Wind abgebrochen.</div></div></div>
-                            <div class="timeline-item"><div class="timeline-time">18:15</div><div><strong>license.office</strong><div>A-Lizenz für Kino von Patra verlängert.</div></div></div>
-                        </div>
-                    </section>
-                </div>
-
-                <div class="grid-2">
-                    <section class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Bevorstehende Wettkämpfe</h3>
-                                <p>Kalenderauszug mit Status für Jury und Wettkampfleitung.</p>
-                            </div>
-                            <span class="tag tag-info">Nächste 14 Tage</span>
-                        </div>
-                        <table class="panel-table">
-                            <thead><tr><th>Event</th><th>Ort</th><th>Datum</th><th>Status</th></tr></thead>
-                            <tbody>
-                                <tr><td>SeaBar Trilogie – Event 2</td><td>SeaBar Arena</td><td>28. Juni 2026</td><td><span class="tag tag-warning">Planung</span></td></tr>
-                                <tr><td>Raphael Flugschanze – Einzel</td><td>Raphael Hill</td><td>30. Juni 2026</td><td><span class="tag tag-success">Freigegeben</span></td></tr>
-                                <tr><td>MicroJump Series – Talente</td><td>MicroJump Park</td><td>3. Juli 2026</td><td><span class="tag tag-info">Qualifikation offen</span></td></tr>
-                            </tbody>
-                        </table>
-                    </section>
-
-                    <section class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Aktuelle Übergaben</h3>
-                                <p>Offene Transfers und Sperrfristen.</p>
-                            </div>
-                        </div>
-                        <table class="panel-table">
-                            <thead><tr><th>Athlet</th><th>Von</th><th>Zu</th><th>Status</th></tr></thead>
-                            <tbody>
-                                <tr><td>Pingu Shen</td><td>Maximan Flyers</td><td>Raphael Eagles</td><td><span class="tag tag-warning">In Verhandlung</span></td></tr>
-                                <tr><td>Rika Möller</td><td>MicroJump Talents</td><td>Maximan Flyers</td><td><span class="tag tag-danger">Sperrfrist aktiv</span></td></tr>
-                                <tr><td>Pünki Train</td><td>Caesar Super Team</td><td>Maximan Flyers</td><td><span class="tag tag-info">Notfalltransfer geprüft</span></td></tr>
-                            </tbody>
-                        </table>
-                    </section>
-                </div>
+                    </div>
+                    <div class="empty-state">Lege Benutzer, Teams, Events, Punkte und Transfers in den jeweiligen Modulen an.</div>
+                </section>
             </section>
         </main>
     </div>
