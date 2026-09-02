@@ -121,6 +121,8 @@ async function initLoginPage() {
     const bootstrapSection = document.getElementById("bootstrap-section");
     if (bootstrapStatus.requiresBootstrap && bootstrapSection) {
         bootstrapSection.classList.remove("hidden");
+    } else if (bootstrapSection) {
+        bootstrapSection.classList.add("hidden");
     }
 
     const loginForm = document.getElementById("login-form");
