@@ -9,10 +9,7 @@
 <body>
     <div class="portal-shell">
         <aside class="portal-sidebar">
-            <div class="portal-brand">
-                <h1>MSC Portal</h1>
-                <p>Punktesysteme, Ranglisten, Serien- und Teamwertungen.</p>
-            </div>
+            <div class="portal-brand"><h1>MSC Portal</h1><p>Punktemodul ohne vordefinierte Regeln.</p></div>
             <nav class="portal-nav">
                 <a href="dashboard.html">Dashboard <small>Start</small></a>
                 <a href="users.html">Benutzer & Rollen <small>RBAC</small></a>
@@ -26,110 +23,14 @@
         </aside>
         <main class="portal-main">
             <header class="portal-topbar">
-                <div class="portal-topbar-left">
-                    <span class="portal-kicker">Punkte & Wertungen</span>
-                    <div class="portal-topbar-title">Regeln, Ergebnislisten und Gesamtwertungen</div>
-                </div>
-                <div class="portal-topbar-right">
-                    <span class="portal-user-chip"><span data-session-user>MSC Systemadministrator</span></span>
-                    <button id="logout-button" class="btn-small">Logout</button>
-                </div>
+                <div class="portal-topbar-left"><span class="portal-kicker">Punkte & Wertungen</span><div class="portal-topbar-title">Regelsystem</div></div>
+                <div class="portal-topbar-right"><span class="portal-user-chip"><span data-session-user>Nicht gesetzt</span></span><button id="logout-button" class="btn-small">Logout</button></div>
             </header>
             <section class="portal-content">
-                <div class="page-hero">
-                    <div>
-                        <h2>Punkte & Wertungen</h2>
-                        <p>Hier werden Punkte-Regeln, Bonuslogiken und Korrekturen verwaltet. Alle Änderungen bleiben nachvollziehbar.</p>
-                    </div>
-                    <div class="hero-actions">
-                        <button class="btn">Regelsatz prüfen</button>
-                        <button class="btn-secondary">Neu berechnen</button>
-                    </div>
-                </div>
-
-                <div class="grid-kpis">
-                    <article class="kpi-card"><div class="kpi-label">Regelsätze</div><div class="kpi-value">4</div><div class="kpi-meta">Einzel, Team, Super Team, Bonus</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Korrekturen</div><div class="kpi-value">2</div><div class="kpi-meta">heute im Audit</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Serienwertungen</div><div class="kpi-value">3</div><div class="kpi-meta">Mädzn, SeaBar, Pünki</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Double Points</div><div class="kpi-value">1</div><div class="kpi-meta">Finale aktiv</div></article>
-                </div>
-
-                <div class="grid-2">
-                    <section class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Punkte-Regelsystem</h3>
-                                <p>Konfigurationsbausteine für den gesamten Wettbewerb.</p>
-                            </div>
-                        </div>
-                        <div class="grid-3">
-                            <div class="module-card"><h3>Weltcup-Punkte</h3><p>Top-30 Schema mit Standardabständen.</p></div>
-                            <div class="module-card"><h3>Team-Punkte</h3><p>Summenwert aus Einzel- und Teamdurchgängen.</p></div>
-                            <div class="module-card"><h3>Bonuspunkte</h3><p>Serien, Rekorde und Finalbonus.</p></div>
-                        </div>
-                    </section>
-                    <section class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Tie-Break-Logik</h3>
-                                <p>Entscheidungswege bei Punktgleichstand.</p>
-                            </div>
-                        </div>
-                        <div class="stack">
-                            <div class="info-card module-card"><h3>1. Beste Einzelplatzierung</h3><p>Primäre Reihenfolge bei Punktegleichstand.</p></div>
-                            <div class="info-card module-card"><h3>2. Letztes Event</h3><p>Zuletzt erzielte Platzierung entscheidet.</p></div>
-                            <div class="info-card module-card"><h3>3. Jury-Entscheid</h3><p>Nur mit Audit-Protokoll.</p></div>
-                        </div>
-                    </section>
-                </div>
-
-                <section class="panel">
-                    <div class="panel-header">
-                        <div>
-                            <h3>Event-Wertungen</h3>
-                            <p>Ranglisten pro Event inklusive Bonus und Jury-Korrekturen.</p>
-                        </div>
-                    </div>
-                    <table class="panel-table">
-                        <thead><tr><th>Rang</th><th>Athlet</th><th>Event</th><th>Punkte</th><th>Bonus</th><th>Kommentar</th></tr></thead>
-                        <tbody>
-                            <tr><td>1</td><td>Pingu Shen</td><td>SeaBar Trilogie</td><td>100</td><td>+10</td><td>Double-Points-Finale</td></tr>
-                            <tr><td>2</td><td>Kino von Patra</td><td>SeaBar Trilogie</td><td>80</td><td>+5</td><td>Jury-Korrektur bestätigt</td></tr>
-                            <tr><td>3</td><td>Rika Möller</td><td>SeaBar Trilogie</td><td>60</td><td>+0</td><td>Windkompensation aktiv</td></tr>
-                        </tbody>
-                    </table>
-                </section>
-
-                <div class="grid-2">
-                    <section class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Gesamtwertungen</h3>
-                                <p>Weltcup-, Team- und Serienwertungen.</p>
-                            </div>
-                        </div>
-                        <table class="panel-table">
-                            <thead><tr><th>Rang</th><th>Name</th><th>Punkte</th><th>Status</th></tr></thead>
-                            <tbody>
-                                <tr><td>1</td><td>Pingu Shen</td><td>460</td><td><span class="tag tag-success">Weltcup</span></td></tr>
-                                <tr><td>1</td><td>Maximan Flyers</td><td>580</td><td><span class="tag tag-info">Team</span></td></tr>
-                                <tr><td>1</td><td>SeaBar Trilogie</td><td>210</td><td><span class="tag tag-warning">Serie</span></td></tr>
-                            </tbody>
-                        </table>
-                    </section>
-                    <section class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Rechenhistorie</h3>
-                                <p>Aktuelle Neuberechnungen und Korrekturen.</p>
-                            </div>
-                        </div>
-                        <div class="timeline">
-                            <div class="timeline-item"><div class="timeline-time">19:01</div><div><strong>admin.maximan</strong><div>Double-Points-Regel für Finale aktiviert.</div></div></div>
-                            <div class="timeline-item"><div class="timeline-time">18:32</div><div><strong>jury.raphael</strong><div>Punktekorrektur für Windabbruch eingetragen.</div></div></div>
-                        </div>
-                    </section>
-                </div>
+                <div class="page-hero"><div><h2>Punkte & Wertungen</h2><p>Regeldefinitionen, Eventwertungen und Gesamtstände sind leer.</p></div></div>
+                <section class="panel"><div class="panel-header"><div><h3>Punkte-Regelsystem</h3></div></div><div class="empty-state">Keine Regeln konfiguriert.</div></section>
+                <section class="panel"><div class="panel-header"><div><h3>Event-Wertungen</h3></div></div><table class="panel-table"><thead><tr><th>Rang</th><th>Name</th><th>Event</th><th>Punkte</th><th>Bonus</th><th>Kommentar</th></tr></thead><tbody><tr><td colspan="6" class="empty-state">Keine Wertungen vorhanden.</td></tr></tbody></table></section>
+                <section class="panel"><div class="panel-header"><div><h3>Gesamtwertungen</h3></div></div><table class="panel-table"><thead><tr><th>Rang</th><th>Name</th><th>Punkte</th><th>Status</th></tr></thead><tbody><tr><td colspan="4" class="empty-state">Keine Gesamtwertungen vorhanden.</td></tr></tbody></table></section>
             </section>
         </main>
     </div>

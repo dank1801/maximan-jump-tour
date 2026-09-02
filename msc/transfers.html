@@ -9,10 +9,7 @@
 <body>
     <div class="portal-shell">
         <aside class="portal-sidebar">
-            <div class="portal-brand">
-                <h1>MSC Portal</h1>
-                <p>Transferfenster, Fristen und verknüpfte Vertragsdokumente.</p>
-            </div>
+            <div class="portal-brand"><h1>MSC Portal</h1><p>Transfermodul ohne Default-Einträge.</p></div>
             <nav class="portal-nav">
                 <a href="dashboard.html">Dashboard <small>Start</small></a>
                 <a href="users.html">Benutzer & Rollen <small>RBAC</small></a>
@@ -26,111 +23,14 @@
         </aside>
         <main class="portal-main">
             <header class="portal-topbar">
-                <div class="portal-topbar-left">
-                    <span class="portal-kicker">Transfers & Verträge</span>
-                    <div class="portal-topbar-title">Fenster, Sperrfristen und Dokumente</div>
-                </div>
-                <div class="portal-topbar-right">
-                    <span class="portal-user-chip"><span data-session-user>MSC Systemadministrator</span></span>
-                    <button id="logout-button" class="btn-small">Logout</button>
-                </div>
+                <div class="portal-topbar-left"><span class="portal-kicker">Transfers & Verträge</span><div class="portal-topbar-title">Transfersteuerung</div></div>
+                <div class="portal-topbar-right"><span class="portal-user-chip"><span data-session-user>Nicht gesetzt</span></span><button id="logout-button" class="btn-small">Logout</button></div>
             </header>
             <section class="portal-content">
-                <div class="page-hero">
-                    <div>
-                        <h2>Transfers & Verträge</h2>
-                        <p>Transferfenster steuern Freigaben, Sperrfristen und Dokumentstatus. Jede Entscheidung landet im Audit-Log.</p>
-                    </div>
-                    <div class="hero-actions">
-                        <button class="btn">Transferfenster prüfen</button>
-                        <button class="btn-secondary">Dokumente anzeigen</button>
-                    </div>
-                </div>
-
-                <div class="grid-kpis">
-                    <article class="kpi-card"><div class="kpi-label">Fensterstatus</div><div class="kpi-value">Offen</div><div class="kpi-meta">bis 31.07.2026</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Anträge</div><div class="kpi-value">5</div><div class="kpi-meta">2 genehmigt, 1 abgelehnt</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Sperrfristen</div><div class="kpi-value">2</div><div class="kpi-meta">aktiv</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Dokumente</div><div class="kpi-value">11</div><div class="kpi-meta">gültig / in Prüfung</div></article>
-                </div>
-
-                <div class="grid-2">
-                    <section class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Transferfenster</h3>
-                                <p>Zeiträume, Kategorien und Notfallregeln.</p>
-                            </div>
-                        </div>
-                        <table class="panel-table">
-                            <thead><tr><th>Fenster</th><th>Zeitraum</th><th>Betroffene Ligen</th><th>Status</th></tr></thead>
-                            <tbody>
-                                <tr><td>Sommerfenster</td><td>01.06. - 31.07.</td><td>A / B</td><td><span class="tag tag-success">Offen</span></td></tr>
-                                <tr><td>Notfallfenster</td><td>Ganzjährig</td><td>Alle</td><td><span class="tag tag-warning">Nur mit Juryfreigabe</span></td></tr>
-                            </tbody>
-                        </table>
-                    </section>
-                    <section class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Sperrfristen</h3>
-                                <p>Regeln für verbotene Wechsel und Fristende.</p>
-                            </div>
-                        </div>
-                        <div class="timeline">
-                            <div class="timeline-item"><div class="timeline-time">30 Tage</div><div><strong>Standard</strong><div>Für reguläre Transfers.</div></div></div>
-                            <div class="timeline-item"><div class="timeline-time">7 Tage</div><div><strong>Notfall</strong><div>Mit Sonderfreigabe und Protokoll.</div></div></div>
-                        </div>
-                    </section>
-                </div>
-
-                <section class="panel">
-                    <div class="panel-header">
-                        <div>
-                            <h3>Transferübersicht</h3>
-                            <p>Aktuelle Anträge mit Status und Frist.</p>
-                        </div>
-                    </div>
-                    <table class="panel-table">
-                        <thead><tr><th>Athlet</th><th>Von</th><th>Zu</th><th>Status</th><th>Sperrfrist</th><th>Aktionen</th></tr></thead>
-                        <tbody>
-                            <tr><td>Pingu Shen</td><td>Maximan Flyers</td><td>Raphael Eagles</td><td><span class="tag tag-warning">Beantragt</span></td><td>18 Tage</td><td><button class="btn-small">Genehmigen</button> <button class="btn-small btn-danger">Ablehnen</button></td></tr>
-                            <tr><td>Rika Möller</td><td>MicroJump Talents</td><td>Maximan Flyers</td><td><span class="tag tag-danger">Sperrfrist aktiv</span></td><td>3 Tage</td><td><button class="btn-small">Notfall markieren</button></td></tr>
-                            <tr><td>Pünki Train</td><td>Caesar Super Team</td><td>Maximan Flyers</td><td><span class="tag tag-success">Genehmigt</span></td><td>—</td><td><button class="btn-small">Protokoll</button></td></tr>
-                        </tbody>
-                    </table>
-                </section>
-
-                <div class="grid-2">
-                    <section class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Vertragsdokumente</h3>
-                                <p>Uploads und Status pro Dokument.</p>
-                            </div>
-                        </div>
-                        <table class="panel-table">
-                            <thead><tr><th>Datei</th><th>Bezug</th><th>Status</th></tr></thead>
-                            <tbody>
-                                <tr><td>contract_pingu.pdf</td><td>Pingu Shen</td><td><span class="tag tag-success">Gültig</span></td></tr>
-                                <tr><td>agreement_rika.pdf</td><td>Rika Möller</td><td><span class="tag tag-warning">In Prüfung</span></td></tr>
-                                <tr><td>team_transfer_2026.pdf</td><td>Maximan Flyers</td><td><span class="tag tag-success">Archiviert</span></td></tr>
-                            </tbody>
-                        </table>
-                    </section>
-                    <section class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Audit-Historie</h3>
-                                <p>Transferentscheidungen mit Zeitstempel.</p>
-                            </div>
-                        </div>
-                        <div class="timeline">
-                            <div class="timeline-item"><div class="timeline-time">Heute</div><div><strong>admin.maximan</strong><div>Notfalltransfer für Pünki Train freigegeben.</div></div></div>
-                            <div class="timeline-item"><div class="timeline-time">Gestern</div><div><strong>license.office</strong><div>Vertragsdokument für Rika Möller geprüft.</div></div></div>
-                        </div>
-                    </section>
-                </div>
+                <div class="page-hero"><div><h2>Transfers & Verträge</h2><p>Fenster, Sperrfristen, Anträge und Dokumente sind leer.</p></div></div>
+                <section class="panel"><div class="panel-header"><div><h3>Transferfenster</h3></div></div><div class="empty-state">Keine Fenster konfiguriert.</div></section>
+                <section class="panel"><div class="panel-header"><div><h3>Transferübersicht</h3></div></div><table class="panel-table"><thead><tr><th>Athlet</th><th>Von</th><th>Zu</th><th>Status</th><th>Sperrfrist</th><th>Aktionen</th></tr></thead><tbody><tr><td colspan="6" class="empty-state">Keine Transfers vorhanden.</td></tr></tbody></table></section>
+                <section class="panel"><div class="panel-header"><div><h3>Vertragsdokumente</h3></div></div><table class="panel-table"><thead><tr><th>Datei</th><th>Bezug</th><th>Status</th></tr></thead><tbody><tr><td colspan="3" class="empty-state">Keine Dokumente vorhanden.</td></tr></tbody></table></section>
             </section>
         </main>
     </div>
