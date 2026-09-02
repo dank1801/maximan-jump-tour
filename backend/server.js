@@ -23,7 +23,7 @@ const REQUIRE_PERSISTENT_DB = process.env.REQUIRE_PERSISTENT_DB === "true";
 const DEFAULT_RUNTIME_DIR = path.join(__dirname, "..", ".runtime", "data");
 const PERSISTENT_DIR_CANDIDATES = [
     String(process.env.DB_DIR || "").trim(),
-    RENDER_DISK_MOUNT_PATH ? path.join(RENDER_DISK_MOUNT_PATH, "data") : "",
+    RENDER_DISK_MOUNT_PATH ? RENDER_DISK_MOUNT_PATH : "",
     "/var/data"
 ].filter(Boolean);
 
@@ -254,6 +254,37 @@ function initDb() {
             details TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
+    `);
+}
+
+function migrateUsersEmailConstraint() {
+    const schemaRow = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get();
+    const createSql = String(schemaRow?.sql || "");
+    if (!/email\s+TEXT\s+NOT NULL\s+UNIQUE/i.test(createSql)) {
+        return;
+    }
+    db.exec(`
+        PRAGMA foreign_keys = OFF;
+        BEGIN;
+        ALTER TABLE users RENAME TO users_old_unique_email;
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL,
+            role TEXT NOT NULL,
+            password_hash TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            last_login_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO users (id, username, name, email, role, password_hash, status, last_login_at, created_at, updated_at)
+        SELECT id, username, name, email, role, password_hash, status, last_login_at, created_at, updated_at
+        FROM users_old_unique_email;
+        DROP TABLE users_old_unique_email;
+        COMMIT;
+        PRAGMA foreign_keys = ON;
     `);
 }
 
@@ -710,17 +741,51 @@ function parseConfigJsonSafely(value) {
     } catch (error) {
         return {};
     }
+}
 
-    function mapUserWriteError(error) {
-        const message = String(error?.message || "");
-        if (message.includes("users.username")) {
-            return "Diese Benutzerkennung ist bereits vergeben.";
-        }
-        if (message.includes("users.email")) {
-            return "Diese E-Mail-Adresse ist bereits vergeben.";
-        }
-        return null;
+function parseBooleanSetting(value, fallback = false) {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "string") {
+        const normalized = value.trim().toLowerCase();
+        if (["true", "1", "yes", "on", "ja"].includes(normalized)) return true;
+        if (["false", "0", "no", "off", "nein"].includes(normalized)) return false;
     }
+    if (typeof value === "number") return value === 1;
+    return fallback;
+}
+
+function getSettingValue(key) {
+    const row = db.prepare("SELECT value_json FROM settings WHERE key = ?").get(String(key || "").trim());
+    if (!row) return null;
+    return parseConfigJsonSafely(row.value_json);
+}
+
+function isDuplicateEmailAllowed() {
+    return parseBooleanSetting(getSettingValue("allow_duplicate_emails"), false);
+}
+
+function findUserByEmail(email, exceptUserId = null) {
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    if (!normalizedEmail) return null;
+    if (exceptUserId) {
+        return db
+            .prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id != ? LIMIT 1")
+            .get(normalizedEmail, exceptUserId);
+    }
+    return db
+        .prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1")
+        .get(normalizedEmail);
+}
+
+function mapUserWriteError(error) {
+    const message = String(error?.message || "");
+    if (message.includes("users.username")) {
+        return "Diese Benutzerkennung ist bereits vergeben.";
+    }
+    if (message.includes("users.email")) {
+        return "Diese E-Mail-Adresse ist bereits vergeben.";
+    }
+    return null;
 }
 
 function seedDefaultRoles() {
@@ -906,6 +971,7 @@ app.use(rateLimit({
 app.use(express.json({ limit: "1mb" }));
 
 initDb();
+migrateUsersEmailConstraint();
 seedDefaultRoles();
 
 const ADMIN_ROLES = ["msc admin", "admin", "root-admin"];
@@ -914,7 +980,11 @@ const JURY_WRITE_ROLES = [...ADMIN_ROLES, "jury"];
 const REPORT_WRITE_ROLES = [...ADMIN_ROLES, "reporter", "media"];
 
 app.get("/api/health", (_, res) => {
-    res.json({ status: "ok" });
+    res.json({
+        status: "ok",
+        dbPath: DB_PATH,
+        persistentStorage: usingPersistentStorage
+    });
 });
 
 app.get("/api/auth/bootstrap-status", (_, res) => {
@@ -1219,6 +1289,10 @@ app.get("/api/users", authRequired, requirePermission("users.read"), (req, res) 
 app.post("/api/users", authRequired, requirePermission("users.write"), (req, res) => {
     const { username, name, email, role, password, status } = req.body || {};
     if (!requireFields(res, req.body || {}, ["username", "name", "email", "role", "password"])) return;
+    if (!isDuplicateEmailAllowed() && findUserByEmail(email)) {
+        res.status(409).json({ error: "Diese E-Mail-Adresse ist bereits vergeben." });
+        return;
+    }
     const resolvedRole = resolveActiveRoleName(role);
     if (!resolvedRole) {
         res.status(400).json({ error: "Unknown or inactive role" });
@@ -1269,6 +1343,10 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
     const updates = [];
     const values = [];
     let invalidRole = false;
+    if (req.body.email !== undefined && !isDuplicateEmailAllowed() && findUserByEmail(req.body.email, id)) {
+        res.status(409).json({ error: "Diese E-Mail-Adresse ist bereits vergeben." });
+        return;
+    }
     allowed.forEach((field) => {
         if (req.body[field] !== undefined) {
             if (field === "role") {

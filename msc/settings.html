@@ -129,6 +129,17 @@
                             <div class="help-text">Nach dieser Zeit wird der Benutzer abgemeldet</div>
                         </div>
 
+                        <div class="form-group">
+                            <label>E-Mail-Eindeutigkeit</label>
+                            <div class="checkbox-group">
+                                <div class="checkbox-item">
+                                    <input type="checkbox" name="allow_duplicate_emails" value="true" />
+                                    <label>Doppelte E-Mail-Adressen erlauben</label>
+                                </div>
+                            </div>
+                            <div class="help-text">Wenn aktiv, dürfen mehrere Benutzer dieselbe E-Mail-Adresse haben.</div>
+                        </div>
+
                         <div class="form-actions" >
                             <button type="submit" class="btn btn-primary">Speichern</button>
                         </div>
@@ -242,6 +253,7 @@
             const securityConfigForm = document.getElementById("security-config-form");
             const defaultSeasonSelect = systemConfigForm?.querySelector("select[name='default_season']");
             const defaultPointsSchemaSelect = systemConfigForm?.querySelector("select[name='default_points_schema']");
+            const allowDuplicateEmailsCheckbox = securityConfigForm?.querySelector("input[name='allow_duplicate_emails']");
 
             function applyValuesToForm(form, values = {}) {
                 if (!form || !values || typeof values !== "object") return;
@@ -312,6 +324,9 @@
                     const map = Object.fromEntries((settings || []).map((entry) => [entry.key, entry.value]));
                     applyValuesToForm(systemConfigForm, map.system_config || {});
                     applyValuesToForm(securityConfigForm, map.security_config || {});
+                    if (allowDuplicateEmailsCheckbox) {
+                        allowDuplicateEmailsCheckbox.checked = Boolean(map.allow_duplicate_emails);
+                    }
                     applyLicenseCategoryPayload(map.license_categories || {});
                 } catch (error) {
                     showToast("Gespeicherte Einstellungen konnten nicht geladen werden.", "warning");
@@ -335,11 +350,18 @@
             securityConfigForm?.addEventListener("submit", async (e) => {
                 e.preventDefault();
                 const data = getFormData(securityConfigForm);
+                data.allow_duplicate_emails = allowDuplicateEmailsCheckbox?.checked ? "true" : "false";
                 try {
-                    await api("/settings", {
-                        method: "POST",
-                        body: JSON.stringify({ key: "security_config", value: data })
-                    });
+                    await Promise.all([
+                        api("/settings", {
+                            method: "POST",
+                            body: JSON.stringify({ key: "security_config", value: data })
+                        }),
+                        api("/settings", {
+                            method: "POST",
+                            body: JSON.stringify({ key: "allow_duplicate_emails", value: Boolean(allowDuplicateEmailsCheckbox?.checked) })
+                        })
+                    ]);
                     showToast("Sicherheitseinstellungen gespeichert.", "success");
                 } catch (error) {
                     showToast(error.message, "error");

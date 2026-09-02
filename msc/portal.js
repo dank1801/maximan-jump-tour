@@ -6,8 +6,12 @@ const AUTH_KEY = "msc_portal_auth";
 const TOAST_TIMEOUT = 4000;
 const LIVE_RECONNECT_DELAY_MS = 2000;
 const LIVE_REFRESH_DEBOUNCE_MS = 700;
+const LIVE_POLL_INTERVAL_MS = 15000;
 let liveSocket = null;
 let liveRefreshTimer = null;
+let livePollTimer = null;
+let liveReconnectTimer = null;
+let liveSyncListenersBound = false;
 
 // ============ HELPERS ============
 
@@ -223,13 +227,54 @@ function scheduleLiveRefresh() {
     }, LIVE_REFRESH_DEBOUNCE_MS);
 }
 
+function startLivePollingFallback() {
+    if (livePollTimer) return;
+    livePollTimer = setInterval(() => {
+        scheduleLiveRefresh();
+    }, LIVE_POLL_INTERVAL_MS);
+}
+
+function stopLivePollingFallback() {
+    if (!livePollTimer) return;
+    clearInterval(livePollTimer);
+    livePollTimer = null;
+}
+
+function scheduleLiveReconnect(delayMs = LIVE_RECONNECT_DELAY_MS) {
+    if (liveReconnectTimer) return;
+    liveReconnectTimer = setTimeout(() => {
+        liveReconnectTimer = null;
+        connectLiveSync();
+    }, delayMs);
+}
+
+function bindLiveSyncRecoveryListeners() {
+    if (liveSyncListenersBound) return;
+    liveSyncListenersBound = true;
+    window.addEventListener("online", () => {
+        scheduleLiveRefresh();
+        connectLiveSync();
+    });
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+            scheduleLiveRefresh();
+            connectLiveSync();
+        }
+    });
+}
+
 function connectLiveSync() {
     const auth = loadAuth();
     if (!auth?.token || liveSocket) return;
+    bindLiveSyncRecoveryListeners();
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
     const url = `${protocol}://${window.location.host}/ws?token=${encodeURIComponent(auth.token)}`;
     const socket = new WebSocket(url);
     liveSocket = socket;
+
+    socket.addEventListener("open", () => {
+        stopLivePollingFallback();
+    });
 
     socket.addEventListener("message", (event) => {
         try {
@@ -242,16 +287,22 @@ function connectLiveSync() {
         }
     });
 
-    socket.addEventListener("close", () => {
+    socket.addEventListener("close", (event) => {
         if (liveSocket === socket) {
             liveSocket = null;
-            setTimeout(connectLiveSync, LIVE_RECONNECT_DELAY_MS);
+            startLivePollingFallback();
+            const suspensionClose = String(event?.reason || "").toLowerCase().includes("suspension");
+            const nextDelay = suspensionClose ? 15000 : LIVE_RECONNECT_DELAY_MS;
+            if (document.visibilityState === "visible") {
+                scheduleLiveReconnect(nextDelay);
+            }
         }
     });
 
     socket.addEventListener("error", () => {
         if (liveSocket === socket) {
             liveSocket = null;
+            startLivePollingFallback();
         }
     });
 }
