@@ -642,6 +642,7 @@ const usersPageState = {
     roles: [],
     permissions: [],
     teams: [],
+    events: [],
     editingRoleId: null
 };
 
@@ -667,6 +668,24 @@ function isTeamManagerRole(roleName) {
     return String(roleName || "").trim().toLowerCase() === "teammanager";
 }
 
+const ASSIGNMENT_REQUIREMENTS = [
+    { key: "team", label: "Team-Zuordnung" },
+    { key: "venue", label: "Schanzen-Zuordnung" },
+    { key: "event", label: "Wettbewerb-Zuordnung" },
+    { key: "other", label: "Sonstige Zuordnung" }
+];
+
+function normalizeRequiredAssignments(requiredAssignments) {
+    const valid = new Set(ASSIGNMENT_REQUIREMENTS.map((entry) => entry.key));
+    if (!Array.isArray(requiredAssignments)) return [];
+    return [...new Set(requiredAssignments.map((entry) => String(entry || "").trim().toLowerCase()).filter((entry) => valid.has(entry)))];
+}
+
+function findRoleByName(roleName) {
+    const normalized = String(roleName || "").trim().toLowerCase();
+    return usersPageState.roles.find((role) => String(role.name || "").trim().toLowerCase() === normalized) || null;
+}
+
 function renderTeamSelectOptions(selectedId = "") {
     const normalizedSelected = String(selectedId || "").trim();
     const options = usersPageState.teams
@@ -680,19 +699,48 @@ function renderTeamSelectOptions(selectedId = "") {
     return `<option value="" ${normalizedSelected ? "" : "selected"}>Kein Team ausgewählt</option>${options}`;
 }
 
-function updateManagedTeamFieldState(roleValue, teamSelect) {
-    if (!teamSelect) return;
-    const required = isTeamManagerRole(roleValue);
-    teamSelect.required = required;
-    teamSelect.disabled = false;
+function renderEventSelectOptions(selectedId = "") {
+    const normalizedSelected = String(selectedId || "").trim();
+    const options = usersPageState.events
+        .filter((event) => event.status !== "cancelled")
+        .map((event) => {
+            const value = String(event.id);
+            const selected = normalizedSelected && value === normalizedSelected ? "selected" : "";
+            return `<option value="${escapeHtml(value)}" ${selected}>${escapeHtml(event.name)}</option>`;
+        })
+        .join("");
+    return `<option value="" ${normalizedSelected ? "" : "selected"}>Kein Wettbewerb ausgewählt</option>${options}`;
+}
+
+function assignmentSummary(user) {
+    const parts = [];
+    if (user.assignment_team_name || user.managed_team_name) parts.push(`Team: ${user.assignment_team_name || user.managed_team_name}`);
+    if (user.assignment_event_name) parts.push(`Wettkampf: ${user.assignment_event_name}`);
+    if (user.assignment_venue_code) parts.push(`Schanze: ${user.assignment_venue_code}`);
+    if (user.assignment_other_scope) parts.push(`Weitere: ${user.assignment_other_scope}`);
+    return parts.length ? parts.join(" · ") : "—";
+}
+
+function updateAssignmentFieldState(roleValue, fields = {}) {
+    const role = findRoleByName(roleValue);
+    const required = new Set(normalizeRequiredAssignments(role?.required_assignments || []));
+    const teamRequired = required.has("team") || isTeamManagerRole(roleValue);
+    if (fields.teamSelect) fields.teamSelect.required = teamRequired;
+    if (fields.eventSelect) fields.eventSelect.required = required.has("event");
+    if (fields.venueInput) fields.venueInput.required = required.has("venue");
+    if (fields.otherInput) fields.otherInput.required = required.has("other");
 }
 
 function renderCreateUserTeamSelect(selectedId = "") {
     const select = document.getElementById("create-user-team");
     if (!select) return;
     select.innerHTML = renderTeamSelectOptions(selectedId);
-    const roleSelect = document.getElementById("create-user-role");
-    updateManagedTeamFieldState(roleSelect?.value, select);
+}
+
+function renderCreateUserEventSelect(selectedId = "") {
+    const select = document.getElementById("create-user-event");
+    if (!select) return;
+    select.innerHTML = renderEventSelectOptions(selectedId);
 }
 
 function permissionGroupName(permission) {
@@ -730,15 +778,30 @@ function renderPermissionMatrix(selected = []) {
     container.innerHTML = sections || `<p class="table-empty">Keine Berechtigungen verfügbar.</p>`;
 }
 
+function renderAssignmentRequirementMatrix(selected = []) {
+    const container = document.getElementById("assignment-requirement-matrix");
+    if (!container) return;
+    const selectedSet = new Set(normalizeRequiredAssignments(selected));
+    const rows = ASSIGNMENT_REQUIREMENTS.map((entry) => `
+        <label class="permission-item">
+            <input type="checkbox" name="requiredAssignments" value="${escapeHtml(entry.key)}" ${selectedSet.has(entry.key) ? "checked" : ""} />
+            <span>${escapeHtml(entry.label)}</span>
+        </label>
+    `).join("");
+    container.innerHTML = `<div class="permission-list">${rows}</div>`;
+}
+
 function readRoleFormPayload() {
     const form = document.getElementById("role-form");
     const formData = new FormData(form);
     const permissions = formData.getAll("permissions");
+    const requiredAssignments = normalizeRequiredAssignments(formData.getAll("requiredAssignments"));
     return {
         name: String(formData.get("name") || "").trim(),
         description: String(formData.get("description") || "").trim(),
         status: formData.get("status") === "inactive" ? "inactive" : "active",
-        permissions
+        permissions,
+        requiredAssignments
     };
 }
 
@@ -756,6 +819,7 @@ function resetRoleForm() {
     const cancel = document.getElementById("role-cancel-edit");
     if (cancel) cancel.classList.add("hidden");
     renderPermissionMatrix([]);
+    renderAssignmentRequirementMatrix([]);
 }
 
 function fillRoleForm(role) {
@@ -766,6 +830,7 @@ function fillRoleForm(role) {
     form.elements.description.value = role.description || "";
     form.elements.status.value = role.status === "inactive" ? "inactive" : "active";
     renderPermissionMatrix(Array.isArray(role.permissions) ? role.permissions : []);
+    renderAssignmentRequirementMatrix(Array.isArray(role.required_assignments) ? role.required_assignments : []);
     usersPageState.editingRoleId = role.id;
     const submit = document.getElementById("role-submit-button");
     if (submit) submit.textContent = "Rolle speichern";
@@ -774,17 +839,21 @@ function fillRoleForm(role) {
 }
 
 async function loadRolesAndPermissions() {
-    const [roles, permissionPayload, teamsResult] = await Promise.all([
+    const [roles, permissionPayload, teamsResult, eventsResult] = await Promise.all([
         api("/roles"),
         api("/permissions"),
-        api("/teams").catch(() => [])
+        api("/teams").catch(() => []),
+        api("/events").catch(() => [])
     ]);
     usersPageState.roles = Array.isArray(roles) ? roles : [];
     usersPageState.permissions = Array.isArray(permissionPayload?.permissions) ? permissionPayload.permissions : [];
     usersPageState.teams = Array.isArray(teamsResult) ? teamsResult : [];
+    usersPageState.events = Array.isArray(eventsResult) ? eventsResult : [];
     renderCreateUserRoleSelect();
     renderCreateUserTeamSelect();
+    renderCreateUserEventSelect();
     renderPermissionMatrix([]);
+    renderAssignmentRequirementMatrix([]);
     renderRolesTable();
 }
 
@@ -794,12 +863,19 @@ function renderRolesTable() {
     const html = usersPageState.roles.map((role) => {
         const preview = (role.permissions || []).slice(0, 4).map((p) => `<span class="permission-pill">${escapeHtml(permissionLabel(p))}</span>`).join("");
         const extra = (role.permissions || []).length > 4 ? `<span class="permission-pill">+${(role.permissions || []).length - 4} weitere</span>` : "";
+        const assignmentPreview = normalizeRequiredAssignments(role.required_assignments || [])
+            .map((entry) => ASSIGNMENT_REQUIREMENTS.find((item) => item.key === entry)?.label || entry)
+            .map((label) => `<span class="permission-pill">${escapeHtml(label)}</span>`)
+            .join("");
         return `
             <tr>
                 <td><strong>${escapeHtml(role.name)}</strong></td>
                 <td>${escapeHtml(role.description || "—")}</td>
                 <td>${statusBadge(role.status)}</td>
-                <td><div class="permission-pill-list">${preview}${extra}</div></td>
+                <td>
+                    <div class="permission-pill-list">${preview}${extra}</div>
+                    <div class="permission-pill-list" style="margin-top: 8px;">${assignmentPreview || '<span class="permission-pill">Keine Pflicht-Zuweisung</span>'}</div>
+                </td>
                 <td>${role.user_count || 0}</td>
                 <td>
                     <button class="btn btn-small btn-secondary" data-edit-role="${role.id}">Bearbeiten</button>
@@ -851,7 +927,7 @@ async function loadUsers() {
             <td><code>${escapeHtml(user.username)}</code></td>
             <td>${escapeHtml(user.email || "—")}</td>
             <td><span class="badge badge-info">${escapeHtml(user.role || "—")}</span></td>
-            <td>${escapeHtml(user.managed_team_name || "—")}</td>
+            <td>${escapeHtml(assignmentSummary(user))}</td>
             <td>${statusBadge(user.status)}</td>
             <td>${user.last_login_at ? new Date(user.last_login_at).toLocaleDateString("de-DE") : "—"}</td>
             <td>
@@ -895,7 +971,8 @@ async function showEditUserModal(user) {
         await loadRolesAndPermissions();
     }
     const roleOptions = renderRoleSelectOptions(user.role);
-    const managedTeamOptions = renderTeamSelectOptions(user.managed_team_id || "");
+    const managedTeamOptions = renderTeamSelectOptions(user.assignment_team_id || user.managed_team_id || "");
+    const eventOptions = renderEventSelectOptions(user.assignment_event_id || "");
     const content = `
         <form id="edit-user-form">
             <div class="form-group">
@@ -917,6 +994,18 @@ async function showEditUserModal(user) {
             <div class="form-group">
                 <label>Verknüpftes Team (für Teammanager)</label>
                 <select name="managedTeamId">${managedTeamOptions}</select>
+            </div>
+            <div class="form-group">
+                <label>Zugewiesener Wettbewerb</label>
+                <select name="assignmentEventId">${eventOptions}</select>
+            </div>
+            <div class="form-group">
+                <label>Zugewiesene Schanze (Code)</label>
+                <input type="text" name="assignmentVenueCode" value="${escapeHtml(user.assignment_venue_code || "")}" />
+            </div>
+            <div class="form-group">
+                <label>Weitere Zuordnung</label>
+                <input type="text" name="assignmentOtherScope" value="${escapeHtml(user.assignment_other_scope || "")}" />
             </div>
             <div class="form-group">
                 <label>Status</label>
@@ -941,14 +1030,33 @@ async function showEditUserModal(user) {
             handler: async () => {
                 const form = document.getElementById("edit-user-form");
                 const data = getFormData(form);
-                const teamSelect = form.querySelector("select[name='managedTeamId']");
-                if (isTeamManagerRole(data.role) && !data.managedTeamId) {
-                    showToast("Teammanager muss einem Team zugeordnet sein.", "error");
+                const role = findRoleByName(data.role);
+                const required = new Set(normalizeRequiredAssignments(role?.required_assignments || []));
+                if ((required.has("team") || isTeamManagerRole(data.role)) && !data.managedTeamId) {
+                    showToast("Für diese Rolle ist ein Team verpflichtend.", "error");
                     return;
                 }
-                if (!isTeamManagerRole(data.role)) {
-                    data.managedTeamId = "";
+                if (required.has("event") && !data.assignmentEventId) {
+                    showToast("Für diese Rolle ist ein Wettbewerb verpflichtend.", "error");
+                    return;
                 }
+                if (required.has("venue") && !String(data.assignmentVenueCode || "").trim()) {
+                    showToast("Für diese Rolle ist eine Schanze verpflichtend.", "error");
+                    return;
+                }
+                if (required.has("other") && !String(data.assignmentOtherScope || "").trim()) {
+                    showToast("Für diese Rolle ist eine zusätzliche Zuordnung verpflichtend.", "error");
+                    return;
+                }
+                data.assignments = {
+                    teamId: data.managedTeamId || null,
+                    eventId: data.assignmentEventId || null,
+                    venueCode: String(data.assignmentVenueCode || "").trim(),
+                    otherScope: String(data.assignmentOtherScope || "").trim()
+                };
+                delete data.assignmentEventId;
+                delete data.assignmentVenueCode;
+                delete data.assignmentOtherScope;
                 if (!data.password) delete data.password;
                 try {
                     await api(`/users/${user.id}`, {
@@ -966,9 +1074,22 @@ async function showEditUserModal(user) {
     const editForm = document.getElementById("edit-user-form");
     const roleField = editForm?.querySelector("select[name='role']");
     const teamField = editForm?.querySelector("select[name='managedTeamId']");
-    updateManagedTeamFieldState(roleField?.value, teamField);
+    const eventField = editForm?.querySelector("select[name='assignmentEventId']");
+    const venueField = editForm?.querySelector("input[name='assignmentVenueCode']");
+    const otherField = editForm?.querySelector("input[name='assignmentOtherScope']");
+    updateAssignmentFieldState(roleField?.value, {
+        teamSelect: teamField,
+        eventSelect: eventField,
+        venueInput: venueField,
+        otherInput: otherField
+    });
     roleField?.addEventListener("change", () => {
-        updateManagedTeamFieldState(roleField.value, teamField);
+        updateAssignmentFieldState(roleField.value, {
+            teamSelect: teamField,
+            eventSelect: eventField,
+            venueInput: venueField,
+            otherInput: otherField
+        });
     });
 }
 
@@ -977,24 +1098,65 @@ async function setupUsersPage() {
     if (createUserForm) {
         const roleSelect = document.getElementById("create-user-role");
         const teamSelect = document.getElementById("create-user-team");
+        const eventSelect = document.getElementById("create-user-event");
+        const venueInput = createUserForm.querySelector("input[name='assignmentVenueCode']");
+        const otherInput = createUserForm.querySelector("input[name='assignmentOtherScope']");
         roleSelect?.addEventListener("change", () => {
-            updateManagedTeamFieldState(roleSelect.value, teamSelect);
+            updateAssignmentFieldState(roleSelect.value, {
+                teamSelect,
+                eventSelect,
+                venueInput,
+                otherInput
+            });
+        });
+        updateAssignmentFieldState(roleSelect?.value, {
+            teamSelect,
+            eventSelect,
+            venueInput,
+            otherInput
         });
         createUserForm.addEventListener("submit", async (event) => {
             event.preventDefault();
             const data = getFormData(createUserForm);
-            if (isTeamManagerRole(data.role) && !data.managedTeamId) {
-                showToast("Teammanager muss einem Team zugeordnet sein.", "error");
+            const role = findRoleByName(data.role);
+            const required = new Set(normalizeRequiredAssignments(role?.required_assignments || []));
+            if ((required.has("team") || isTeamManagerRole(data.role)) && !data.managedTeamId) {
+                showToast("Für diese Rolle ist ein Team verpflichtend.", "error");
                 return;
             }
-            if (!isTeamManagerRole(data.role)) {
-                data.managedTeamId = "";
+            if (required.has("event") && !data.assignmentEventId) {
+                showToast("Für diese Rolle ist ein Wettbewerb verpflichtend.", "error");
+                return;
             }
+            if (required.has("venue") && !String(data.assignmentVenueCode || "").trim()) {
+                showToast("Für diese Rolle ist eine Schanze verpflichtend.", "error");
+                return;
+            }
+            if (required.has("other") && !String(data.assignmentOtherScope || "").trim()) {
+                showToast("Für diese Rolle ist eine zusätzliche Zuordnung verpflichtend.", "error");
+                return;
+            }
+            data.assignments = {
+                teamId: data.managedTeamId || null,
+                eventId: data.assignmentEventId || null,
+                venueCode: String(data.assignmentVenueCode || "").trim(),
+                otherScope: String(data.assignmentOtherScope || "").trim()
+            };
+            delete data.assignmentEventId;
+            delete data.assignmentVenueCode;
+            delete data.assignmentOtherScope;
             try {
                 await api("/users", { method: "POST", body: JSON.stringify(data) });
                 createUserForm.reset();
                 renderCreateUserRoleSelect();
                 renderCreateUserTeamSelect();
+                renderCreateUserEventSelect();
+                updateAssignmentFieldState(roleSelect?.value, {
+                    teamSelect,
+                    eventSelect,
+                    venueInput,
+                    otherInput
+                });
                 showToast("Benutzer erstellt", "success");
                 await loadUsers();
             } catch (error) {

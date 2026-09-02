@@ -254,14 +254,22 @@
             const defaultSeasonSelect = systemConfigForm?.querySelector("select[name='default_season']");
             const defaultPointsSchemaSelect = systemConfigForm?.querySelector("select[name='default_points_schema']");
             const allowDuplicateEmailsCheckbox = securityConfigForm?.querySelector("input[name='allow_duplicate_emails']");
+            const securityCheckboxNames = ["require_uppercase", "require_numbers", "require_special", "allow_duplicate_emails"];
+
+            function toBoolean(value) {
+                return value === true || value === "true" || value === "1" || value === 1 || value === "on";
+            }
 
             function applyValuesToForm(form, values = {}) {
                 if (!form || !values || typeof values !== "object") return;
+                form.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
+                    checkbox.checked = false;
+                });
                 Object.entries(values).forEach(([key, value]) => {
                     const field = form.elements.namedItem(key);
                     if (!field) return;
                     if (field.type === "checkbox") {
-                        field.checked = value === true || value === "true" || value === "on";
+                        field.checked = toBoolean(value);
                     } else {
                         field.value = value ?? "";
                     }
@@ -325,7 +333,7 @@
                     applyValuesToForm(systemConfigForm, map.system_config || {});
                     applyValuesToForm(securityConfigForm, map.security_config || {});
                     if (allowDuplicateEmailsCheckbox) {
-                        allowDuplicateEmailsCheckbox.checked = Boolean(map.allow_duplicate_emails);
+                        allowDuplicateEmailsCheckbox.checked = toBoolean(map.allow_duplicate_emails);
                     }
                     applyLicenseCategoryPayload(map.license_categories || {});
                 } catch (error) {
@@ -341,6 +349,7 @@
                         method: "POST",
                         body: JSON.stringify({ key: "system_config", value: data })
                     });
+                    await hydrateSettingsForms();
                     showToast("Systemkonfiguration gespeichert.", "success");
                 } catch (error) {
                     showToast(error.message, "error");
@@ -350,7 +359,12 @@
             securityConfigForm?.addEventListener("submit", async (e) => {
                 e.preventDefault();
                 const data = getFormData(securityConfigForm);
-                data.allow_duplicate_emails = allowDuplicateEmailsCheckbox?.checked ? "true" : "false";
+                securityCheckboxNames.forEach((name) => {
+                    const checkbox = securityConfigForm.querySelector(`input[name='${name}']`);
+                    if (checkbox) {
+                        data[name] = checkbox.checked ? "true" : "false";
+                    }
+                });
                 try {
                     await Promise.all([
                         api("/settings", {
@@ -359,9 +373,10 @@
                         }),
                         api("/settings", {
                             method: "POST",
-                            body: JSON.stringify({ key: "allow_duplicate_emails", value: Boolean(allowDuplicateEmailsCheckbox?.checked) })
+                            body: JSON.stringify({ key: "allow_duplicate_emails", value: allowDuplicateEmailsCheckbox?.checked ? "true" : "false" })
                         })
                     ]);
+                    await hydrateSettingsForms();
                     showToast("Sicherheitseinstellungen gespeichert.", "success");
                 } catch (error) {
                     showToast(error.message, "error");
@@ -374,6 +389,7 @@
                         method: "POST",
                         body: JSON.stringify({ key: "license_categories", value: readLicenseCategoryPayload() })
                     });
+                    await hydrateSettingsForms();
                     showToast("Lizenz-Kategorien gespeichert.", "success");
                 } catch (error) {
                     showToast(error.message, "error");

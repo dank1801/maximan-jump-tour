@@ -85,6 +85,7 @@ function initDb() {
             name TEXT NOT NULL UNIQUE COLLATE NOCASE,
             description TEXT,
             permissions_json TEXT NOT NULL,
+            required_assignments_json TEXT NOT NULL DEFAULT '[]',
             status TEXT NOT NULL DEFAULT 'active',
             is_system INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -95,13 +96,25 @@ function initDb() {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE,
             name TEXT NOT NULL,
-            email TEXT NOT NULL UNIQUE,
+            email TEXT NOT NULL,
             role TEXT NOT NULL,
             password_hash TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'active',
             last_login_at TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS user_scope_assignments (
+            user_id INTEGER PRIMARY KEY,
+            team_id INTEGER,
+            event_id INTEGER,
+            venue_code TEXT,
+            other_scope TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE SET NULL,
+            FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE SET NULL
         );
 
         CREATE TABLE IF NOT EXISTS teams (
@@ -288,6 +301,14 @@ function migrateUsersEmailConstraint() {
     `);
 }
 
+function ensureRolesRequiredAssignmentsColumn() {
+    const columns = db.prepare("PRAGMA table_info(roles)").all();
+    const hasColumn = columns.some((column) => column.name === "required_assignments_json");
+    if (!hasColumn) {
+        db.prepare("ALTER TABLE roles ADD COLUMN required_assignments_json TEXT NOT NULL DEFAULT '[]'").run();
+    }
+}
+
 const ALL_PERMISSIONS = [
     "dashboard.read",
     "audit.read",
@@ -344,6 +365,7 @@ const DEFAULT_ROLE_DEFINITIONS = [
     {
         name: "Teammanager",
         description: "Verwaltet Teams, Mitglieder und Teamdaten.",
+        requiredAssignments: ["team"],
         permissions: [
             "dashboard.read",
             "teams.read",
@@ -360,6 +382,7 @@ const DEFAULT_ROLE_DEFINITIONS = [
     {
         name: "Jury",
         description: "Pflegt Wettkämpfe, Punktregeln und Jury-Entscheidungen.",
+        requiredAssignments: ["event"],
         permissions: [
             "dashboard.read",
             "events.read",
@@ -379,6 +402,7 @@ const DEFAULT_ROLE_DEFINITIONS = [
     {
         name: "Lizenzstelle",
         description: "Bearbeitet Lizenz- und Vertragsprozesse.",
+        requiredAssignments: ["team"],
         permissions: [
             "dashboard.read",
             "teams.read",
@@ -394,6 +418,7 @@ const DEFAULT_ROLE_DEFINITIONS = [
     {
         name: "Reporter",
         description: "Erstellt Veröffentlichungen und Reporting-Ausgaben.",
+        requiredAssignments: [],
         permissions: [
             "dashboard.read",
             "events.read",
@@ -435,6 +460,8 @@ const BONUS_TRIGGER_OPTIONS = [
     "clean_sweep",
     "finalissimo_double"
 ];
+
+const ROLE_ASSIGNMENT_TARGETS = ["team", "venue", "event", "other"];
 
 const SYSTEM_SCOPE_MODULES = [
     { key: "identity_access", name: "Identity & Access", priority: "critical", category: "governance" },
@@ -500,6 +527,27 @@ function signToken(user) {
 function parsePermissions(value) {
     const list = Array.isArray(value) ? value : [];
     return [...new Set(list.map((entry) => String(entry || "").trim()).filter(Boolean))];
+}
+
+function parseRoleRequiredAssignments(value) {
+    const list = Array.isArray(value) ? value : [];
+    return [...new Set(list
+        .map((entry) => String(entry || "").trim().toLowerCase())
+        .filter((entry) => ROLE_ASSIGNMENT_TARGETS.includes(entry))
+    )];
+}
+
+function getRoleAssignmentRequirementsByName(roleName) {
+    const row = db
+        .prepare("SELECT required_assignments_json FROM roles WHERE LOWER(name) = LOWER(?) LIMIT 1")
+        .get(String(roleName || "").trim());
+    if (!row) {
+        const fallback = DEFAULT_ROLE_DEFINITIONS.find(
+            (entry) => normalizeRole(entry.name) === normalizeRole(roleName)
+        );
+        return parseRoleRequiredAssignments(fallback?.requiredAssignments || []);
+    }
+    return parseRoleRequiredAssignments(parseConfigJsonSafely(row.required_assignments_json || "[]"));
 }
 
 function buildDescendingScale(maxRank, startPoints, step, minimumPoints = 1) {
@@ -790,15 +838,21 @@ function mapUserWriteError(error) {
 
 function seedDefaultRoles() {
     const upsert = db.prepare(
-        `INSERT INTO roles (name, description, permissions_json, status, is_system, updated_at)
-         VALUES (?, ?, ?, 'active', 1, CURRENT_TIMESTAMP)
+        `INSERT INTO roles (name, description, permissions_json, required_assignments_json, status, is_system, updated_at)
+         VALUES (?, ?, ?, ?, 'active', 1, CURRENT_TIMESTAMP)
          ON CONFLICT(name) DO UPDATE SET
            description = excluded.description,
            permissions_json = excluded.permissions_json,
+           required_assignments_json = excluded.required_assignments_json,
            updated_at = CURRENT_TIMESTAMP`
     );
     DEFAULT_ROLE_DEFINITIONS.forEach((role) => {
-        upsert.run(role.name, role.description, JSON.stringify(role.permissions));
+        upsert.run(
+           role.name,
+           role.description,
+           JSON.stringify(role.permissions),
+           JSON.stringify(parseRoleRequiredAssignments(role.requiredAssignments || []))
+        );
     });
 }
 
@@ -994,6 +1048,111 @@ function parseOptionalIdStrict(value) {
     return { provided: true, value: parsed, valid: Boolean(parsed) };
 }
 
+function getEventById(eventId) {
+    return db
+        .prepare("SELECT id, name, status FROM events WHERE id = ?")
+        .get(eventId);
+}
+
+function normalizeUserAssignments(input, fallbackTeamId = undefined) {
+    const source = input && typeof input === "object" ? input : {};
+    const hasTeamId = Object.prototype.hasOwnProperty.call(source, "teamId");
+    const hasEventId = Object.prototype.hasOwnProperty.call(source, "eventId");
+    const hasVenueCode = Object.prototype.hasOwnProperty.call(source, "venueCode");
+    const hasOtherScope = Object.prototype.hasOwnProperty.call(source, "otherScope");
+    const rawTeamId = hasTeamId ? source.teamId : fallbackTeamId;
+    const teamResult = parseOptionalIdStrict(rawTeamId);
+    const eventResult = parseOptionalIdStrict(source.eventId);
+    if (!teamResult.valid || !eventResult.valid) {
+        return { valid: false, assignments: null };
+    }
+    const venueCode = String(source.venueCode || "").trim();
+    const otherScope = String(source.otherScope || "").trim();
+    return {
+        valid: true,
+        assignments: {
+            teamId: teamResult.value,
+            eventId: eventResult.value,
+            venueCode,
+            otherScope
+        },
+        provided: {
+            teamId: hasTeamId || fallbackTeamId !== undefined,
+            eventId: hasEventId,
+            venueCode: hasVenueCode,
+            otherScope: hasOtherScope
+        }
+    };
+}
+
+function validateUserAssignments(assignments, requiredAssignments) {
+    if (!assignments || typeof assignments !== "object") return "Ungültige Zuordnungsdaten.";
+    const required = parseRoleRequiredAssignments(requiredAssignments || []);
+    if (required.includes("team") && !assignments.teamId) return "Für diese Rolle ist ein Team verpflichtend.";
+    if (required.includes("event") && !assignments.eventId) return "Für diese Rolle ist ein Wettbewerb verpflichtend.";
+    if (required.includes("venue") && !assignments.venueCode) return "Für diese Rolle ist eine Schanze verpflichtend.";
+    if (required.includes("other") && !assignments.otherScope) return "Für diese Rolle ist eine zusätzliche Zuordnung verpflichtend.";
+    if (assignments.teamId) {
+        const team = getTeamById(assignments.teamId);
+        if (!team || team.status === "inactive") return "Ausgewähltes Team wurde nicht gefunden.";
+    }
+    if (assignments.eventId) {
+        const eventEntry = getEventById(assignments.eventId);
+        if (!eventEntry) return "Ausgewählter Wettbewerb wurde nicht gefunden.";
+    }
+    return null;
+}
+
+function upsertUserScopeAssignments(userId, assignments) {
+    db.prepare(
+        `INSERT INTO user_scope_assignments (user_id, team_id, event_id, venue_code, other_scope, updated_at)
+         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(user_id) DO UPDATE SET
+           team_id = excluded.team_id,
+           event_id = excluded.event_id,
+           venue_code = excluded.venue_code,
+           other_scope = excluded.other_scope,
+           updated_at = CURRENT_TIMESTAMP`
+    ).run(
+        userId,
+        assignments.teamId || null,
+        assignments.eventId || null,
+        assignments.venueCode || null,
+        assignments.otherScope || null
+    );
+}
+
+function getUserScopeAssignments(userId) {
+    const row = db
+        .prepare(
+            `SELECT usa.user_id, usa.team_id, usa.event_id, usa.venue_code, usa.other_scope,
+                    t.name AS team_name, e.name AS event_name
+             FROM user_scope_assignments usa
+             LEFT JOIN teams t ON t.id = usa.team_id
+             LEFT JOIN events e ON e.id = usa.event_id
+             WHERE usa.user_id = ?`
+        )
+        .get(userId);
+    if (!row) {
+        return {
+            teamId: null,
+            teamName: null,
+            eventId: null,
+            eventName: null,
+            venueCode: "",
+            otherScope: ""
+        };
+    }
+    return {
+        teamId: row.team_id || null,
+        teamName: row.team_name || null,
+        eventId: row.event_id || null,
+        eventName: row.event_name || null,
+        venueCode: row.venue_code || "",
+        otherScope: row.other_scope || ""
+    };
+}
+
 const app = express();
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
@@ -1011,6 +1170,7 @@ app.use(express.json({ limit: "1mb" }));
 
 initDb();
 migrateUsersEmailConstraint();
+ensureRolesRequiredAssignmentsColumn();
 seedDefaultRoles();
 
 const ADMIN_ROLES = ["msc admin", "admin", "root-admin"];
@@ -1104,17 +1264,23 @@ app.get("/api/permissions", authRequired, requirePermission("roles.read"), (_req
 
 app.get("/api/roles", authRequired, requirePermission("roles.read"), (_req, res) => {
     const rows = db.prepare(
-        `SELECT r.id, r.name, r.description, r.status, r.is_system, r.permissions_json, r.created_at, r.updated_at,
+        `SELECT r.id, r.name, r.description, r.status, r.is_system, r.permissions_json, r.required_assignments_json, r.created_at, r.updated_at,
                 (SELECT COUNT(*) FROM users u WHERE LOWER(u.role) = LOWER(r.name)) AS user_count
          FROM roles r
          ORDER BY r.name ASC`
     ).all();
     const mapped = rows.map((row) => {
         let permissions = [];
+        let requiredAssignments = [];
         try {
             permissions = parsePermissions(JSON.parse(row.permissions_json || "[]"));
         } catch (error) {
             permissions = [];
+        }
+        try {
+            requiredAssignments = parseRoleRequiredAssignments(JSON.parse(row.required_assignments_json || "[]"));
+        } catch (error) {
+            requiredAssignments = [];
         }
         return {
             id: row.id,
@@ -1125,16 +1291,18 @@ app.get("/api/roles", authRequired, requirePermission("roles.read"), (_req, res)
             user_count: row.user_count,
             created_at: row.created_at,
             updated_at: row.updated_at,
-            permissions
+            permissions,
+            required_assignments: requiredAssignments
         };
     });
     res.json(mapped);
 });
 
 app.post("/api/roles", authRequired, requirePermission("roles.write"), (req, res) => {
-    const { name, description, permissions, status } = req.body || {};
+    const { name, description, permissions, requiredAssignments, status } = req.body || {};
     if (!requireFields(res, req.body || {}, ["name"])) return;
     const normalizedPermissions = parsePermissions(permissions || []);
+    const normalizedRequiredAssignments = parseRoleRequiredAssignments(requiredAssignments || []);
     const invalid = normalizedPermissions.filter((entry) => !ALL_PERMISSIONS.includes(entry));
     if (invalid.length > 0) {
         res.status(400).json({ error: `Unknown permissions: ${invalid.join(", ")}` });
@@ -1142,12 +1310,13 @@ app.post("/api/roles", authRequired, requirePermission("roles.write"), (req, res
     }
     try {
         const result = db.prepare(
-            `INSERT INTO roles (name, description, permissions_json, status, is_system, updated_at)
-             VALUES (?, ?, ?, ?, 0, CURRENT_TIMESTAMP)`
+            `INSERT INTO roles (name, description, permissions_json, required_assignments_json, status, is_system, updated_at)
+             VALUES (?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP)`
         ).run(
             String(name).trim(),
             description ? String(description).trim() : null,
             JSON.stringify(normalizedPermissions),
+            JSON.stringify(normalizedRequiredAssignments),
             status === "inactive" ? "inactive" : "active"
         );
         const created = db.prepare("SELECT id, name, description, status, is_system, created_at, updated_at FROM roles WHERE id = ?").get(result.lastInsertRowid);
@@ -1155,7 +1324,8 @@ app.post("/api/roles", authRequired, requirePermission("roles.write"), (req, res
         res.status(201).json({
             ...created,
             is_system: created.is_system === 1,
-            permissions: normalizedPermissions
+            permissions: normalizedPermissions,
+            required_assignments: normalizedRequiredAssignments
         });
     } catch (error) {
         res.status(409).json({ error: "Role already exists" });
@@ -1208,6 +1378,11 @@ app.patch("/api/roles/:id", authRequired, requirePermission("roles.write"), (req
         updates.push("permissions_json = ?");
         values.push(JSON.stringify(normalizedPermissions));
     }
+    if (req.body?.requiredAssignments !== undefined) {
+        const normalizedRequiredAssignments = parseRoleRequiredAssignments(req.body.requiredAssignments);
+        updates.push("required_assignments_json = ?");
+        values.push(JSON.stringify(normalizedRequiredAssignments));
+    }
     if (updates.length === 0) {
         res.status(400).json({ error: "No updatable fields provided" });
         return;
@@ -1223,13 +1398,19 @@ app.patch("/api/roles/:id", authRequired, requirePermission("roles.write"), (req
     }
 
     const updated = db.prepare(
-        "SELECT id, name, description, status, is_system, created_at, updated_at, permissions_json FROM roles WHERE id = ?"
+        "SELECT id, name, description, status, is_system, created_at, updated_at, permissions_json, required_assignments_json FROM roles WHERE id = ?"
     ).get(id);
     let permissions = [];
+    let requiredAssignments = [];
     try {
         permissions = parsePermissions(JSON.parse(updated.permissions_json || "[]"));
     } catch (error) {
         permissions = [];
+    }
+    try {
+        requiredAssignments = parseRoleRequiredAssignments(JSON.parse(updated.required_assignments_json || "[]"));
+    } catch (error) {
+        requiredAssignments = [];
     }
     logAudit(req.user, "UPDATE_ROLE", "roles", id, JSON.stringify(req.body || {}));
     res.json({
@@ -1240,7 +1421,8 @@ app.patch("/api/roles/:id", authRequired, requirePermission("roles.write"), (req
         is_system: updated.is_system === 1,
         created_at: updated.created_at,
         updated_at: updated.updated_at,
-        permissions
+        permissions,
+        required_assignments: requiredAssignments
     });
 });
 
@@ -1319,9 +1501,18 @@ app.get("/api/audit-logs", authRequired, requirePermission("audit.read"), (req, 
 app.get("/api/users", authRequired, requirePermission("users.read"), (req, res) => {
     const rows = db.prepare(
         `SELECT u.id, u.username, u.name, u.email, u.role, u.status, u.last_login_at, u.created_at,
+                usa.team_id AS assignment_team_id,
+                team.name AS assignment_team_name,
+                usa.event_id AS assignment_event_id,
+                event.name AS assignment_event_name,
+                usa.venue_code AS assignment_venue_code,
+                usa.other_scope AS assignment_other_scope,
                 (SELECT t.id FROM teams t WHERE t.manager_user_id = u.id AND t.status != 'inactive' ORDER BY t.id ASC LIMIT 1) AS managed_team_id,
                 (SELECT t.name FROM teams t WHERE t.manager_user_id = u.id AND t.status != 'inactive' ORDER BY t.id ASC LIMIT 1) AS managed_team_name
          FROM users u
+         LEFT JOIN user_scope_assignments usa ON usa.user_id = u.id
+         LEFT JOIN teams team ON team.id = usa.team_id
+         LEFT JOIN events event ON event.id = usa.event_id
          ORDER BY u.id DESC`
     ).all();
     res.json(rows);
@@ -1339,26 +1530,28 @@ app.post("/api/users", authRequired, requirePermission("users.write"), (req, res
         res.status(400).json({ error: "Unknown or inactive role" });
         return;
     }
-    const parsedManagedTeam = parseOptionalIdStrict(managedTeamId);
-    if (!parsedManagedTeam.valid) {
-        res.status(400).json({ error: "Ungültige Team-ID für Teammanager-Zuordnung." });
+    const normalizedAssignments = normalizeUserAssignments(req.body?.assignments, managedTeamId);
+    if (!normalizedAssignments.valid) {
+        res.status(400).json({ error: "Ungültige Zuordnungsdaten." });
         return;
     }
-    if (isTeamManagerRole(resolvedRole) && !parsedManagedTeam.value) {
+    const requiredAssignments = getRoleAssignmentRequirementsByName(resolvedRole);
+    const assignmentError = validateUserAssignments(normalizedAssignments.assignments, requiredAssignments);
+    if (assignmentError) {
+        res.status(400).json({ error: assignmentError });
+        return;
+    }
+    if (isTeamManagerRole(resolvedRole) && !normalizedAssignments.assignments.teamId) {
         res.status(400).json({ error: "Teammanager muss einem Team zugeordnet sein." });
         return;
     }
-    if (!isTeamManagerRole(resolvedRole) && parsedManagedTeam.provided && parsedManagedTeam.value) {
-        res.status(400).json({ error: "Nur Teammanager dürfen mit einem Team verknüpft werden." });
-        return;
-    }
-    if (parsedManagedTeam.value) {
-        const targetTeam = getTeamById(parsedManagedTeam.value);
+    if (normalizedAssignments.assignments.teamId) {
+        const targetTeam = getTeamById(normalizedAssignments.assignments.teamId);
         if (!targetTeam || targetTeam.status === "inactive") {
             res.status(404).json({ error: "Ausgewähltes Team wurde nicht gefunden." });
             return;
         }
-        if (targetTeam.manager_user_id) {
+        if (isTeamManagerRole(resolvedRole) && targetTeam.manager_user_id) {
             res.status(409).json({ error: "Dieses Team hat bereits einen Teammanager." });
             return;
         }
@@ -1380,10 +1573,11 @@ app.post("/api/users", authRequired, requirePermission("users.write"), (req, res
                 hash,
                 status === "inactive" ? "inactive" : "active"
             );
-        if (parsedManagedTeam.value) {
+        if (normalizedAssignments.assignments.teamId && isTeamManagerRole(resolvedRole)) {
             db.prepare("UPDATE teams SET manager_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-                .run(result.lastInsertRowid, parsedManagedTeam.value);
+                .run(result.lastInsertRowid, normalizedAssignments.assignments.teamId);
         }
+        upsertUserScopeAssignments(result.lastInsertRowid, normalizedAssignments.assignments);
     });
     try {
         createUserWithAssignment();
@@ -1402,8 +1596,17 @@ app.post("/api/users", authRequired, requirePermission("users.write"), (req, res
          FROM users u
          WHERE u.id = ?`
     ).get(result.lastInsertRowid);
+    const assignment = getUserScopeAssignments(result.lastInsertRowid);
     logAudit(req.user, "CREATE_USER", "users", created.id, `${created.username} (${created.role})`);
-    res.status(201).json(created);
+    res.status(201).json({
+        ...created,
+        assignment_team_id: assignment.teamId,
+        assignment_team_name: assignment.teamName,
+        assignment_event_id: assignment.eventId,
+        assignment_event_name: assignment.eventName,
+        assignment_venue_code: assignment.venueCode,
+        assignment_other_scope: assignment.otherScope
+    });
 });
 
 app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req, res) => {
@@ -1449,21 +1652,40 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
         return;
     }
     const currentManagedTeam = findTeamManagedByUser(id);
-    const parsedManagedTeam = parseOptionalIdStrict(req.body.managedTeamId);
-    if (!parsedManagedTeam.valid) {
-        res.status(400).json({ error: "Ungültige Team-ID für Teammanager-Zuordnung." });
+    const currentAssignments = getUserScopeAssignments(id);
+    const normalizedAssignments = normalizeUserAssignments(
+        req.body?.assignments,
+        req.body?.managedTeamId !== undefined ? req.body.managedTeamId : currentAssignments.teamId
+    );
+    if (!normalizedAssignments.valid) {
+        res.status(400).json({ error: "Ungültige Zuordnungsdaten." });
         return;
     }
-    const finalManagedTeamId = parsedManagedTeam.provided
-        ? parsedManagedTeam.value
-        : (currentManagedTeam?.id || null);
+    const finalAssignments = {
+        teamId: normalizedAssignments.assignments.teamId,
+        eventId: normalizedAssignments.provided.eventId
+            ? normalizedAssignments.assignments.eventId
+            : currentAssignments.eventId,
+        venueCode: normalizedAssignments.provided.venueCode
+            ? normalizedAssignments.assignments.venueCode
+            : currentAssignments.venueCode,
+        otherScope: normalizedAssignments.provided.otherScope
+            ? normalizedAssignments.assignments.otherScope
+            : currentAssignments.otherScope
+    };
+    const requiredAssignments = getRoleAssignmentRequirementsByName(nextRole);
+    const assignmentError = validateUserAssignments(finalAssignments, requiredAssignments);
+    if (assignmentError) {
+        res.status(400).json({ error: assignmentError });
+        return;
+    }
 
     if (isTeamManagerRole(nextRole)) {
-        if (!finalManagedTeamId) {
+        if (!finalAssignments.teamId) {
             res.status(400).json({ error: "Teammanager muss einem Team zugeordnet sein." });
             return;
         }
-        const targetTeam = getTeamById(finalManagedTeamId);
+        const targetTeam = getTeamById(finalAssignments.teamId);
         if (!targetTeam || targetTeam.status === "inactive") {
             res.status(404).json({ error: "Ausgewähltes Team wurde nicht gefunden." });
             return;
@@ -1472,16 +1694,18 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
             res.status(409).json({ error: "Dieses Team hat bereits einen anderen Teammanager." });
             return;
         }
-    } else if (parsedManagedTeam.provided && finalManagedTeamId) {
-        res.status(400).json({ error: "Nur Teammanager dürfen mit einem Team verknüpft werden." });
-        return;
     }
 
     if (req.body.password) {
         updates.push("password_hash = ?");
         values.push(bcrypt.hashSync(String(req.body.password), 12));
     }
-    if (updates.length === 0 && !parsedManagedTeam.provided && normalizeRole(nextRole) === normalizeRole(existing.role)) {
+    const hasAssignmentChange =
+        finalAssignments.teamId !== currentAssignments.teamId ||
+        finalAssignments.eventId !== currentAssignments.eventId ||
+        finalAssignments.venueCode !== currentAssignments.venueCode ||
+        finalAssignments.otherScope !== currentAssignments.otherScope;
+    if (updates.length === 0 && !hasAssignmentChange && normalizeRole(nextRole) === normalizeRole(existing.role)) {
         res.status(400).json({ error: "No updatable fields provided" });
         return;
     }
@@ -1494,13 +1718,14 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
         if (updates.length > 0) {
             db.prepare(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`).run(...values);
         }
+        upsertUserScopeAssignments(id, finalAssignments);
         if (isTeamManagerRole(nextRole)) {
-            if (currentManagedTeam && currentManagedTeam.id !== finalManagedTeamId) {
+            if (currentManagedTeam && currentManagedTeam.id !== finalAssignments.teamId) {
                 db.prepare("UPDATE teams SET manager_user_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
                     .run(currentManagedTeam.id);
             }
             db.prepare("UPDATE teams SET manager_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-                .run(id, finalManagedTeamId);
+                .run(id, finalAssignments.teamId);
         } else if (currentManagedTeam) {
             db.prepare("UPDATE teams SET manager_user_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE manager_user_id = ?")
                 .run(id);
@@ -1523,8 +1748,17 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
          FROM users u
          WHERE u.id = ?`
     ).get(id);
+    const assignment = getUserScopeAssignments(id);
     logAudit(req.user, "UPDATE_USER", "users", id, JSON.stringify(req.body));
-    res.json(updated);
+    res.json({
+        ...updated,
+        assignment_team_id: assignment.teamId,
+        assignment_team_name: assignment.teamName,
+        assignment_event_id: assignment.eventId,
+        assignment_event_name: assignment.eventName,
+        assignment_venue_code: assignment.venueCode,
+        assignment_other_scope: assignment.otherScope
+    });
 });
 
 app.delete("/api/users/:id", authRequired, requirePermission("users.write"), (req, res) => {

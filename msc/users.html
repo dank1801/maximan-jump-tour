@@ -68,7 +68,20 @@
                                 <div class="form-group">
                                     <label for="create-user-team">Verknüpftes Team (für Teammanager)</label>
                                     <select id="create-user-team" name="managedTeamId"></select>
-                                    <div class="help-text">Pflichtfeld bei Rolle „Teammanager“.</div>
+                                    <div class="help-text">Pflichtfeld bei Rollen mit Team-Zuordnung.</div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="create-user-event">Zugewiesener Wettbewerb</label>
+                                    <select id="create-user-event" name="assignmentEventId"></select>
+                                    <div class="help-text">Wird verpflichtend, wenn die Rolle eine Event-Zuordnung verlangt.</div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="create-user-venue">Zugewiesene Schanze (Code)</label>
+                                    <input id="create-user-venue" type="text" name="assignmentVenueCode" placeholder="z. B. HS106-BI" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="create-user-other">Weitere Pflicht-Zuordnung</label>
+                                    <input id="create-user-other" type="text" name="assignmentOtherScope" placeholder="z. B. Medical Team Nord" />
                                 </div>
                                 <div class="form-group">
                                     <label for="create-user-password">Passwort</label>
@@ -94,7 +107,7 @@
                                             <th>Benutzerkennung</th>
                                             <th>E-Mail</th>
                                             <th>Rolle</th>
-                                            <th>Team</th>
+                                            <th>Zuordnung</th>
                                             <th>Status</th>
                                             <th>Letzter Login</th>
                                             <th>Aktion</th>
@@ -145,6 +158,11 @@
                                 <div class="form-group">
                                     <label>Berechtigungen</label>
                                     <div id="permission-matrix" class="permission-matrix"></div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Pflicht-Zuweisungen je Rolle</label>
+                                    <div id="assignment-requirement-matrix" class="permission-matrix"></div>
+                                    <div class="help-text">Definiert, welche Zuordnung beim Benutzer Pflicht ist.</div>
                                 </div>
                                 <div class="form-actions">
                                     <button type="submit" id="role-submit-button" class="btn btn-primary">Rolle erstellen</button>
