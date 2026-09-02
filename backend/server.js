@@ -710,6 +710,17 @@ function parseConfigJsonSafely(value) {
     } catch (error) {
         return {};
     }
+
+    function mapUserWriteError(error) {
+        const message = String(error?.message || "");
+        if (message.includes("users.username")) {
+            return "Diese Benutzerkennung ist bereits vergeben.";
+        }
+        if (message.includes("users.email")) {
+            return "Diese E-Mail-Adresse ist bereits vergeben.";
+        }
+        return null;
+    }
 }
 
 function seedDefaultRoles() {
@@ -1214,19 +1225,29 @@ app.post("/api/users", authRequired, requirePermission("users.write"), (req, res
         return;
     }
     const hash = bcrypt.hashSync(password, 12);
-    const result = db
-        .prepare(
-            `INSERT INTO users (username, name, email, role, password_hash, status)
-             VALUES (?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-            username.trim(),
-            name.trim(),
-            email.trim().toLowerCase(),
-            resolvedRole,
-            hash,
-            status === "inactive" ? "inactive" : "active"
-        );
+    let result;
+    try {
+        result = db
+            .prepare(
+                `INSERT INTO users (username, name, email, role, password_hash, status)
+                 VALUES (?, ?, ?, ?, ?, ?)`
+            )
+            .run(
+                username.trim(),
+                name.trim(),
+                email.trim().toLowerCase(),
+                resolvedRole,
+                hash,
+                status === "inactive" ? "inactive" : "active"
+            );
+    } catch (error) {
+        const userMessage = mapUserWriteError(error);
+        if (userMessage) {
+            res.status(409).json({ error: userMessage });
+            return;
+        }
+        throw error;
+    }
     const created = db.prepare("SELECT id, username, name, email, role, status, created_at FROM users WHERE id = ?").get(result.lastInsertRowid);
     logAudit(req.user, "CREATE_USER", "users", created.id, `${created.username} (${created.role})`);
     res.status(201).json(created);
@@ -1278,7 +1299,16 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
     }
     updates.push("updated_at = CURRENT_TIMESTAMP");
     values.push(id);
-    db.prepare(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`).run(...values);
+    try {
+        db.prepare(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`).run(...values);
+    } catch (error) {
+        const userMessage = mapUserWriteError(error);
+        if (userMessage) {
+            res.status(409).json({ error: userMessage });
+            return;
+        }
+        throw error;
+    }
     const updated = db.prepare("SELECT id, username, name, email, role, status, last_login_at FROM users WHERE id = ?").get(id);
     logAudit(req.user, "UPDATE_USER", "users", id, JSON.stringify(req.body));
     res.json(updated);
