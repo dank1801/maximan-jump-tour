@@ -9,28 +9,28 @@
 <body>
     <div class="portal-container">
         <div class="portal-sidebar">
-            <div class="portal-logo">🏅 MSC Portal</div>
+            <div class="portal-logo">MSC Portal</div>
             <ul class="portal-nav">
-                <li><a href="dashboard.html">📊 Dashboard</a></li>
-                <li><a href="users.html">👥 Benutzer & Rollen</a></li>
-                <li><a href="teams.html">🏢 Teams & Lizenzen</a></li>
-                <li><a href="events.html">🏆 Wettkämpfe</a></li>
-                <li><a href="points.html">📈 Punkte & Wertungen</a></li>
-                <li><a href="transfers.html">↔️ Transfers & Verträge</a></li>
-                <li><a href="reporting.html">📋 Reporting & Audit</a></li>
-                <li><a href="settings.html">⚙️ Einstellungen</a></li>
+                <li><a href="dashboard.html">Dashboard</a></li>
+                <li><a href="users.html">Benutzer & Rollen</a></li>
+                <li><a href="teams.html">Teams & Lizenzen</a></li>
+                <li><a href="events.html">Wettkämpfe</a></li>
+                <li><a href="points.html">Punkte & Wertungen</a></li>
+                <li><a href="transfers.html">Transfers & Verträge</a></li>
+                <li><a href="reporting.html">Reporting & Audit</a></li>
+                <li><a href="settings.html">Einstellungen</a></li>
             </ul>
         </div>
 
         <div class="portal-main">
             <div class="portal-header">
-                <h1>⚙️ Einstellungen</h1>
+                <h1>Einstellungen</h1>
                 <div class="portal-user-info">
                     <div>
                         <div class="user-badge" data-session-user>Admin</div>
                         <div style="font-size: 12px; color: #999; margin-top: 4px;" data-session-role>Admin</div>
                     </div>
-                    <button id="logout-button" class="btn btn-secondary btn-small">🚪 Abmelden</button>
+                    <button id="logout-button" class="btn btn-secondary btn-small">Abmelden</button>
                 </div>
             </div>
 
@@ -38,7 +38,7 @@
                 <!-- System Configuration -->
                 <div class="card">
                     <div class="card-header">
-                        <h2>🔧 Systemkonfiguration</h2>
+                        <h2>Systemkonfiguration</h2>
                     </div>
                     <form id="system-config-form">
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
@@ -46,18 +46,18 @@
                                 <label>Zeitzone *</label>
                                 <select name="timezone" required>
                                     <option value="">-- Bitte auswählen --</option>
-                                    <option value="Europe/Berlin">🇩🇪 Europa/Berlin (UTC+1)</option>
-                                    <option value="Europe/London">🇬🇧 Europa/London (UTC+0)</option>
-                                    <option value="Europe/Paris">🇫🇷 Europa/Paris (UTC+1)</option>
-                                    <option value="America/New_York">🇺🇸 Amerika/New York (UTC-5)</option>
+                                    <option value="Europe/Berlin">Europa/Berlin (UTC+1)</option>
+                                    <option value="Europe/London">Europa/London (UTC+0)</option>
+                                    <option value="Europe/Paris">Europa/Paris (UTC+1)</option>
+                                    <option value="America/New_York">Amerika/New York (UTC-5)</option>
                                 </select>
                             </div>
                             <div class="form-group">
                                 <label>Sprache *</label>
                                 <select name="language" required>
-                                    <option value="de">🇩🇪 Deutsch</option>
-                                    <option value="en">🇬🇧 English</option>
-                                    <option value="fr">🇫🇷 Français</option>
+                                    <option value="de">Deutsch</option>
+                                    <option value="en">English</option>
+                                    <option value="fr">Français</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -78,7 +78,7 @@
                             </div>
                         </div>
                         <div class="form-actions" style="margin-top: 20px;">
-                            <button type="submit" class="btn btn-primary">✅ Speichern</button>
+                            <button type="submit" class="btn btn-primary">Speichern</button>
                         </div>
                     </form>
                 </div>
@@ -86,7 +86,7 @@
                 <!-- Security Settings -->
                 <div class="card">
                     <div class="card-header">
-                        <h2>🔒 Sicherheitseinstellungen</h2>
+                        <h2>Sicherheitseinstellungen</h2>
                     </div>
                     <form id="security-config-form">
                         <div class="form-group">
@@ -129,7 +129,7 @@
                         </div>
 
                         <div class="form-actions" style="margin-top: 30px;">
-                            <button type="submit" class="btn btn-primary">✅ Speichern</button>
+                            <button type="submit" class="btn btn-primary">Speichern</button>
                         </div>
                     </form>
                 </div>
@@ -137,14 +137,14 @@
                 <!-- License Categories -->
                 <div class="card">
                     <div class="card-header">
-                        <h2>📄 Lizenz-Kategorien</h2>
+                        <h2>Lizenz-Kategorien</h2>
                     </div>
                     <div class="card-body">
                         <p style="color: #999; margin-bottom: 20px;">Definiere die Anforderungen für jede Lizenzklasse</p>
                         
                         <!-- License Type A -->
                         <div style="border: 1px solid #e0e6ed; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-                            <h3 style="color: #1a2a4a; margin-bottom: 15px;">🏅 A-Lizenz (Elite)</h3>
+                            <h3 style="color: #1a2a4a; margin-bottom: 15px;">A-Lizenz (Elite)</h3>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                                 <div class="form-group">
                                     <label>Mindestalter</label>
@@ -167,7 +167,7 @@
 
                         <!-- License Type B -->
                         <div style="border: 1px solid #e0e6ed; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-                            <h3 style="color: #1a2a4a; margin-bottom: 15px;">🏆 B-Lizenz (Regional)</h3>
+                            <h3 style="color: #1a2a4a; margin-bottom: 15px;">B-Lizenz (Regional)</h3>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                                 <div class="form-group">
                                     <label>Mindestalter</label>
@@ -190,7 +190,7 @@
 
                         <!-- License Type C -->
                         <div style="border: 1px solid #e0e6ed; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-                            <h3 style="color: #1a2a4a; margin-bottom: 15px;">🌟 C-Lizenz (Nachwuchs)</h3>
+                            <h3 style="color: #1a2a4a; margin-bottom: 15px;">C-Lizenz (Nachwuchs)</h3>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                                 <div class="form-group">
                                     <label>Mindestalter</label>
@@ -212,7 +212,7 @@
                         </div>
 
                         <div class="form-actions">
-                            <button type="button" class="btn btn-primary" onclick="saveLicenseCategories()">✅ Lizenzen speichern</button>
+                            <button type="button" class="btn btn-primary" onclick="saveLicenseCategories()">Lizenzen speichern</button>
                         </div>
                     </div>
                 </div>
@@ -220,13 +220,13 @@
                 <!-- Danger Zone -->
                 <div class="card" style="border-top: 3px solid #e74c3c;">
                     <div class="card-header" style="color: #e74c3c;">
-                        <h2>⚠️ Gefahrenzone</h2>
+                        <h2>Gefahrenzone</h2>
                     </div>
                     <div class="card-body">
                         <p style="color: #e74c3c; margin-bottom: 20px; font-weight: 500;">Diese Aktionen sind irreversibel!</p>
                         <div style="display: flex; gap: 10px;">
-                            <button type="button" class="btn btn-danger" onclick="showDatabaseResetModal()">🗑️ Datenbank zurücksetzen</button>
-                            <button type="button" class="btn btn-warning" onclick="exportDatabase()">💾 Datenbank sichern</button>
+                            <button type="button" class="btn btn-danger" onclick="showDatabaseResetModal()">Datenbank zurücksetzen</button>
+                            <button type="button" class="btn btn-warning" onclick="exportDatabase()">Datenbank sichern</button>
                         </div>
                     </div>
                 </div>

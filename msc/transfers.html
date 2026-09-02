@@ -9,28 +9,28 @@
 <body>
     <div class="portal-container">
         <div class="portal-sidebar">
-            <div class="portal-logo">🏅 MSC Portal</div>
+            <div class="portal-logo">MSC Portal</div>
             <ul class="portal-nav">
-                <li><a href="dashboard.html">📊 Dashboard</a></li>
-                <li><a href="users.html">👥 Benutzer & Rollen</a></li>
-                <li><a href="teams.html">🏢 Teams & Lizenzen</a></li>
-                <li><a href="events.html">🏆 Wettkämpfe</a></li>
-                <li><a href="points.html">📈 Punkte & Wertungen</a></li>
-                <li><a href="transfers.html">↔️ Transfers & Verträge</a></li>
-                <li><a href="reporting.html">📋 Reporting & Audit</a></li>
-                <li><a href="settings.html">⚙️ Einstellungen</a></li>
+                <li><a href="dashboard.html">Dashboard</a></li>
+                <li><a href="users.html">Benutzer & Rollen</a></li>
+                <li><a href="teams.html">Teams & Lizenzen</a></li>
+                <li><a href="events.html">Wettkämpfe</a></li>
+                <li><a href="points.html">Punkte & Wertungen</a></li>
+                <li><a href="transfers.html">Transfers & Verträge</a></li>
+                <li><a href="reporting.html">Reporting & Audit</a></li>
+                <li><a href="settings.html">Einstellungen</a></li>
             </ul>
         </div>
 
         <div class="portal-main">
             <div class="portal-header">
-                <h1>↔️ Transfers & Verträge</h1>
+                <h1>Transfers & Verträge</h1>
                 <div class="portal-user-info">
                     <div>
                         <div class="user-badge" data-session-user>Admin</div>
                         <div style="font-size: 12px; color: #999; margin-top: 4px;" data-session-role>Admin</div>
                     </div>
-                    <button id="logout-button" class="btn btn-secondary btn-small">🚪 Abmelden</button>
+                    <button id="logout-button" class="btn btn-secondary btn-small">Abmelden</button>
                 </div>
             </div>
 
@@ -53,8 +53,8 @@
                             <div class="form-group">
                                 <label>Status *</label>
                                 <select name="status" required>
-                                    <option value="closed">🔒 Geschlossen</option>
-                                    <option value="open">🔓 Offen</option>
+                                    <option value="closed">Geschlossen</option>
+                                    <option value="open">Offen</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -76,7 +76,7 @@
                             </div>
                         </div>
                         <div class="form-actions">
-                            <button type="submit" class="btn btn-primary">✅ Fenster speichern</button>
+                            <button type="submit" class="btn btn-primary">Fenster speichern</button>
                         </div>
                     </form>
                 </div>
@@ -110,8 +110,8 @@
                                 <label>Transfer-Typ *</label>
                                 <select name="transfer_type" required>
                                     <option value="">-- Typ wählen --</option>
-                                    <option value="regular">📋 Normal</option>
-                                    <option value="emergency">⚠️ Notfall</option>
+                                    <option value="regular">Normal</option>
+                                    <option value="emergency">Notfall</option>
                                 </select>
                             </div>
                         </div>
@@ -120,7 +120,7 @@
                             <textarea name="notes" placeholder="z.B. Besondere Vereinbarungen..."></textarea>
                         </div>
                         <div class="form-actions">
-                            <button type="submit" class="btn btn-primary">✅ Transfer erstellen</button>
+                            <button type="submit" class="btn btn-primary">Transfer erstellen</button>
                         </div>
                     </form>
                 </div>
@@ -128,7 +128,7 @@
                 <!-- Active Transfers -->
                 <div class="card">
                     <div class="card-header">
-                        <h2>📊 Aktive Transfers</h2>
+                        <h2>Aktive Transfers</h2>
                     </div>
                     <div class="card-body">
                         <table class="table">
@@ -151,7 +151,7 @@
                 <!-- Contracts -->
                 <div class="card">
                     <div class="card-header">
-                        <h2>📄 Vertragsdokumente</h2>
+                        <h2>Vertragsdokumente</h2>
                     </div>
                     <div class="card-body">
                         <div class="form-group" style="margin-bottom: 20px;">
@@ -229,7 +229,7 @@
                             <td>${t.lock_until ? new Date(t.lock_until).toLocaleDateString("de-DE") : "—"}</td>
                             <td>
                                 <button class="btn btn-small btn-secondary">✏️</button>
-                                <button class="btn btn-small btn-success">✅ Genehmigen</button>
+                                <button class="btn btn-small btn-success">Genehmigen</button>
                             </td>
                         </tr>
                     `).join("");
