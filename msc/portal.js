@@ -4,6 +4,10 @@
 
 const AUTH_KEY = "msc_portal_auth";
 const TOAST_TIMEOUT = 4000;
+const LIVE_RECONNECT_DELAY_MS = 2000;
+const LIVE_REFRESH_DEBOUNCE_MS = 700;
+let liveSocket = null;
+let liveRefreshTimer = null;
 
 // ============ HELPERS ============
 
@@ -31,6 +35,10 @@ function saveAuth(payload) {
 
 function clearAuth() {
     localStorage.removeItem(AUTH_KEY);
+    if (liveSocket) {
+        liveSocket.close();
+        liveSocket = null;
+    }
 }
 
 // ============ TOASTS (Modern Notifications) ============
@@ -177,6 +185,66 @@ function wireTabs() {
         if (!button) return;
         event.preventDefault();
         activateTab(button);
+    });
+}
+
+function scheduleLiveRefresh() {
+    if (liveRefreshTimer) return;
+    liveRefreshTimer = setTimeout(async () => {
+        liveRefreshTimer = null;
+        const page = pageName();
+        try {
+            if (page === "dashboard.html") {
+                await loadDashboard();
+            } else if (page === "users.html") {
+                await loadUsers();
+            } else if (page === "teams.html") {
+                await loadTeams();
+            } else if (page === "events.html") {
+                await loadEvents();
+            } else if (page === "points.html") {
+                await loadPointsRules();
+            } else if (page === "transfers.html") {
+                await loadTransfers();
+            } else if (page === "reporting.html") {
+                await loadAuditLog();
+            }
+        } catch (error) {
+            // Keep UI stable even if one refresh request fails.
+        }
+    }, LIVE_REFRESH_DEBOUNCE_MS);
+}
+
+function connectLiveSync() {
+    const auth = loadAuth();
+    if (!auth?.token || liveSocket) return;
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const url = `${protocol}://${window.location.host}/ws?token=${encodeURIComponent(auth.token)}`;
+    const socket = new WebSocket(url);
+    liveSocket = socket;
+
+    socket.addEventListener("message", (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            if (data?.type === "audit") {
+                scheduleLiveRefresh();
+            }
+        } catch (error) {
+            // Ignore malformed messages.
+        }
+    });
+
+    socket.addEventListener("close", () => {
+        if (liveSocket === socket) {
+            liveSocket = null;
+            setTimeout(connectLiveSync, LIVE_RECONNECT_DELAY_MS);
+        }
+    });
+
+    socket.addEventListener("error", () => {
+        if (liveSocket === socket) {
+            liveSocket = null;
+        }
     });
 }
 
@@ -708,6 +776,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (user) {
             wireLogout();
             activateNav();
+            connectLiveSync();
             
             const page = pageName();
             if (page === "dashboard.html") {

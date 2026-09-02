@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const http = require("http");
 const express = require("express");
 const cors = require("cors");
 const compression = require("compression");
@@ -9,6 +10,7 @@ const { rateLimit } = require("express-rate-limit");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const Database = require("better-sqlite3");
+const { WebSocketServer } = require("ws");
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -38,6 +40,7 @@ const EFFECTIVE_JWT_SECRET = JWT_SECRET || "dev-insecure-secret";
 
 const db = new Database(DB_PATH);
 db.pragma("foreign_keys = ON");
+const wsClients = new Map();
 
 function initDb() {
     db.exec(`
@@ -244,6 +247,54 @@ function logAudit(actor, action, entityType, entityId, details) {
         `INSERT INTO audit_logs (actor_user_id, actor_username, action, entity_type, entity_id, details)
          VALUES (?, ?, ?, ?, ?, ?)`
     ).run(actor?.sub || null, actor?.username || "system", action, entityType, entityId ? String(entityId) : null, details || null);
+    broadcastLiveUpdate({
+        type: "audit",
+        action,
+        entityType,
+        entityId: entityId ? String(entityId) : null,
+        details: details || null,
+        actor: actor?.username || "system"
+    });
+}
+
+function broadcastLiveUpdate(event) {
+    const payload = JSON.stringify({
+        ...event,
+        timestamp: new Date().toISOString()
+    });
+    wsClients.forEach((session, socket) => {
+        if (socket.readyState === 1) {
+            socket.send(payload);
+            return;
+        }
+        wsClients.delete(socket);
+    });
+}
+
+function registerWebSocketServer(server) {
+    const wss = new WebSocketServer({ server, path: "/ws" });
+    wss.on("connection", (socket, req) => {
+        const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+        const token = url.searchParams.get("token");
+        if (!token) {
+            socket.close(1008, "Missing token");
+            return;
+        }
+        try {
+            const payload = jwt.verify(token, EFFECTIVE_JWT_SECRET);
+            wsClients.set(socket, { userId: payload.sub, username: payload.username });
+            socket.send(JSON.stringify({ type: "connected", timestamp: new Date().toISOString() }));
+        } catch (error) {
+            socket.close(1008, "Invalid token");
+            return;
+        }
+        socket.on("close", () => {
+            wsClients.delete(socket);
+        });
+        socket.on("error", () => {
+            wsClients.delete(socket);
+        });
+    });
 }
 
 function parseId(value) {
@@ -1014,6 +1065,24 @@ app.get("/api/settings", authRequired, (_, res) => {
     res.json(mapped);
 });
 
+app.post("/api/settings", authRequired, requireRoles(ADMIN_ROLES), (req, res) => {
+    const key = String(req.body?.key || "").trim();
+    if (!key) {
+        res.status(400).json({ error: "Missing setting key" });
+        return;
+    }
+    const valueJson = JSON.stringify(req.body?.value ?? null);
+    db.prepare(
+        `INSERT INTO settings (key, value_json, updated_at)
+         VALUES (?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(key) DO UPDATE SET
+           value_json = excluded.value_json,
+           updated_at = CURRENT_TIMESTAMP`
+    ).run(key, valueJson);
+    logAudit(req.user, "UPSERT_SETTING", "settings", key, valueJson);
+    res.json({ key, value: req.body?.value ?? null });
+});
+
 app.put("/api/settings/:key", authRequired, requireRoles(ADMIN_ROLES), (req, res) => {
     const key = String(req.params.key || "").trim();
     if (!key) {
@@ -1055,7 +1124,10 @@ app.get("/{*path}", (req, res) => {
     res.sendFile(path.join(STATIC_ROOT, "index.html"));
 });
 
-app.listen(PORT, HOST, () => {
+const server = http.createServer(app);
+registerWebSocketServer(server);
+
+server.listen(PORT, HOST, () => {
     // eslint-disable-next-line no-console
     console.log(`MSC backend running on http://${HOST}:${PORT}`);
 });

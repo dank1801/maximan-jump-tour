@@ -411,6 +411,14 @@ html, body {
     min-width: 640px;
 }
 
+.table-responsive {
+    overflow-x: auto;
+}
+
+.points-scale-table input {
+    max-width: 120px;
+}
+
 .table thead {
     background: var(--lighter);
     border-bottom: 2px solid var(--border);
@@ -717,6 +725,10 @@ html, body {
     .grid-3 {
         grid-template-columns: repeat(2, 1fr);
     }
+
+    .grid-2 {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 768px) {
@@ -731,6 +743,23 @@ html, body {
         padding: 15px;
         border-right: none;
         border-bottom: 1px solid var(--border);
+    }
+
+    .portal-nav {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 8px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+    }
+
+    .portal-nav li {
+        flex: 0 0 auto;
+    }
+
+    .portal-nav a {
+        white-space: nowrap;
+        margin-bottom: 0;
     }
 
     .portal-main {
@@ -774,6 +803,7 @@ html, body {
     }
 
     .table {
+        min-width: 520px;
         font-size: 12px;
     }
 

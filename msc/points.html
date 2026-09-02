@@ -35,176 +35,160 @@
             </div>
 
             <div class="portal-content">
-                <!-- Point Rules Editor -->
                 <div class="card">
                     <div class="card-header">
                         <h2>Punkte-Regelsystem konfigurieren</h2>
                     </div>
                     <form id="points-rules-form">
                         <div class="tabs">
-                            <button class="tab-button active" type="button" data-tab="worldcup">Weltcup-Punkte</button>
-                            <button class="tab-button" type="button" data-tab="team">Team-Punkte</button>
+                            <button class="tab-button active" type="button" data-tab="worldcup">Punkte-Skala</button>
+                            <button class="tab-button" type="button" data-tab="team">Team-Wertung</button>
                             <button class="tab-button" type="button" data-tab="bonus">Bonuspunkte</button>
                             <button class="tab-button" type="button" data-tab="tiebreak">Tie-Break</button>
                         </div>
 
-                        <!-- Tab 1: World Cup -->
                         <div id="worldcup" class="tab-content active">
-                            <div class="form-group">
-                                <label>Weltcup-Schema *</label>
-                                <select name="worldcup_schema" required>
-                                    <option value="">-- Bitte auswählen --</option>
-                                    <option value="top_30">Top 30 Schema (Standard)</option>
-                                    <option value="top_50">Top 50 Schema</option>
-                                    <option value="custom">Benutzerdefiniert</option>
-                                </select>
+                            <div class="grid-2">
+                                <div class="form-group">
+                                    <label>Regel-Name *</label>
+                                    <input type="text" name="rule_name" placeholder="z.B. Saison 2026 Standard" required />
+                                </div>
+                                <div class="form-group">
+                                    <label>Vorlage *</label>
+                                    <select id="worldcup-schema" name="worldcup_schema" required>
+                                        <option value="">-- Bitte auswählen --</option>
+                                        <option value="top_10">Top 10</option>
+                                        <option value="top_30">Top 30</option>
+                                        <option value="top_50">Top 50</option>
+                                        <option value="custom">Individuell</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="form-group">
-                                <label>Punkte für Platz 1</label>
-                                <input type="number" name="wc_1st_place" placeholder="100" value="100" />
+
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary btn-small" id="preset-top-10">Top-10 laden</button>
+                                <button type="button" class="btn btn-secondary btn-small" id="preset-top-30">Top-30 laden</button>
+                                <button type="button" class="btn btn-secondary btn-small" id="preset-top-50">Top-50 laden</button>
+                                <button type="button" class="btn btn-secondary btn-small" id="clear-scale">Leeren</button>
                             </div>
-                            <div class="form-group">
-                                <label>Punkte für Platz 2</label>
-                                <input type="number" name="wc_2nd_place" placeholder="80" value="80" />
+
+                            <div class="table-responsive">
+                                <table class="table points-scale-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Platz</th>
+                                            <th>Punkte</th>
+                                            <th>Aktion</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="points-scale-body"></tbody>
+                                </table>
                             </div>
-                            <div class="form-group">
-                                <label>Punkte für Platz 3</label>
-                                <input type="number" name="wc_3rd_place" placeholder="60" value="60" />
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-primary btn-small" id="add-points-row">Zeile hinzufügen</button>
                             </div>
                         </div>
 
-                        <!-- Tab 2: Team -->
                         <div id="team" class="tab-content">
-                            <div class="form-group">
-                                <label>Team-Punkte Berechnung *</label>
-                                <div class="radio-group">
-                                    <div class="radio-item">
-                                        <input type="radio" name="team_calc" value="sum" required />
-                                        <label>Summe der Athleten-Punkte</label>
-                                    </div>
-                                    <div class="radio-item">
-                                        <input type="radio" name="team_calc" value="avg" />
-                                        <label>Durchschnitt der Athleten</label>
-                                    </div>
-                                    <div class="radio-item">
-                                        <input type="radio" name="team_calc" value="best_3" />
-                                        <label>Besten 3 Athleten</label>
-                                    </div>
+                            <div class="grid-2">
+                                <div class="form-group">
+                                    <label>Berechnung *</label>
+                                    <select name="team_calc" required>
+                                        <option value="sum">Summe aller Athleten</option>
+                                        <option value="avg">Durchschnitt aller Athleten</option>
+                                        <option value="best_n">Nur beste N Athleten</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Anzahl N (bei „beste N“)</label>
+                                    <input type="number" name="team_top_n" min="1" max="20" value="3" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Rundung</label>
+                                    <select name="team_rounding">
+                                        <option value="none">Keine Rundung</option>
+                                        <option value="round">Kaufmännisch runden</option>
+                                        <option value="floor">Abrunden</option>
+                                        <option value="ceil">Aufrunden</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Tab 3: Bonus -->
                         <div id="bonus" class="tab-content">
-                            <div class="checkbox-group">
-                                <div class="checkbox-item">
-                                    <input type="checkbox" name="bonus_record" value="true" />
-                                    <label>Bonuspunkte für neuen Rekord (+10 Punkte)</label>
+                            <div class="grid-2">
+                                <div class="form-group">
+                                    <label>Rekord-Bonus</label>
+                                    <div class="checkbox-item">
+                                        <input type="checkbox" name="bonus_record" value="true" />
+                                        <label>Aktivieren</label>
+                                    </div>
+                                    <input type="number" name="record_bonus_points" min="0" value="10" />
                                 </div>
-                                <div class="checkbox-item">
-                                    <input type="checkbox" name="bonus_series" value="true" />
-                                    <label>Serien-Bonus (3 x Platz 1)</label>
+                                <div class="form-group">
+                                    <label>Serien-Bonus (z.B. 3 Siege)</label>
+                                    <div class="checkbox-item">
+                                        <input type="checkbox" name="bonus_series" value="true" />
+                                        <label>Aktivieren</label>
+                                    </div>
+                                    <input type="number" name="series_bonus_points" min="0" value="25" />
                                 </div>
-                                <div class="checkbox-item">
-                                    <input type="checkbox" name="bonus_double" value="true" />
-                                    <label>Double-Points an bestimmten Events</label>
+                                <div class="form-group">
+                                    <label>Double-Points Event</label>
+                                    <div class="checkbox-item">
+                                        <input type="checkbox" name="bonus_double" value="true" />
+                                        <label>Aktivieren</label>
+                                    </div>
+                                    <input type="number" name="double_multiplier" min="1" step="0.1" value="2" />
                                 </div>
-                            </div>
-                            <div class="form-group" >
-                                <label>Serien-Bonus Punkte</label>
-                                <input type="number" name="series_bonus_points" placeholder="25" value="25" />
                             </div>
                         </div>
 
-                        <!-- Tab 4: Tie-Break -->
                         <div id="tiebreak" class="tab-content">
-                            <div class="form-group">
-                                <label>Tie-Break Regel 1 (Priorität: Höher)</label>
-                                <select name="tiebreak_1" required>
-                                    <option value="">-- Bitte auswählen --</option>
-                                    <option value="most_wins">Meiste Siege</option>
-                                    <option value="best_single">Beste Einzelplatzierung</option>
-                                    <option value="last_event">Letzte Event-Platzierung</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Tie-Break Regel 2 (Priorität: Mittel)</label>
-                                <select name="tiebreak_2" required>
-                                    <option value="">-- Bitte auswählen --</option>
-                                    <option value="most_wins">Meiste Siege</option>
-                                    <option value="best_single">Beste Einzelplatzierung</option>
-                                    <option value="last_event">Letzte Event-Platzierung</option>
-                                </select>
+                            <div class="grid-2">
+                                <div class="form-group">
+                                    <label>Tie-Break Regel 1 *</label>
+                                    <select name="tiebreak_1" required>
+                                        <option value="">-- Bitte auswählen --</option>
+                                        <option value="most_wins">Meiste Siege</option>
+                                        <option value="best_single">Beste Einzelplatzierung</option>
+                                        <option value="last_event">Letzte Event-Platzierung</option>
+                                        <option value="most_podiums">Meiste Podien</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Tie-Break Regel 2 *</label>
+                                    <select name="tiebreak_2" required>
+                                        <option value="">-- Bitte auswählen --</option>
+                                        <option value="most_wins">Meiste Siege</option>
+                                        <option value="best_single">Beste Einzelplatzierung</option>
+                                        <option value="last_event">Letzte Event-Platzierung</option>
+                                        <option value="most_podiums">Meiste Podien</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="form-actions" >
+                        <div class="form-actions">
                             <button type="submit" class="btn btn-primary">Regeln speichern</button>
                         </div>
                     </form>
                 </div>
 
-                <!-- Event Scoring -->
                 <div class="card">
                     <div class="card-header">
-                        <h2>Event-Wertungen</h2>
+                        <h2>Punkte-Vorschau</h2>
                     </div>
                     <div class="card-body">
-                        <div class="form-group" >
-                            <label>Event auswählen</label>
-                            <select id="event-selector">
-                                <option value="">-- Event wählen --</option>
-                            </select>
-                        </div>
-                        <table class="table" id="event-scores-table">
+                        <table class="table">
                             <thead>
                                 <tr>
-                                    <th>Platzierung</th>
-                                    <th>Athlet / Team</th>
+                                    <th>Platz</th>
                                     <th>Punkte</th>
-                                    <th>Bonuspunkte</th>
-                                    <th>Gesamt</th>
                                 </tr>
                             </thead>
-                            <tbody></tbody>
+                            <tbody id="points-preview-body"></tbody>
                         </table>
-                    </div>
-                </div>
-
-                <!-- Rankings -->
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Gesamtwertungen</h2>
-                    </div>
-                    <div class="card-body">
-                        <div class="grid-2">
-                            <div>
-                                <h3 >Weltcup Einzelwertung</h3>
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Platz</th>
-                                            <th>Athlet</th>
-                                            <th>Punkte</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="individual-ranking"></tbody>
-                                </table>
-                            </div>
-                            <div>
-                                <h3 >Team-Gesamtwertung</h3>
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Platz</th>
-                                            <th>Team</th>
-                                            <th>Punkte</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="team-ranking"></tbody>
-                                </table>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -214,20 +198,177 @@
     <script src="portal.js"></script>
     <script>
         if (!isLoginPage()) {
-            // Form submit
-            document.getElementById("points-rules-form")?.addEventListener("submit", async (e) => {
-                e.preventDefault();
-                const data = getFormData(document.getElementById("points-rules-form"));
+            const form = document.getElementById("points-rules-form");
+            const scaleBody = document.getElementById("points-scale-body");
+            const previewBody = document.getElementById("points-preview-body");
+            const schemaSelect = document.getElementById("worldcup-schema");
+
+            function createScaleRow(rank = "", points = "") {
+                const row = document.createElement("tr");
+                row.innerHTML = `
+                    <td><input type="number" class="scale-rank" min="1" value="${rank}" /></td>
+                    <td><input type="number" class="scale-points" min="0" step="0.1" value="${points}" /></td>
+                    <td><button type="button" class="btn btn-danger btn-small remove-scale-row">Entfernen</button></td>
+                `;
+                scaleBody.appendChild(row);
+            }
+
+            function collectScale() {
+                return Array.from(scaleBody.querySelectorAll("tr"))
+                    .map((row) => {
+                        const rank = Number(row.querySelector(".scale-rank")?.value);
+                        const points = Number(row.querySelector(".scale-points")?.value);
+                        return { rank, points };
+                    })
+                    .filter((entry) => Number.isFinite(entry.rank) && entry.rank > 0 && Number.isFinite(entry.points))
+                    .sort((a, b) => a.rank - b.rank);
+            }
+
+            function renderPreview() {
+                const scale = collectScale().slice(0, 10);
+                const html = scale.map((entry) => `<tr><td>${entry.rank}</td><td>${entry.points}</td></tr>`).join("");
+                previewBody.innerHTML = html || "<tr><td colspan='2' class='table-empty'>Noch keine Punkte-Skala konfiguriert.</td></tr>";
+            }
+
+            function applyPreset(type) {
+                scaleBody.innerHTML = "";
+                const maxRank = type === "top_10" ? 10 : type === "top_50" ? 50 : 30;
+                for (let rank = 1; rank <= maxRank; rank += 1) {
+                    const points = Math.max(1, maxRank + 1 - rank);
+                    createScaleRow(rank, points);
+                }
+                renderPreview();
+            }
+
+            document.getElementById("preset-top-10")?.addEventListener("click", () => {
+                schemaSelect.value = "top_10";
+                applyPreset("top_10");
+            });
+            document.getElementById("preset-top-30")?.addEventListener("click", () => {
+                schemaSelect.value = "top_30";
+                applyPreset("top_30");
+            });
+            document.getElementById("preset-top-50")?.addEventListener("click", () => {
+                schemaSelect.value = "top_50";
+                applyPreset("top_50");
+            });
+            document.getElementById("clear-scale")?.addEventListener("click", () => {
+                scaleBody.innerHTML = "";
+                createScaleRow(1, 100);
+                createScaleRow(2, 80);
+                createScaleRow(3, 60);
+                schemaSelect.value = "custom";
+                renderPreview();
+            });
+
+            document.getElementById("add-points-row")?.addEventListener("click", () => {
+                const currentRows = collectScale();
+                const nextRank = currentRows.length > 0 ? currentRows[currentRows.length - 1].rank + 1 : 1;
+                createScaleRow(nextRank, 0);
+                renderPreview();
+            });
+
+            scaleBody.addEventListener("input", renderPreview);
+            scaleBody.addEventListener("click", (event) => {
+                const button = event.target.closest(".remove-scale-row");
+                if (!button) return;
+                button.closest("tr")?.remove();
+                renderPreview();
+            });
+
+            schemaSelect?.addEventListener("change", () => {
+                if (schemaSelect.value === "top_10" || schemaSelect.value === "top_30" || schemaSelect.value === "top_50") {
+                    applyPreset(schemaSelect.value);
+                }
+            });
+
+            async function hydrateFromLatestRule() {
                 try {
+                    const rules = await api("/point-rules");
+                    const latest = Array.isArray(rules) ? rules[0] : null;
+                    if (!latest) return;
+
+                    const config = latest.config_json ? JSON.parse(latest.config_json) : {};
+                    form.rule_name.value = latest.name || "";
+                    form.worldcup_schema.value = latest.rule_type || "custom";
+                    form.team_calc.value = config.team?.method || "sum";
+                    form.team_top_n.value = config.team?.topN || 3;
+                    form.team_rounding.value = config.team?.rounding || "none";
+                    form.tiebreak_1.value = config.tieBreak?.[0] || "";
+                    form.tiebreak_2.value = config.tieBreak?.[1] || "";
+                    form.bonus_record.checked = Boolean(config.bonus?.recordEnabled);
+                    form.bonus_series.checked = Boolean(config.bonus?.seriesEnabled);
+                    form.bonus_double.checked = Boolean(config.bonus?.doubleEnabled);
+                    form.record_bonus_points.value = config.bonus?.recordPoints ?? 10;
+                    form.series_bonus_points.value = config.bonus?.seriesPoints ?? 25;
+                    form.double_multiplier.value = config.bonus?.doubleMultiplier ?? 2;
+
+                    scaleBody.innerHTML = "";
+                    const scale = Array.isArray(config.pointsScale) ? config.pointsScale : [];
+                    if (scale.length === 0) {
+                        createScaleRow(1, 100);
+                        createScaleRow(2, 80);
+                        createScaleRow(3, 60);
+                    } else {
+                        scale.forEach((entry) => createScaleRow(entry.rank, entry.points));
+                    }
+                    renderPreview();
+                } catch (error) {
+                    createScaleRow(1, 100);
+                    createScaleRow(2, 80);
+                    createScaleRow(3, 60);
+                    renderPreview();
+                }
+            }
+
+            form?.addEventListener("submit", async (event) => {
+                event.preventDefault();
+                const data = getFormData(form);
+                const pointsScale = collectScale();
+                if (pointsScale.length === 0) {
+                    showToast("Bitte mindestens eine Punkte-Zeile anlegen.", "error");
+                    return;
+                }
+
+                const payload = {
+                    name: data.rule_name || `Regel ${new Date().toLocaleString("de-DE")}`,
+                    ruleType: data.worldcup_schema || "custom",
+                    config: {
+                        pointsScale,
+                        team: {
+                            method: data.team_calc || "sum",
+                            topN: Number(data.team_top_n) || 3,
+                            rounding: data.team_rounding || "none"
+                        },
+                        bonus: {
+                            recordEnabled: Boolean(data.bonus_record),
+                            recordPoints: Number(data.record_bonus_points) || 0,
+                            seriesEnabled: Boolean(data.bonus_series),
+                            seriesPoints: Number(data.series_bonus_points) || 0,
+                            doubleEnabled: Boolean(data.bonus_double),
+                            doubleMultiplier: Number(data.double_multiplier) || 1
+                        },
+                        tieBreak: [data.tiebreak_1, data.tiebreak_2].filter(Boolean)
+                    },
+                    active: true
+                };
+
+                try {
+                    await api("/point-rules", {
+                        method: "POST",
+                        body: JSON.stringify(payload)
+                    });
                     await api("/settings", {
                         method: "POST",
-                        body: JSON.stringify({ key: "point_rules", value: data })
+                        body: JSON.stringify({ key: "point_rules_current", value: payload })
                     });
                     showToast("Punkte-Regeln gespeichert.", "success");
                 } catch (error) {
                     showToast(error.message, "error");
                 }
             });
+
+            document.addEventListener("DOMContentLoaded", hydrateFromLatestRule);
         }
     </script>
 </body>
