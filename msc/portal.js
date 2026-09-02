@@ -1,4 +1,11 @@
+/* ========================================
+   MSC Portal - Modern UI Library
+   ======================================== */
+
 const AUTH_KEY = "msc_portal_auth";
+const TOAST_TIMEOUT = 4000;
+
+// ============ HELPERS ============
 
 function pageName() {
     return (window.location.pathname.split("/").pop() || "dashboard.html").toLowerCase();
@@ -7,6 +14,8 @@ function pageName() {
 function isLoginPage() {
     return pageName() === "login.html";
 }
+
+// ============ STORAGE ============
 
 function loadAuth() {
     try {
@@ -24,12 +33,128 @@ function clearAuth() {
     localStorage.removeItem(AUTH_KEY);
 }
 
+// ============ TOASTS (Modern Notifications) ============
+
+function showToast(message, type = "success", duration = TOAST_TIMEOUT) {
+    const toastContainer = document.getElementById("toast-container") || createToastContainer();
+    
+    const toast = document.createElement("div");
+    toast.className = `alert alert-${type}`;
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        min-width: 300px;
+        z-index: 9999;
+        animation: slideInUp 0.3s ease;
+    `;
+    
+    const icons = {
+        success: "✅",
+        error: "❌",
+        warning: "⚠️",
+        info: "ℹ️"
+    };
+    
+    toast.innerHTML = `
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <span>${icons[type]}</span>
+            <span>${message}</span>
+            <button class="alert-close" style="border: none; background: none; cursor: pointer; font-size: 1.2em;">×</button>
+        </div>
+    `;
+    
+    toast.querySelector(".alert-close").addEventListener("click", () => {
+        toast.remove();
+    });
+    
+    toastContainer.appendChild(toast);
+    
+    if (duration > 0) {
+        setTimeout(() => toast.remove(), duration);
+    }
+}
+
+function createToastContainer() {
+    const container = document.createElement("div");
+    container.id = "toast-container";
+    document.body.appendChild(container);
+    return container;
+}
+
+// ============ MODALS ============
+
+function showModal(title, content, actions = []) {
+    const modalContainer = document.getElementById("modal-container") || createModalContainer();
+    
+    const modal = document.createElement("div");
+    modal.className = "modal active";
+    
+    let actionsHtml = "";
+    if (actions.length === 0) {
+        actionsHtml = `<button class="btn btn-primary" onclick="this.closest('.modal').remove();">OK</button>`;
+    } else {
+        actionsHtml = actions.map(a => {
+            if (typeof a === "function") return "";
+            return `<button class="btn ${a.primary ? 'btn-primary' : 'btn-secondary'}" data-action="${a.id}">${a.label}</button>`;
+        }).join("");
+    }
+    
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">${title}</div>
+            <div>${content}</div>
+            <div class="modal-footer">${actionsHtml}</div>
+        </div>
+    `;
+    
+    // Wire up action handlers
+    actions.forEach(action => {
+        if (typeof action.handler === "function") {
+            modal.querySelector(`[data-action="${action.id}"]`)?.addEventListener("click", () => {
+                action.handler();
+                modal.remove();
+            });
+        }
+    });
+    
+    // Close on outside click
+    modal.addEventListener("click", (e) => {
+        if (e.target === modal) modal.remove();
+    });
+    
+    modalContainer.appendChild(modal);
+    return modal;
+}
+
+function createModalContainer() {
+    const container = document.createElement("div");
+    container.id = "modal-container";
+    document.body.appendChild(container);
+    return container;
+}
+
+function confirmDelete(entityName, callback) {
+    showModal(`Bestätigung`, 
+        `<p>Möchtest du <strong>${entityName}</strong> wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.</p>`,
+        [
+            { id: "cancel", label: "Abbrechen", primary: false, handler: () => {} },
+            { id: "confirm", label: "Ja, löschen", primary: true, handler: callback }
+        ]
+    );
+}
+
+// ============ MESSAGE HANDLING ============
+
 function showMessage(message, type = "info") {
     const node = document.getElementById("page-message") || document.getElementById("login-message");
-    if (!node) return;
+    if (!node) {
+        showToast(message, type === "error" ? "error" : "info");
+        return;
+    }
     node.classList.remove("hidden");
     node.textContent = message;
-    node.style.color = type === "error" ? "#ff7a7a" : "#b9c4ec";
+    node.className = `alert alert-${type === "error" ? "danger" : "success"}`;
 }
 
 function clearMessage() {
@@ -38,6 +163,8 @@ function clearMessage() {
     node.classList.add("hidden");
     node.textContent = "";
 }
+
+// ============ API CALLS ============
 
 async function api(path, options = {}) {
     const auth = loadAuth();
@@ -53,6 +180,8 @@ async function api(path, options = {}) {
     }
     return data;
 }
+
+// ============ AUTH ============
 
 function setIdentity(user) {
     document.querySelectorAll("[data-session-user]").forEach((node) => {
@@ -75,16 +204,11 @@ function wireLogout() {
     if (!button) return;
     button.addEventListener("click", () => {
         clearAuth();
-        window.location.href = "login.html";
+        showToast("Abgemeldet", "info", 2000);
+        setTimeout(() => {
+            window.location.href = "login.html";
+        }, 500);
     });
-}
-
-function tableRow(cells) {
-    return `<tr>${cells.map((cell) => `<td>${cell ?? ""}</td>`).join("")}</tr>`;
-}
-
-function button(label, attrs = "") {
-    return `<button class="btn-small btn-danger" ${attrs}>${label}</button>`;
 }
 
 async function requireAuth() {
@@ -105,17 +229,116 @@ async function requireAuth() {
     }
 }
 
-async function initLoginPage() {
-    const existing = loadAuth();
-    if (existing?.token) {
-        try {
-            await api("/auth/me");
-            window.location.href = "dashboard.html";
-            return;
-        } catch (error) {
-            clearAuth();
-        }
+// ============ FORM HELPERS ============
+
+function createDropdown(name, options, placeholder = "-- Bitte auswählen --") {
+    const select = document.createElement("select");
+    select.name = name;
+    
+    const emptyOption = document.createElement("option");
+    emptyOption.value = "";
+    emptyOption.textContent = placeholder;
+    emptyOption.disabled = true;
+    emptyOption.selected = true;
+    select.appendChild(emptyOption);
+    
+    options.forEach(opt => {
+        const option = document.createElement("option");
+        option.value = typeof opt === "string" ? opt : opt.value;
+        option.textContent = typeof opt === "string" ? opt : opt.label;
+        select.appendChild(option);
+    });
+    
+    return select;
+}
+
+function createCheckboxGroup(name, options, selectedValues = []) {
+    const group = document.createElement("div");
+    group.className = "checkbox-group";
+    
+    options.forEach(opt => {
+        const value = typeof opt === "string" ? opt : opt.value;
+        const label = typeof opt === "string" ? opt : opt.label;
+        const checked = selectedValues.includes(value);
+        
+        const wrapper = document.createElement("div");
+        wrapper.className = "checkbox-item";
+        wrapper.innerHTML = `
+            <input type="checkbox" name="${name}" value="${value}" ${checked ? "checked" : ""} />
+            <label>${label}</label>
+        `;
+        group.appendChild(wrapper);
+    });
+    
+    return group;
+}
+
+function createRadioGroup(name, options, selectedValue = null) {
+    const group = document.createElement("div");
+    group.className = "radio-group";
+    
+    options.forEach(opt => {
+        const value = typeof opt === "string" ? opt : opt.value;
+        const label = typeof opt === "string" ? opt : opt.label;
+        const checked = value === selectedValue;
+        
+        const wrapper = document.createElement("div");
+        wrapper.className = "radio-item";
+        wrapper.innerHTML = `
+            <input type="radio" name="${name}" value="${value}" ${checked ? "checked" : ""} />
+            <label>${label}</label>
+        `;
+        group.appendChild(wrapper);
+    });
+    
+    return group;
+}
+
+function getFormData(form) {
+    const formData = new FormData(form);
+    const data = {};
+    for (const [key, value] of formData.entries()) {
+        data[key] = value;
     }
+    return data;
+}
+
+// ============ TABLE HELPERS ============
+
+function tableRow(cells) {
+    return `<tr>${cells.map((cell) => `<td>${cell ?? ""}</td>`).join("")}</tr>`;
+}
+
+function statusBadge(status) {
+    const colors = {
+        active: "success",
+        inactive: "danger",
+        pending: "warning",
+        in_prüfung: "info",
+        gültig: "success",
+        abgelaufen: "danger"
+    };
+    const icons = {
+        active: "✅",
+        inactive: "🔒",
+        pending: "⏳",
+        in_prüfung: "🔄",
+        gültig: "✅",
+        abgelaufen: "❌"
+    };
+    const color = colors[status?.toLowerCase()] || "info";
+    const icon = icons[status?.toLowerCase()] || "•";
+    return `<span class="badge badge-${color}">${icon} ${status}</span>`;
+}
+
+function button(label, attrs = "") {
+    return `<button class="btn btn-small btn-danger" ${attrs}>${label}</button>`;
+}
+
+// ============ LOGIN PAGE ============
+
+async function setupLoginPage() {
+    if (!isLoginPage()) return;
 
     const bootstrapStatus = await api("/auth/bootstrap-status");
     const bootstrapSection = document.getElementById("bootstrap-section");
@@ -137,7 +360,10 @@ async function initLoginPage() {
                 body: JSON.stringify(payload)
             });
             saveAuth({ token: result.token, user: result.user });
-            window.location.href = "dashboard.html";
+            showToast("Willkommen! 🎉", "success", 1500);
+            setTimeout(() => {
+                window.location.href = "dashboard.html";
+            }, 500);
         } catch (error) {
             showMessage(error.message, "error");
         }
@@ -154,542 +380,308 @@ async function initLoginPage() {
                 body: JSON.stringify(payload)
             });
             saveAuth({ token: result.token, user: result.user });
-            window.location.href = "dashboard.html";
+            showToast("Admin erstellt! Willkommen 🎉", "success", 1500);
+            setTimeout(() => {
+                window.location.href = "dashboard.html";
+            }, 500);
         } catch (error) {
             showMessage(error.message, "error");
         }
     });
 }
 
-function bindDeleteHandler(selector, callback) {
-    document.querySelectorAll(selector).forEach((node) => {
-        node.addEventListener("click", callback);
-    });
-}
+// ============ DASHBOARD ============
 
 async function loadDashboard() {
     const data = await api("/dashboard");
     document.getElementById("kpi-users").textContent = data.stats.users;
     document.getElementById("kpi-teams").textContent = data.stats.teams;
     document.getElementById("kpi-events").textContent = data.stats.events;
-    document.getElementById("kpi-transfers").textContent = data.stats.transfers;
+    document.getElementById("kpi-licenses").textContent = data.stats.pending_licenses;
 
-    const eventsTable = document.getElementById("dashboard-events-table");
-    eventsTable.innerHTML = data.nextEvents.length
-        ? data.nextEvents.map((row) => tableRow([row.name, row.location || "—", row.event_date || "—", row.status || "—"])).join("")
-        : tableRow(['<span class="empty-state">Keine Events</span>', "", "", ""]);
+    const licensesHtml = data.licenses.map(l => tableRow([
+        `<strong>${l.person}</strong>`,
+        l.team || "—",
+        l.type || "—",
+        statusBadge(l.status)
+    ])).join("");
+    document.getElementById("licenses-table").innerHTML = licensesHtml || "<tr><td colspan='4' style='text-align: center; color: #999;'>Keine offenen Lizenzanträge</td></tr>";
 
-    const licensesTable = document.getElementById("dashboard-licenses-table");
-    licensesTable.innerHTML = data.pendingLicenses.length
-        ? data.pendingLicenses.map((row) => tableRow([row.name, row.team_name || "—", row.license_type || "—", row.license_status || "—"])).join("")
-        : tableRow(['<span class="empty-state">Keine Lizenzfälle</span>', "", "", ""]);
+    const eventsHtml = data.events.map(e => tableRow([
+        `<strong>${e.name}</strong>`,
+        e.location || "—",
+        e.date ? new Date(e.date).toLocaleDateString("de-DE") : "—",
+        statusBadge(e.status)
+    ])).join("");
+    document.getElementById("events-table").innerHTML = eventsHtml || "<tr><td colspan='4' style='text-align: center; color: #999;'>Keine kommenden Events</td></tr>";
 
-    const auditTable = document.getElementById("dashboard-audit-table");
-    auditTable.innerHTML = data.recentAudit.length
-        ? data.recentAudit.map((row) => tableRow([row.created_at, row.actor_username, row.action, `${row.entity_type} ${row.entity_id || ""}`])).join("")
-        : tableRow(['<span class="empty-state">Keine Audit-Einträge</span>', "", "", ""]);
+    const auditHtml = data.audit.slice(0, 10).map(a => tableRow([
+        a.created_at ? new Date(a.created_at).toLocaleTimeString("de-DE") : "—",
+        a.actor_username || "—",
+        a.action || "—",
+        a.details || "—"
+    ])).join("");
+    document.getElementById("audit-table").innerHTML = auditHtml || "<tr><td colspan='4' style='text-align: center; color: #999;'>Kein Audit-Log vorhanden</td></tr>";
 }
+
+// ============ USERS ============
 
 async function loadUsers() {
-    const rows = await api("/users");
-    const table = document.getElementById("users-table");
-    table.innerHTML = rows.length
-        ? rows.map((row) => tableRow([
-            row.id,
-            row.username,
-            row.name,
-            row.email,
-            row.role,
-            row.status,
-            row.last_login_at || "—",
-            row.status === "active" ? button("Deaktivieren", `data-delete-user="${row.id}"`) : "—"
-        ])).join("")
-        : tableRow(['<span class="empty-state">Keine Benutzer vorhanden</span>', "", "", "", "", "", "", ""]);
-
-    bindDeleteHandler("[data-delete-user]", async (event) => {
-        const id = event.currentTarget.getAttribute("data-delete-user");
-        await api(`/users/${id}`, { method: "DELETE" });
-        await loadUsers();
+    const users = await api("/users");
+    const container = document.getElementById("users-list");
+    
+    const html = users.map(u => `
+        <tr>
+            <td><strong>${u.name}</strong></td>
+            <td><code>${u.username}</code></td>
+            <td><span class="badge badge-primary">${u.role}</span></td>
+            <td>${statusBadge(u.status)}</td>
+            <td>${u.last_login_at ? new Date(u.last_login_at).toLocaleDateString("de-DE") : "—"}</td>
+            <td>
+                <button class="btn btn-small btn-secondary" data-edit-user="${u.id}">✏️</button>
+                <button class="btn btn-small btn-danger" data-delete-user="${u.id}">🗑️</button>
+            </td>
+        </tr>
+    `).join("");
+    
+    container.innerHTML = html || `<tr><td colspan='6' style='text-align: center; color: #999;'>Keine Benutzer vorhanden</td></tr>`;
+    
+    // Wire up edit handlers
+    document.querySelectorAll("[data-edit-user]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const userId = btn.dataset.editUser;
+            const user = users.find(u => u.id == userId);
+            showEditUserModal(user);
+        });
     });
-}
-
-async function initUsersPage() {
-    await loadUsers();
-    const form = document.getElementById("user-form");
-    form?.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        clearMessage();
-        try {
-            await api("/users", {
-                method: "POST",
-                body: JSON.stringify(Object.fromEntries(new FormData(form).entries()))
+    
+    // Wire up delete handlers
+    document.querySelectorAll("[data-delete-user]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const userId = btn.dataset.deleteUser;
+            const user = users.find(u => u.id == userId);
+            confirmDelete(user.name, async () => {
+                try {
+                    await api(`/users/${userId}`, { method: "DELETE" });
+                    showToast(`${user.name} wurde gelöscht`, "success");
+                    loadUsers();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
             });
-            form.reset();
-            await loadUsers();
-            showMessage("Benutzer gespeichert.");
-        } catch (error) {
-            showMessage(error.message, "error");
-        }
+        });
     });
 }
+
+async function showEditUserModal(user) {
+    const content = `
+        <form id="edit-user-form">
+            <div class="form-group">
+                <label>Benutzerkennung</label>
+                <input type="text" value="${user.username}" disabled />
+            </div>
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" name="name" value="${user.name}" required />
+            </div>
+            <div class="form-group">
+                <label>E-Mail</label>
+                <input type="email" name="email" value="${user.email}" required />
+            </div>
+            <div class="form-group">
+                <label>Rolle</label>
+                <select name="role" required>
+                    <option value="MSC Admin" ${user.role === "MSC Admin" ? "selected" : ""}>MSC Admin</option>
+                    <option value="Teammanager" ${user.role === "Teammanager" ? "selected" : ""}>Teammanager</option>
+                    <option value="Jury" ${user.role === "Jury" ? "selected" : ""}>Jury / Wettkampfleitung</option>
+                    <option value="Lizenzstelle" ${user.role === "Lizenzstelle" ? "selected" : ""}>Lizenzstelle</option>
+                    <option value="Reporter" ${user.role === "Reporter" ? "selected" : ""}>Reporter / Media</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Status</label>
+                <select name="status" required>
+                    <option value="active" ${user.status === "active" ? "selected" : ""}>Aktiv</option>
+                    <option value="inactive" ${user.status === "inactive" ? "selected" : ""}>Inaktiv</option>
+                </select>
+            </div>
+        </form>
+    `;
+    
+    showModal(`Benutzer bearbeiten: ${user.name}`, content, [
+        { id: "cancel", label: "Abbrechen", primary: false, handler: () => {} },
+        { id: "save", label: "Speichern", primary: true, handler: async () => {
+            const form = document.getElementById("edit-user-form");
+            const data = getFormData(form);
+            try {
+                await api(`/users/${user.id}`, {
+                    method: "PUT",
+                    body: JSON.stringify(data)
+                });
+                showToast(`${user.name} wurde aktualisiert`, "success");
+                loadUsers();
+            } catch (error) {
+                showToast(error.message, "error");
+            }
+        }}
+    ]);
+}
+
+// ============ TEAMS PAGE ============
 
 async function loadTeams() {
-    const [teams, members] = await Promise.all([
-        api("/teams"),
-        api("/teams").then(async (teamRows) => {
-            const allMembers = [];
-            for (const team of teamRows) {
-                const entries = await api(`/teams/${team.id}/members`);
-                allMembers.push(...entries);
-            }
-            return allMembers;
-        })
-    ]);
-
-    const teamsTable = document.getElementById("teams-table");
-    teamsTable.innerHTML = teams.length
-        ? teams.map((row) => tableRow([
-            row.id,
-            row.name,
-            row.nation || "—",
-            row.category || "—",
-            row.manager_username || "—",
-            row.status,
-            row.status === "active" ? button("Deaktivieren", `data-delete-team="${row.id}"`) : "—"
-        ])).join("")
-        : tableRow(['<span class="empty-state">Keine Teams vorhanden</span>', "", "", "", "", "", ""]);
-
-    const membersTable = document.getElementById("team-members-table");
-    membersTable.innerHTML = members.length
-        ? members.map((row) => tableRow([
-            row.id,
-            row.team_id,
-            row.name,
-            row.member_role,
-            row.license_type || "—",
-            row.license_valid_until || "—",
-            row.license_status || "—",
-            button("Löschen", `data-delete-member="${row.id}"`)
-        ])).join("")
-        : tableRow(['<span class="empty-state">Keine Mitglieder vorhanden</span>', "", "", "", "", "", "", ""]);
-
-    bindDeleteHandler("[data-delete-team]", async (event) => {
-        await api(`/teams/${event.currentTarget.getAttribute("data-delete-team")}`, { method: "DELETE" });
-        await loadTeams();
-    });
-    bindDeleteHandler("[data-delete-member]", async (event) => {
-        await api(`/team-members/${event.currentTarget.getAttribute("data-delete-member")}`, { method: "DELETE" });
-        await loadTeams();
-    });
+    try {
+        const teams = await api("/teams");
+        const html = teams.map(t => `
+            <tr>
+                <td><strong>${t.name}</strong></td>
+                <td>${t.category || "—"}</td>
+                <td>${t.athlete_count || 0}</td>
+                <td><span class="badge" style="background: ${t.status === "active" ? "#27ae60" : "#95a5a6"};">${t.status || "pending"}</span></td>
+                <td>
+                    <button class="btn-small btn-secondary" onclick="editTeamModal(${t.id})">✏️ Bearbeiten</button>
+                    <button class="btn-small btn-danger" onclick="confirmDelete('Team ${t.name}', () => deleteTeam(${t.id}))">🗑️ Löschen</button>
+                </td>
+            </tr>
+        `).join("");
+        document.getElementById("teams-list-tbody").innerHTML = html || "<tr><td colspan='5' style='text-align: center; color: #999;'>Keine Teams vorhanden</td></tr>";
+    } catch (error) {
+        showToast(error.message, "error");
+    }
 }
 
-async function initTeamsPage() {
-    await loadTeams();
-    const teamForm = document.getElementById("team-form");
-    const memberForm = document.getElementById("team-member-form");
-
-    teamForm?.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        clearMessage();
-        const payload = Object.fromEntries(new FormData(teamForm).entries());
-        if (!payload.managerUserId) delete payload.managerUserId;
-        try {
-            await api("/teams", { method: "POST", body: JSON.stringify(payload) });
-            teamForm.reset();
-            await loadTeams();
-            showMessage("Team gespeichert.");
-        } catch (error) {
-            showMessage(error.message, "error");
-        }
-    });
-
-    memberForm?.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        clearMessage();
-        const payload = Object.fromEntries(new FormData(memberForm).entries());
-        const teamId = payload.teamId;
-        delete payload.teamId;
-        try {
-            await api(`/teams/${teamId}/members`, { method: "POST", body: JSON.stringify(payload) });
-            memberForm.reset();
-            await loadTeams();
-            showMessage("Mitglied gespeichert.");
-        } catch (error) {
-            showMessage(error.message, "error");
-        }
-    });
+async function deleteTeam(id) {
+    try {
+        await api(`/teams/${id}`, { method: "DELETE" });
+        showToast("Team gelöscht ✅", "success");
+        await loadTeams();
+    } catch (error) {
+        showToast(error.message, "error");
+    }
 }
+
+// ============ EVENTS PAGE ============
 
 async function loadEvents() {
-    const [seasons, events, jury] = await Promise.all([api("/seasons"), api("/events"), api("/jury-decisions")]);
-    const seasonsTable = document.getElementById("seasons-table");
-    const eventsTable = document.getElementById("events-table");
-    const juryTable = document.getElementById("jury-table");
+    try {
+        const events = await api("/events");
+        const html = events.map(e => `
+            <tr>
+                <td><strong>${e.name}</strong></td>
+                <td>${e.event_type || "—"}</td>
+                <td>${e.location || "—"}</td>
+                <td>${new Date(e.date).toLocaleDateString("de-DE")}</td>
+                <td><span class="badge" style="background: ${e.status === "confirmed" ? "#3498db" : "#f39c12"};">${e.status || "pending"}</span></td>
+                <td>
+                    <button class="btn-small btn-secondary" onclick="editEventModal(${e.id})">✏️ Bearbeiten</button>
+                    <button class="btn-small btn-danger" onclick="confirmDelete('Event ${e.name}', () => deleteEvent(${e.id}))">🗑️ Löschen</button>
+                </td>
+            </tr>
+        `).join("");
+        document.getElementById("events-list-tbody").innerHTML = html || "<tr><td colspan='6' style='text-align: center; color: #999;'>Keine Events vorhanden</td></tr>";
+    } catch (error) {
+        showToast(error.message, "error");
+    }
+}
 
-    seasonsTable.innerHTML = seasons.length
-        ? seasons.map((row) => tableRow([
-            row.id, row.name, row.start_date || "—", row.end_date || "—", row.status || "—",
-            button("Löschen", `data-delete-season="${row.id}"`)
-        ])).join("")
-        : tableRow(['<span class="empty-state">Keine Saisons</span>', "", "", "", "", ""]);
-
-    eventsTable.innerHTML = events.length
-        ? events.map((row) => tableRow([
-            row.id, row.name, row.location || "—", row.event_date || "—", row.season_name || "—", row.status || "—",
-            button("Löschen", `data-delete-event="${row.id}"`)
-        ])).join("")
-        : tableRow(['<span class="empty-state">Keine Events</span>', "", "", "", "", "", ""]);
-
-    juryTable.innerHTML = jury.length
-        ? jury.map((row) => tableRow([
-            row.id, row.event_name || "—", row.decision_type, row.notes, row.created_at,
-            button("Löschen", `data-delete-jury="${row.id}"`)
-        ])).join("")
-        : tableRow(['<span class="empty-state">Keine Jury-Einträge</span>', "", "", "", "", ""]);
-
-    bindDeleteHandler("[data-delete-season]", async (event) => {
-        await api(`/seasons/${event.currentTarget.getAttribute("data-delete-season")}`, { method: "DELETE" });
+async function deleteEvent(id) {
+    try {
+        await api(`/events/${id}`, { method: "DELETE" });
+        showToast("Event gelöscht ✅", "success");
         await loadEvents();
-    });
-    bindDeleteHandler("[data-delete-event]", async (event) => {
-        await api(`/events/${event.currentTarget.getAttribute("data-delete-event")}`, { method: "DELETE" });
-        await loadEvents();
-    });
-    bindDeleteHandler("[data-delete-jury]", async (event) => {
-        await api(`/jury-decisions/${event.currentTarget.getAttribute("data-delete-jury")}`, { method: "DELETE" });
-        await loadEvents();
-    });
+    } catch (error) {
+        showToast(error.message, "error");
+    }
 }
 
-async function initEventsPage() {
-    await loadEvents();
-    const seasonForm = document.getElementById("season-form");
-    const eventForm = document.getElementById("event-form");
-    const juryForm = document.getElementById("jury-form");
+// ============ POINTS PAGE ============
 
-    seasonForm?.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        try {
-            await api("/seasons", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(seasonForm).entries())) });
-            seasonForm.reset();
-            await loadEvents();
-            showMessage("Saison gespeichert.");
-        } catch (error) {
-            showMessage(error.message, "error");
+async function loadPointsRules() {
+    try {
+        const rules = await api("/points-rules");
+        if (rules) {
+            document.getElementById("world-cup-schema").value = rules.world_cup_schema || "top_30";
+            document.getElementById("team-calc-method").value = rules.team_calc_method || "sum";
+            document.querySelector("input[name='bonus_record']").checked = rules.bonus_record;
+            document.querySelector("input[name='bonus_series']").checked = rules.bonus_series;
         }
-    });
-
-    eventForm?.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        try {
-            const payload = Object.fromEntries(new FormData(eventForm).entries());
-            if (!payload.seasonId) delete payload.seasonId;
-            await api("/events", { method: "POST", body: JSON.stringify(payload) });
-            eventForm.reset();
-            await loadEvents();
-            showMessage("Event gespeichert.");
-        } catch (error) {
-            showMessage(error.message, "error");
-        }
-    });
-
-    juryForm?.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        try {
-            const payload = Object.fromEntries(new FormData(juryForm).entries());
-            if (!payload.eventId) delete payload.eventId;
-            await api("/jury-decisions", { method: "POST", body: JSON.stringify(payload) });
-            juryForm.reset();
-            await loadEvents();
-            showMessage("Jury-Entscheidung gespeichert.");
-        } catch (error) {
-            showMessage(error.message, "error");
-        }
-    });
+    } catch (error) {
+        console.error("Fehler beim Laden der Punkte-Regeln:", error);
+    }
 }
 
-async function loadPoints() {
-    const [rules, scores] = await Promise.all([api("/point-rules"), api("/event-scores")]);
-    const rulesTable = document.getElementById("point-rules-table");
-    const scoresTable = document.getElementById("event-scores-table");
-
-    rulesTable.innerHTML = rules.length
-        ? rules.map((row) => tableRow([
-            row.id, row.name, row.rule_type, row.active ? "Ja" : "Nein", row.config_json,
-            button("Löschen", `data-delete-rule="${row.id}"`)
-        ])).join("")
-        : tableRow(['<span class="empty-state">Keine Punktregeln</span>', "", "", "", "", ""]);
-
-    scoresTable.innerHTML = scores.length
-        ? scores.map((row) => tableRow([
-            row.id, row.event_name || row.event_id || "—", row.entry_name, row.rank_position || "—",
-            row.points, row.bonus_points, row.notes || "—",
-            button("Löschen", `data-delete-score="${row.id}"`)
-        ])).join("")
-        : tableRow(['<span class="empty-state">Keine Eventwertungen</span>', "", "", "", "", "", "", ""]);
-
-    bindDeleteHandler("[data-delete-rule]", async (event) => {
-        await api(`/point-rules/${event.currentTarget.getAttribute("data-delete-rule")}`, { method: "DELETE" });
-        await loadPoints();
-    });
-    bindDeleteHandler("[data-delete-score]", async (event) => {
-        await api(`/event-scores/${event.currentTarget.getAttribute("data-delete-score")}`, { method: "DELETE" });
-        await loadPoints();
-    });
-}
-
-async function initPointsPage() {
-    await loadPoints();
-    const ruleForm = document.getElementById("point-rule-form");
-    const scoreForm = document.getElementById("event-score-form");
-
-    ruleForm?.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const payload = Object.fromEntries(new FormData(ruleForm).entries());
-        let parsedConfig = {};
-        try {
-            parsedConfig = JSON.parse(payload.configJson || "{}");
-        } catch (error) {
-            showMessage("Konfiguration muss valides JSON sein.", "error");
-            return;
-        }
-        payload.config = parsedConfig;
-        payload.active = payload.active === "1";
-        delete payload.configJson;
-        try {
-            await api("/point-rules", { method: "POST", body: JSON.stringify(payload) });
-            ruleForm.reset();
-            await loadPoints();
-            showMessage("Punktregel gespeichert.");
-        } catch (error) {
-            showMessage(error.message, "error");
-        }
-    });
-
-    scoreForm?.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const payload = Object.fromEntries(new FormData(scoreForm).entries());
-        if (!payload.eventId) delete payload.eventId;
-        try {
-            await api("/event-scores", { method: "POST", body: JSON.stringify(payload) });
-            scoreForm.reset();
-            await loadPoints();
-            showMessage("Eventwertung gespeichert.");
-        } catch (error) {
-            showMessage(error.message, "error");
-        }
-    });
-}
+// ============ TRANSFERS PAGE ============
 
 async function loadTransfers() {
-    const [transfers, contracts] = await Promise.all([api("/transfers"), api("/contracts")]);
-    const transferTable = document.getElementById("transfers-table");
-    const contractsTable = document.getElementById("contracts-table");
-
-    transferTable.innerHTML = transfers.length
-        ? transfers.map((row) => tableRow([
-            row.id, row.athlete_name, row.from_team_name || "—", row.to_team_name || "—", row.status,
-            row.lock_until || "—", row.is_emergency ? "Ja" : "Nein",
-            button("Löschen", `data-delete-transfer="${row.id}"`)
-        ])).join("")
-        : tableRow(['<span class="empty-state">Keine Transfers</span>', "", "", "", "", "", "", ""]);
-
-    contractsTable.innerHTML = contracts.length
-        ? contracts.map((row) => tableRow([
-            row.id, row.file_name, `${row.entity_type} ${row.entity_id || ""}`, row.status, row.expires_at || "—",
-            button("Löschen", `data-delete-contract="${row.id}"`)
-        ])).join("")
-        : tableRow(['<span class="empty-state">Keine Dokumente</span>', "", "", "", "", ""]);
-
-    bindDeleteHandler("[data-delete-transfer]", async (event) => {
-        await api(`/transfers/${event.currentTarget.getAttribute("data-delete-transfer")}`, { method: "DELETE" });
-        await loadTransfers();
-    });
-    bindDeleteHandler("[data-delete-contract]", async (event) => {
-        await api(`/contracts/${event.currentTarget.getAttribute("data-delete-contract")}`, { method: "DELETE" });
-        await loadTransfers();
-    });
-}
-
-async function initTransfersPage() {
-    await loadTransfers();
-    const transferForm = document.getElementById("transfer-form");
-    const contractForm = document.getElementById("contract-form");
-
-    transferForm?.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const payload = Object.fromEntries(new FormData(transferForm).entries());
-        payload.isEmergency = payload.isEmergency === "1";
-        if (!payload.fromTeamId) delete payload.fromTeamId;
-        if (!payload.toTeamId) delete payload.toTeamId;
-        try {
-            await api("/transfers", { method: "POST", body: JSON.stringify(payload) });
-            transferForm.reset();
-            await loadTransfers();
-            showMessage("Transfer gespeichert.");
-        } catch (error) {
-            showMessage(error.message, "error");
-        }
-    });
-
-    contractForm?.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const payload = Object.fromEntries(new FormData(contractForm).entries());
-        if (!payload.entityId) delete payload.entityId;
-        try {
-            await api("/contracts", { method: "POST", body: JSON.stringify(payload) });
-            contractForm.reset();
-            await loadTransfers();
-            showMessage("Dokument gespeichert.");
-        } catch (error) {
-            showMessage(error.message, "error");
-        }
-    });
-}
-
-async function loadReporting() {
-    const [scores, publications, audit] = await Promise.all([
-        api("/event-scores"),
-        api("/publications"),
-        api("/audit-logs?limit=50")
-    ]);
-    const liveTable = document.getElementById("reporting-live-table");
-    const publicationsTable = document.getElementById("publications-table");
-    const auditTable = document.getElementById("reporting-audit-table");
-
-    liveTable.innerHTML = scores.length
-        ? scores.map((row) => tableRow([row.id, row.event_name || row.event_id || "—", row.entry_name, row.rank_position || "—", row.points, row.bonus_points])).join("")
-        : tableRow(['<span class="empty-state">Keine Live-Ergebnisse</span>', "", "", "", "", ""]);
-
-    publicationsTable.innerHTML = publications.length
-        ? publications.map((row) => tableRow([
-            row.id, row.title, row.format, row.status, row.published_at || "—",
-            button("Löschen", `data-delete-publication="${row.id}"`)
-        ])).join("")
-        : tableRow(['<span class="empty-state">Keine Veröffentlichungen</span>', "", "", "", "", ""]);
-
-    auditTable.innerHTML = audit.length
-        ? audit.map((row) => tableRow([row.created_at, row.actor_username, row.action, `${row.entity_type} ${row.entity_id || ""}`, row.details || "—"])).join("")
-        : tableRow(['<span class="empty-state">Keine Audit-Logs</span>', "", "", "", ""]);
-
-    bindDeleteHandler("[data-delete-publication]", async (event) => {
-        await api(`/publications/${event.currentTarget.getAttribute("data-delete-publication")}`, { method: "DELETE" });
-        await loadReporting();
-    });
-}
-
-async function initReportingPage() {
-    await loadReporting();
-    const publicationForm = document.getElementById("publication-form");
-    publicationForm?.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const payload = Object.fromEntries(new FormData(publicationForm).entries());
-        try {
-            await api("/publications", { method: "POST", body: JSON.stringify(payload) });
-            publicationForm.reset();
-            await loadReporting();
-            showMessage("Veröffentlichung gespeichert.");
-        } catch (error) {
-            showMessage(error.message, "error");
-        }
-    });
-}
-
-async function loadSettings() {
-    const rows = await api("/settings");
-    const map = Object.fromEntries(rows.map((entry) => [entry.key, entry.value]));
-    const settingsForm = document.getElementById("settings-form");
-    const licensesTable = document.getElementById("license-categories-table");
-    const config = map.systemConfig || {};
-    const security = map.securityConfig || {};
-    const categories = Array.isArray(map.licenseCategories) ? map.licenseCategories : [];
-
-    if (settingsForm) {
-        settingsForm.timezone.value = config.timezone || "";
-        settingsForm.language.value = config.language || "";
-        settingsForm.defaultSeason.value = config.defaultSeason || "";
-        settingsForm.defaultPointsSchema.value = config.defaultPointsSchema || "";
-        settingsForm.passwordMinLength.value = security.passwordMinLength || "";
-        settingsForm.sessionTimeoutMinutes.value = security.sessionTimeoutMinutes || "";
-        settingsForm.twoFactorMode.value = security.twoFactorMode || "";
+    try {
+        const transfers = await api("/transfers");
+        const html = transfers.map(t => `
+            <tr>
+                <td><strong>${t.athlete_name || "—"}</strong></td>
+                <td>${t.from_team || "—"} ➜ ${t.to_team || "—"}</td>
+                <td><span class="badge" style="background: ${t.status === "approved" ? "#27ae60" : "#f39c12"};">${t.status || "pending"}</span></td>
+                <td>${new Date(t.transfer_date).toLocaleDateString("de-DE")}</td>
+                <td>
+                    <button class="btn-small btn-secondary" onclick="editTransferModal(${t.id})">✏️ Details</button>
+                </td>
+            </tr>
+        `).join("");
+        document.getElementById("transfers-list-tbody").innerHTML = html || "<tr><td colspan='5' style='text-align: center; color: #999;'>Keine Transfers vorhanden</td></tr>";
+    } catch (error) {
+        showToast(error.message, "error");
     }
-
-    licensesTable.innerHTML = categories.length
-        ? categories.map((row) => tableRow([row.code, row.description, row.requirements])).join("")
-        : tableRow(['<span class="empty-state">Keine Lizenzkategorien</span>', "", ""]);
 }
 
-async function initSettingsPage() {
-    await loadSettings();
-    const settingsForm = document.getElementById("settings-form");
-    const categoryForm = document.getElementById("license-category-form");
+// ============ REPORTING PAGE ============
 
-    settingsForm?.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const payload = Object.fromEntries(new FormData(settingsForm).entries());
-        const systemConfig = {
-            timezone: payload.timezone || "",
-            language: payload.language || "",
-            defaultSeason: payload.defaultSeason || "",
-            defaultPointsSchema: payload.defaultPointsSchema || ""
-        };
-        const securityConfig = {
-            passwordMinLength: payload.passwordMinLength ? Number(payload.passwordMinLength) : null,
-            sessionTimeoutMinutes: payload.sessionTimeoutMinutes ? Number(payload.sessionTimeoutMinutes) : null,
-            twoFactorMode: payload.twoFactorMode || ""
-        };
-        try {
-            await api("/settings/systemConfig", { method: "PUT", body: JSON.stringify({ value: systemConfig }) });
-            await api("/settings/securityConfig", { method: "PUT", body: JSON.stringify({ value: securityConfig }) });
-            await loadSettings();
-            showMessage("Settings gespeichert.");
-        } catch (error) {
-            showMessage(error.message, "error");
+async function loadAuditLog() {
+    try {
+        const logs = await api("/audit-logs?limit=100");
+        const html = logs.map(l => `
+            <tr>
+                <td>${l.created_at ? new Date(l.created_at).toLocaleString("de-DE") : "—"}</td>
+                <td><strong>${l.actor_username || "—"}</strong></td>
+                <td><span class="badge" style="background: #3498db;">${l.action || "—"}</span></td>
+                <td>${l.entity_type || "—"}</td>
+                <td style="font-size: 12px; color: #999;">${l.details ? l.details.substring(0, 50) + "..." : "—"}</td>
+            </tr>
+        `).join("");
+        const tbody = document.getElementById("audit-log-tbody");
+        if (tbody) {
+            tbody.innerHTML = html || "<tr><td colspan='5' style='text-align: center; color: #999;'>Keine Einträge vorhanden</td></tr>";
         }
-    });
-
-    categoryForm?.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        try {
-            const existing = await api("/settings");
-            const map = Object.fromEntries(existing.map((entry) => [entry.key, entry.value]));
-            const current = Array.isArray(map.licenseCategories) ? map.licenseCategories : [];
-            const payload = Object.fromEntries(new FormData(categoryForm).entries());
-            const next = [...current, payload];
-            await api("/settings/licenseCategories", { method: "PUT", body: JSON.stringify({ value: next }) });
-            categoryForm.reset();
-            await loadSettings();
-            showMessage("Lizenzkategorie gespeichert.");
-        } catch (error) {
-            showMessage(error.message, "error");
-        }
-    });
+    } catch (error) {
+        console.error("Fehler beim Laden des Audit-Logs:", error);
+    }
 }
 
-async function initProtectedPage() {
-    const user = await requireAuth();
-    if (!user) return;
-    activateNav();
-    wireLogout();
-    const current = pageName();
-    if (current === "dashboard.html") await loadDashboard();
-    if (current === "users.html") await initUsersPage();
-    if (current === "teams.html") await initTeamsPage();
-    if (current === "events.html") await initEventsPage();
-    if (current === "points.html") await initPointsPage();
-    if (current === "transfers.html") await initTransfersPage();
-    if (current === "reporting.html") await initReportingPage();
-    if (current === "settings.html") await initSettingsPage();
-}
+// ============ INIT ============
 
 document.addEventListener("DOMContentLoaded", async () => {
-    try {
-        if (isLoginPage()) {
-            await initLoginPage();
-            return;
+    if (isLoginPage()) {
+        await setupLoginPage();
+    } else {
+        const user = await requireAuth();
+        if (user) {
+            wireLogout();
+            activateNav();
+            
+            const page = pageName();
+            if (page === "dashboard.html") {
+                await loadDashboard();
+            } else if (page === "users.html") {
+                await loadUsers();
+            } else if (page === "teams.html") {
+                await loadTeams();
+            } else if (page === "events.html") {
+                await loadEvents();
+            } else if (page === "points.html") {
+                await loadPointsRules();
+            } else if (page === "transfers.html") {
+                await loadTransfers();
+            } else if (page === "reporting.html") {
+                await loadAuditLog();
+            }
         }
-        await initProtectedPage();
-    } catch (error) {
-        showMessage(error.message, "error");
     }
 });

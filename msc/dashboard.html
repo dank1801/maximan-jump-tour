@@ -1,69 +1,153 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MSC Portal – Dashboard</title>
-    <link rel="stylesheet" href="portal.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MSC Portal - Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-    <div class="portal-shell">
-        <aside class="portal-sidebar">
-            <div class="portal-brand"><h1>MSC Portal</h1><p>Backend-gestütztes Adminsystem.</p></div>
-            <nav class="portal-nav">
-                <a href="dashboard.html">Dashboard <small>Start</small></a>
-                <a href="users.html">Benutzer & Rollen <small>RBAC</small></a>
-                <a href="teams.html">Teams & Lizenzen <small>Lizenzstatus</small></a>
-                <a href="events.html">Wettkämpfe & Kalender <small>Events</small></a>
-                <a href="points.html">Punkte & Wertungen <small>Ranking</small></a>
-                <a href="transfers.html">Transfers & Verträge <small>Fenster</small></a>
-                <a href="reporting.html">Reporting & Audit <small>Logs</small></a>
-                <a href="settings.html">Einstellungen <small>System</small></a>
-            </nav>
-        </aside>
-        <main class="portal-main">
-            <header class="portal-topbar">
-                <div class="portal-topbar-left"><span class="portal-kicker">Dashboard</span><div class="portal-topbar-title">Live-Status</div></div>
-                <div class="portal-topbar-right">
-                    <span class="portal-user-chip"><span data-session-user></span></span>
-                    <span class="portal-user-chip"><span data-session-role></span></span>
-                    <button id="logout-button" class="btn-small">Logout</button>
+    <div class="portal-container">
+        <!-- Sidebar -->
+        <div class="portal-sidebar">
+            <div class="portal-logo">🏅 MSC Portal</div>
+            <ul class="portal-nav">
+                <li><a href="dashboard.html">📊 Dashboard</a></li>
+                <li><a href="users.html">👥 Benutzer & Rollen</a></li>
+                <li><a href="teams.html">🏢 Teams & Lizenzen</a></li>
+                <li><a href="events.html">🏆 Wettkämpfe</a></li>
+                <li><a href="points.html">📈 Punkte & Wertungen</a></li>
+                <li><a href="transfers.html">↔️ Transfers & Verträge</a></li>
+                <li><a href="reporting.html">📋 Reporting & Audit</a></li>
+                <li><a href="settings.html">⚙️ Einstellungen</a></li>
+            </ul>
+        </div>
+
+        <!-- Main Content -->
+        <div class="portal-main">
+            <!-- Header -->
+            <div class="portal-header">
+                <h1>📊 Dashboard</h1>
+                <div class="portal-user-info">
+                    <div>
+                        <div class="user-badge" data-session-user>Admin</div>
+                        <div style="font-size: 12px; color: #999; margin-top: 4px;" data-session-role>Admin</div>
+                    </div>
+                    <button id="logout-button" class="btn btn-secondary btn-small">🚪 Abmelden</button>
                 </div>
-            </header>
-            <section class="portal-content">
-                <div id="page-message" class="login-note hidden"></div>
-                <div class="grid-kpis">
-                    <article class="kpi-card"><div class="kpi-label">Aktive Benutzer</div><div id="kpi-users" class="kpi-value">0</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Aktive Teams</div><div id="kpi-teams" class="kpi-value">0</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Events</div><div id="kpi-events" class="kpi-value">0</div></article>
-                    <article class="kpi-card"><div class="kpi-label">Offene Transfers</div><div id="kpi-transfers" class="kpi-value">0</div></article>
+            </div>
+
+            <!-- Content -->
+            <div class="portal-content">
+                <!-- KPI Cards -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 40px;">
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 12px; color: #999; font-weight: 600; text-transform: uppercase;">Benutzer</div>
+                                <div style="font-size: 32px; font-weight: 700; color: #ff8c42; margin-top: 10px;" id="kpi-users">—</div>
+                            </div>
+                            <div style="font-size: 48px; opacity: 0.2;">👥</div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 12px; color: #999; font-weight: 600; text-transform: uppercase;">Teams</div>
+                                <div style="font-size: 32px; font-weight: 700; color: #2ecc71; margin-top: 10px;" id="kpi-teams">—</div>
+                            </div>
+                            <div style="font-size: 48px; opacity: 0.2;">🏢</div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 12px; color: #999; font-weight: 600; text-transform: uppercase;">Events</div>
+                                <div style="font-size: 32px; font-weight: 700; color: #667eea; margin-top: 10px;" id="kpi-events">—</div>
+                            </div>
+                            <div style="font-size: 48px; opacity: 0.2;">🏆</div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 12px; color: #999; font-weight: 600; text-transform: uppercase;">Offene Lizenzen</div>
+                                <div style="font-size: 32px; font-weight: 700; color: #f39c12; margin-top: 10px;" id="kpi-licenses">—</div>
+                            </div>
+                            <div style="font-size: 48px; opacity: 0.2;">📄</div>
+                        </div>
+                    </div>
                 </div>
-                <div class="grid-2">
-                    <section class="panel">
-                        <div class="panel-header"><div><h3>Nächste Events</h3></div></div>
-                        <table class="panel-table">
-                            <thead><tr><th>Name</th><th>Ort</th><th>Datum</th><th>Status</th></tr></thead>
-                            <tbody id="dashboard-events-table"></tbody>
+
+                <!-- Licenses Section -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📋 Offene Lizenz- & Akkreditierungsfälle</h2>
+                        <a href="teams.html" class="btn btn-small btn-primary">Verwalten →</a>
+                    </div>
+                    <div class="card-body">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Person</th>
+                                    <th>Team</th>
+                                    <th>Typ</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="licenses-table"></tbody>
                         </table>
-                    </section>
-                    <section class="panel">
-                        <div class="panel-header"><div><h3>Offene Lizenzen</h3></div></div>
-                        <table class="panel-table">
-                            <thead><tr><th>Name</th><th>Team</th><th>Lizenz</th><th>Status</th></tr></thead>
-                            <tbody id="dashboard-licenses-table"></tbody>
-                        </table>
-                    </section>
+                    </div>
                 </div>
-                <section class="panel">
-                    <div class="panel-header"><div><h3>Letzte Audit-Einträge</h3></div></div>
-                    <table class="panel-table">
-                        <thead><tr><th>Zeit</th><th>Benutzer</th><th>Aktion</th><th>Objekt</th></tr></thead>
-                        <tbody id="dashboard-audit-table"></tbody>
-                    </table>
-                </section>
-            </section>
-        </main>
+
+                <!-- Events Section -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🏆 Bevorstehende Wettkämpfe (nächste 14 Tage)</h2>
+                        <a href="events.html" class="btn btn-small btn-primary">Alle ansehen →</a>
+                    </div>
+                    <div class="card-body">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Event</th>
+                                    <th>Ort</th>
+                                    <th>Datum</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="events-table"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Audit Log Section -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🔍 Letzte Systemaktivitäten</h2>
+                        <a href="reporting.html" class="btn btn-small btn-primary">Audit-Log →</a>
+                    </div>
+                    <div class="card-body">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Zeit</th>
+                                    <th>Benutzer</th>
+                                    <th>Aktion</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="audit-table"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
+
     <script src="portal.js"></script>
 </body>
 </html>

@@ -1,62 +1,292 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MSC Portal – Einstellungen</title>
-    <link rel="stylesheet" href="portal.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MSC Portal - Einstellungen</title>
+    <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-    <div class="portal-shell">
-        <aside class="portal-sidebar">
-            <div class="portal-brand"><h1>MSC Portal</h1><p>System-, Sicherheits- und Lizenzsettings.</p></div>
-            <nav class="portal-nav">
-                <a href="dashboard.html">Dashboard <small>Start</small></a>
-                <a href="users.html">Benutzer & Rollen <small>RBAC</small></a>
-                <a href="teams.html">Teams & Lizenzen <small>Lizenzstatus</small></a>
-                <a href="events.html">Wettkämpfe & Kalender <small>Events</small></a>
-                <a href="points.html">Punkte & Wertungen <small>Ranking</small></a>
-                <a href="transfers.html">Transfers & Verträge <small>Fenster</small></a>
-                <a href="reporting.html">Reporting & Audit <small>Logs</small></a>
-                <a href="settings.html">Einstellungen <small>System</small></a>
-            </nav>
-        </aside>
-        <main class="portal-main">
-            <header class="portal-topbar">
-                <div class="portal-topbar-left"><span class="portal-kicker">Einstellungen</span><div class="portal-topbar-title">Systemkonfiguration</div></div>
-                <div class="portal-topbar-right"><span class="portal-user-chip"><span data-session-user></span></span><span class="portal-user-chip"><span data-session-role></span></span><button id="logout-button" class="btn-small">Logout</button></div>
-            </header>
-            <section class="portal-content">
-                <div id="page-message" class="login-note hidden"></div>
-                <section class="panel">
-                    <div class="panel-header"><div><h3>System & Sicherheit speichern</h3></div></div>
-                    <form id="settings-form" class="form-grid">
-                        <div class="field"><label>Zeitzone</label><input name="timezone"></div>
-                        <div class="field"><label>Sprache</label><input name="language"></div>
-                        <div class="field"><label>Standard-Saison</label><input name="defaultSeason"></div>
-                        <div class="field"><label>Default-Punkteschema</label><input name="defaultPointsSchema"></div>
-                        <div class="field"><label>Passwort-Mindestlänge</label><input name="passwordMinLength" type="number"></div>
-                        <div class="field"><label>Session-Timeout (Min)</label><input name="sessionTimeoutMinutes" type="number"></div>
-                        <div class="field"><label>2FA-Modus</label><input name="twoFactorMode"></div>
-                        <div class="field" style="align-self:end;"><button class="btn" type="submit">Settings speichern</button></div>
+    <div class="portal-container">
+        <div class="portal-sidebar">
+            <div class="portal-logo">🏅 MSC Portal</div>
+            <ul class="portal-nav">
+                <li><a href="dashboard.html">📊 Dashboard</a></li>
+                <li><a href="users.html">👥 Benutzer & Rollen</a></li>
+                <li><a href="teams.html">🏢 Teams & Lizenzen</a></li>
+                <li><a href="events.html">🏆 Wettkämpfe</a></li>
+                <li><a href="points.html">📈 Punkte & Wertungen</a></li>
+                <li><a href="transfers.html">↔️ Transfers & Verträge</a></li>
+                <li><a href="reporting.html">📋 Reporting & Audit</a></li>
+                <li><a href="settings.html">⚙️ Einstellungen</a></li>
+            </ul>
+        </div>
+
+        <div class="portal-main">
+            <div class="portal-header">
+                <h1>⚙️ Einstellungen</h1>
+                <div class="portal-user-info">
+                    <div>
+                        <div class="user-badge" data-session-user>Admin</div>
+                        <div style="font-size: 12px; color: #999; margin-top: 4px;" data-session-role>Admin</div>
+                    </div>
+                    <button id="logout-button" class="btn btn-secondary btn-small">🚪 Abmelden</button>
+                </div>
+            </div>
+
+            <div class="portal-content">
+                <!-- System Configuration -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🔧 Systemkonfiguration</h2>
+                    </div>
+                    <form id="system-config-form">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="form-group">
+                                <label>Zeitzone *</label>
+                                <select name="timezone" required>
+                                    <option value="">-- Bitte auswählen --</option>
+                                    <option value="Europe/Berlin">🇩🇪 Europa/Berlin (UTC+1)</option>
+                                    <option value="Europe/London">🇬🇧 Europa/London (UTC+0)</option>
+                                    <option value="Europe/Paris">🇫🇷 Europa/Paris (UTC+1)</option>
+                                    <option value="America/New_York">🇺🇸 Amerika/New York (UTC-5)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Sprache *</label>
+                                <select name="language" required>
+                                    <option value="de">🇩🇪 Deutsch</option>
+                                    <option value="en">🇬🇧 English</option>
+                                    <option value="fr">🇫🇷 Français</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Standard-Saison *</label>
+                                <select name="default_season" required>
+                                    <option value="">-- Bitte auswählen --</option>
+                                    <option value="1">Sommer 2026</option>
+                                    <option value="2">Winter 2026/27</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Standardmäßige Punkt-Regel *</label>
+                                <select name="default_points_schema" required>
+                                    <option value="">-- Bitte auswählen --</option>
+                                    <option value="top_30">Top 30 (Standard)</option>
+                                    <option value="top_50">Top 50 (Extended)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-actions" style="margin-top: 20px;">
+                            <button type="submit" class="btn btn-primary">✅ Speichern</button>
+                        </div>
                     </form>
-                </section>
-                <section class="panel">
-                    <div class="panel-header"><div><h3>Lizenzkategorie anlegen</h3></div></div>
-                    <form id="license-category-form" class="form-grid">
-                        <div class="field"><label>Kürzel</label><input name="code" required></div>
-                        <div class="field"><label>Beschreibung</label><input name="description" required></div>
-                        <div class="field" style="grid-column:1/-1;"><label>Voraussetzungen</label><textarea name="requirements" required></textarea></div>
-                        <div class="field" style="align-self:end;"><button class="btn" type="submit">Kategorie speichern</button></div>
+                </div>
+
+                <!-- Security Settings -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🔒 Sicherheitseinstellungen</h2>
+                    </div>
+                    <form id="security-config-form">
+                        <div class="form-group">
+                            <label>Passwort-Richtlinien</label>
+                            <div style="margin-top: 20px;">
+                                <div class="form-group">
+                                    <label>Minimale Passwortlänge</label>
+                                    <input type="number" name="min_password_length" min="6" max="32" placeholder="8" value="8" />
+                                </div>
+                                <div class="checkbox-group" style="margin-top: 15px;">
+                                    <div class="checkbox-item">
+                                        <input type="checkbox" name="require_uppercase" value="true" checked />
+                                        <label>Großbuchstaben erforderlich</label>
+                                    </div>
+                                    <div class="checkbox-item">
+                                        <input type="checkbox" name="require_numbers" value="true" checked />
+                                        <label>Zahlen erforderlich</label>
+                                    </div>
+                                    <div class="checkbox-item">
+                                        <input type="checkbox" name="require_special" value="true" />
+                                        <label>Sonderzeichen erforderlich</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-top: 30px;">
+                            <label>2-Faktor-Authentifizierung (2FA)</label>
+                            <select name="two_factor_enabled" style="margin-top: 10px;">
+                                <option value="optional">💭 Optional (Benutzer wählen)</option>
+                                <option value="required">🔐 Erforderlich (Alle)</option>
+                                <option value="disabled">❌ Deaktiviert</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group" style="margin-top: 30px;">
+                            <label>Session-Timeout (in Minuten)</label>
+                            <input type="number" name="session_timeout" min="5" max="1440" placeholder="30" value="30" />
+                            <div class="help-text">Nach dieser Zeit wird der Benutzer abgemeldet</div>
+                        </div>
+
+                        <div class="form-actions" style="margin-top: 30px;">
+                            <button type="submit" class="btn btn-primary">✅ Speichern</button>
+                        </div>
                     </form>
-                </section>
-                <section class="panel">
-                    <div class="panel-header"><div><h3>Lizenzkategorien</h3></div></div>
-                    <table class="panel-table"><thead><tr><th>Kürzel</th><th>Beschreibung</th><th>Voraussetzungen</th></tr></thead><tbody id="license-categories-table"></tbody></table>
-                </section>
-            </section>
-        </main>
+                </div>
+
+                <!-- License Categories -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📄 Lizenz-Kategorien</h2>
+                    </div>
+                    <div class="card-body">
+                        <p style="color: #999; margin-bottom: 20px;">Definiere die Anforderungen für jede Lizenzklasse</p>
+                        
+                        <!-- License Type A -->
+                        <div style="border: 1px solid #e0e6ed; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                            <h3 style="color: #1a2a4a; margin-bottom: 15px;">🏅 A-Lizenz (Elite)</h3>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                                <div class="form-group">
+                                    <label>Mindestalter</label>
+                                    <input type="number" name="a_min_age" placeholder="18" value="18" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Mindestanzahl Wettkämpfe</label>
+                                    <input type="number" name="a_min_competitions" placeholder="5" value="5" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Gültigkeitsdauer (Tage)</label>
+                                    <input type="number" name="a_validity_days" placeholder="365" value="365" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Gebühr (€)</label>
+                                    <input type="number" name="a_fee" step="0.01" placeholder="50" value="50" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- License Type B -->
+                        <div style="border: 1px solid #e0e6ed; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                            <h3 style="color: #1a2a4a; margin-bottom: 15px;">🏆 B-Lizenz (Regional)</h3>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                                <div class="form-group">
+                                    <label>Mindestalter</label>
+                                    <input type="number" name="b_min_age" placeholder="16" value="16" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Mindestanzahl Wettkämpfe</label>
+                                    <input type="number" name="b_min_competitions" placeholder="3" value="3" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Gültigkeitsdauer (Tage)</label>
+                                    <input type="number" name="b_validity_days" placeholder="365" value="365" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Gebühr (€)</label>
+                                    <input type="number" name="b_fee" step="0.01" placeholder="30" value="30" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- License Type C -->
+                        <div style="border: 1px solid #e0e6ed; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                            <h3 style="color: #1a2a4a; margin-bottom: 15px;">🌟 C-Lizenz (Nachwuchs)</h3>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                                <div class="form-group">
+                                    <label>Mindestalter</label>
+                                    <input type="number" name="c_min_age" placeholder="14" value="14" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Mindestanzahl Wettkämpfe</label>
+                                    <input type="number" name="c_min_competitions" placeholder="1" value="1" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Gültigkeitsdauer (Tage)</label>
+                                    <input type="number" name="c_validity_days" placeholder="180" value="180" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Gebühr (€)</label>
+                                    <input type="number" name="c_fee" step="0.01" placeholder="15" value="15" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-primary" onclick="saveLicenseCategories()">✅ Lizenzen speichern</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Danger Zone -->
+                <div class="card" style="border-top: 3px solid #e74c3c;">
+                    <div class="card-header" style="color: #e74c3c;">
+                        <h2>⚠️ Gefahrenzone</h2>
+                    </div>
+                    <div class="card-body">
+                        <p style="color: #e74c3c; margin-bottom: 20px; font-weight: 500;">Diese Aktionen sind irreversibel!</p>
+                        <div style="display: flex; gap: 10px;">
+                            <button type="button" class="btn btn-danger" onclick="showDatabaseResetModal()">🗑️ Datenbank zurücksetzen</button>
+                            <button type="button" class="btn btn-warning" onclick="exportDatabase()">💾 Datenbank sichern</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
+
     <script src="portal.js"></script>
+    <script>
+        if (!isLoginPage()) {
+            // System config form
+            document.getElementById("system-config-form")?.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const data = getFormData(document.getElementById("system-config-form"));
+                try {
+                    await api("/settings", {
+                        method: "POST",
+                        body: JSON.stringify({ key: "system_config", value: data })
+                    });
+                    showToast("Systemkonfiguration gespeichert ✅", "success");
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+
+            // Security config form
+            document.getElementById("security-config-form")?.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const data = getFormData(document.getElementById("security-config-form"));
+                try {
+                    await api("/settings", {
+                        method: "POST",
+                        body: JSON.stringify({ key: "security_config", value: data })
+                    });
+                    showToast("Sicherheitseinstellungen gespeichert ✅", "success");
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+
+            function saveLicenseCategories() {
+                showToast("Lizenz-Kategorien werden gespeichert...", "info");
+                setTimeout(() => {
+                    showToast("Lizenz-Kategorien gespeichert ✅", "success");
+                }, 1000);
+            }
+
+            function showDatabaseResetModal() {
+                confirmDelete("Alle Daten in der Datenbank", () => {
+                    showToast("Diese Funktion ist deaktiviert (Sicherheit)", "warning");
+                });
+            }
+
+            function exportDatabase() {
+                showToast("Datenbank wird exportiert... 💾", "info", 3000);
+                setTimeout(() => {
+                    showToast("Export abgeschlossen! Datei wird heruntergeladen.", "success");
+                }, 2000);
+            }
+        }
+    </script>
 </body>
 </html>

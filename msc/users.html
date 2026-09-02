@@ -1,54 +1,136 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MSC Portal – Benutzer & Rollen</title>
-    <link rel="stylesheet" href="portal.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MSC Portal - Benutzer & Rollen</title>
+    <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-    <div class="portal-shell">
-        <aside class="portal-sidebar">
-            <div class="portal-brand"><h1>MSC Portal</h1><p>Benutzerverwaltung mit Rollenmodell.</p></div>
-            <nav class="portal-nav">
-                <a href="dashboard.html">Dashboard <small>Start</small></a>
-                <a href="users.html">Benutzer & Rollen <small>RBAC</small></a>
-                <a href="teams.html">Teams & Lizenzen <small>Lizenzstatus</small></a>
-                <a href="events.html">Wettkämpfe & Kalender <small>Events</small></a>
-                <a href="points.html">Punkte & Wertungen <small>Ranking</small></a>
-                <a href="transfers.html">Transfers & Verträge <small>Fenster</small></a>
-                <a href="reporting.html">Reporting & Audit <small>Logs</small></a>
-                <a href="settings.html">Einstellungen <small>System</small></a>
-            </nav>
-        </aside>
-        <main class="portal-main">
-            <header class="portal-topbar">
-                <div class="portal-topbar-left"><span class="portal-kicker">Benutzer & Rollen</span><div class="portal-topbar-title">Konten und Berechtigungen</div></div>
-                <div class="portal-topbar-right"><span class="portal-user-chip"><span data-session-user></span></span><span class="portal-user-chip"><span data-session-role></span></span><button id="logout-button" class="btn-small">Logout</button></div>
-            </header>
-            <section class="portal-content">
-                <div id="page-message" class="login-note hidden"></div>
-                <section class="panel">
-                    <div class="panel-header"><div><h3>Neuen Benutzer erstellen</h3></div></div>
-                    <form id="user-form" class="form-grid">
-                        <div class="field"><label>Benutzerkennung</label><input name="username" required></div>
-                        <div class="field"><label>Name</label><input name="name" required></div>
-                        <div class="field"><label>E-Mail</label><input name="email" type="email" required></div>
-                        <div class="field"><label>Rolle</label><input name="role" placeholder="MSC Admin / Teammanager / Jury ..." required></div>
-                        <div class="field"><label>Passwort</label><input name="password" type="password" required></div>
-                        <div class="field" style="align-self:end;"><button class="btn" type="submit">Speichern</button></div>
+    <div class="portal-container">
+        <!-- Sidebar -->
+        <div class="portal-sidebar">
+            <div class="portal-logo">🏅 MSC Portal</div>
+            <ul class="portal-nav">
+                <li><a href="dashboard.html">📊 Dashboard</a></li>
+                <li><a href="users.html">👥 Benutzer & Rollen</a></li>
+                <li><a href="teams.html">🏢 Teams & Lizenzen</a></li>
+                <li><a href="events.html">🏆 Wettkämpfe</a></li>
+                <li><a href="points.html">📈 Punkte & Wertungen</a></li>
+                <li><a href="transfers.html">↔️ Transfers & Verträge</a></li>
+                <li><a href="reporting.html">📋 Reporting & Audit</a></li>
+                <li><a href="settings.html">⚙️ Einstellungen</a></li>
+            </ul>
+        </div>
+
+        <!-- Main Content -->
+        <div class="portal-main">
+            <!-- Header -->
+            <div class="portal-header">
+                <h1>👥 Benutzer & Rollen</h1>
+                <div class="portal-user-info">
+                    <div>
+                        <div class="user-badge" data-session-user>Admin</div>
+                        <div style="font-size: 12px; color: #999; margin-top: 4px;" data-session-role>Admin</div>
+                    </div>
+                    <button id="logout-button" class="btn btn-secondary btn-small">🚪 Abmelden</button>
+                </div>
+            </div>
+
+            <!-- Content -->
+            <div class="portal-content">
+                <!-- Create User Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>➕ Neuen Benutzer erstellen</h2>
+                    </div>
+                    <form id="create-user-form">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="form-group">
+                                <label>Benutzerkennung *</label>
+                                <input type="text" name="username" placeholder="z.B. max.mueller" required />
+                                <div class="help-text">Nur Buchstaben, Zahlen und Punkte</div>
+                            </div>
+                            <div class="form-group">
+                                <label>Name *</label>
+                                <input type="text" name="name" placeholder="z.B. Max Müller" required />
+                            </div>
+                            <div class="form-group">
+                                <label>E-Mail *</label>
+                                <input type="email" name="email" placeholder="max@example.com" required />
+                            </div>
+                            <div class="form-group">
+                                <label>Passwort *</label>
+                                <input type="password" name="password" placeholder="••••••••" required />
+                                <div class="help-text">Mind. 8 Zeichen</div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Rolle *</label>
+                            <select name="role" required>
+                                <option value="">-- Bitte auswählen --</option>
+                                <option value="MSC Admin">🔐 MSC Admin (Vollzugriff)</option>
+                                <option value="Teammanager">🏢 Teammanager</option>
+                                <option value="Jury">🏆 Jury / Wettkampfleitung</option>
+                                <option value="Lizenzstelle">📄 Lizenzstelle</option>
+                                <option value="Reporter">📊 Reporter / Media</option>
+                            </select>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">➕ Benutzer erstellen</button>
+                        </div>
                     </form>
-                </section>
-                <section class="panel">
-                    <div class="panel-header"><div><h3>Benutzerliste</h3></div></div>
-                    <table class="panel-table">
-                        <thead><tr><th>ID</th><th>Benutzer</th><th>Name</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th>Letzter Login</th><th>Aktion</th></tr></thead>
-                        <tbody id="users-table"></tbody>
-                    </table>
-                </section>
-            </section>
-        </main>
+                </div>
+
+                <!-- Users List -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📋 Alle Benutzer</h2>
+                    </div>
+                    <div class="card-body">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Kennung</th>
+                                    <th>Rolle</th>
+                                    <th>Status</th>
+                                    <th>Letzte Anmeldung</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
+
     <script src="portal.js"></script>
+    <script>
+        if (!isLoginPage()) {
+            document.addEventListener("DOMContentLoaded", async () => {
+                const form = document.getElementById("create-user-form");
+                if (form) {
+                    form.addEventListener("submit", async (e) => {
+                        e.preventDefault();
+                        const data = getFormData(form);
+                        try {
+                            await api("/users", {
+                                method: "POST",
+                                body: JSON.stringify(data)
+                            });
+                            showToast(`Benutzer ${data.name} erstellt! ✅`, "success");
+                            form.reset();
+                            loadUsers();
+                        } catch (error) {
+                            showToast(error.message, "error");
+                        }
+                    });
+                }
+            });
+        }
+    </script>
 </body>
 </html>

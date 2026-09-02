@@ -1,74 +1,222 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MSC Portal – Teams & Lizenzen</title>
-    <link rel="stylesheet" href="portal.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MSC Portal - Teams & Lizenzen</title>
+    <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-    <div class="portal-shell">
-        <aside class="portal-sidebar">
-            <div class="portal-brand"><h1>MSC Portal</h1><p>Teams, Mitglieder und Lizenzen.</p></div>
-            <nav class="portal-nav">
-                <a href="dashboard.html">Dashboard <small>Start</small></a>
-                <a href="users.html">Benutzer & Rollen <small>RBAC</small></a>
-                <a href="teams.html">Teams & Lizenzen <small>Lizenzstatus</small></a>
-                <a href="events.html">Wettkämpfe & Kalender <small>Events</small></a>
-                <a href="points.html">Punkte & Wertungen <small>Ranking</small></a>
-                <a href="transfers.html">Transfers & Verträge <small>Fenster</small></a>
-                <a href="reporting.html">Reporting & Audit <small>Logs</small></a>
-                <a href="settings.html">Einstellungen <small>System</small></a>
-            </nav>
-        </aside>
-        <main class="portal-main">
-            <header class="portal-topbar">
-                <div class="portal-topbar-left"><span class="portal-kicker">Teams & Lizenzen</span><div class="portal-topbar-title">Teamverwaltung</div></div>
-                <div class="portal-topbar-right"><span class="portal-user-chip"><span data-session-user></span></span><span class="portal-user-chip"><span data-session-role></span></span><button id="logout-button" class="btn-small">Logout</button></div>
-            </header>
-            <section class="portal-content">
-                <div id="page-message" class="login-note hidden"></div>
-                <div class="grid-2">
-                    <section class="panel">
-                        <div class="panel-header"><div><h3>Team anlegen</h3></div></div>
-                        <form id="team-form" class="form-grid">
-                            <div class="field"><label>Teamname</label><input name="name" required></div>
-                            <div class="field"><label>Nation</label><input name="nation"></div>
-                            <div class="field"><label>Kategorie</label><input name="category"></div>
-                            <div class="field"><label>Manager User ID</label><input name="managerUserId" type="number"></div>
-                            <div class="field" style="align-self:end;"><button class="btn" type="submit">Team speichern</button></div>
-                        </form>
-                    </section>
-                    <section class="panel">
-                        <div class="panel-header"><div><h3>Mitglied/Lizenz anlegen</h3></div></div>
-                        <form id="team-member-form" class="form-grid">
-                            <div class="field"><label>Team ID</label><input name="teamId" type="number" required></div>
-                            <div class="field"><label>Name</label><input name="name" required></div>
-                            <div class="field"><label>Rolle</label><input name="memberRole" required></div>
-                            <div class="field"><label>Lizenztyp</label><input name="licenseType"></div>
-                            <div class="field"><label>Lizenz gültig bis</label><input name="licenseValidUntil" type="date"></div>
-                            <div class="field"><label>Lizenzstatus</label><input name="licenseStatus" placeholder="valid / in_review / expired"></div>
-                            <div class="field" style="align-self:end;"><button class="btn" type="submit">Mitglied speichern</button></div>
-                        </form>
-                    </section>
+    <div class="portal-container">
+        <div class="portal-sidebar">
+            <div class="portal-logo">🏅 MSC Portal</div>
+            <ul class="portal-nav">
+                <li><a href="dashboard.html">📊 Dashboard</a></li>
+                <li><a href="users.html">👥 Benutzer & Rollen</a></li>
+                <li><a href="teams.html">🏢 Teams & Lizenzen</a></li>
+                <li><a href="events.html">🏆 Wettkämpfe</a></li>
+                <li><a href="points.html">📈 Punkte & Wertungen</a></li>
+                <li><a href="transfers.html">↔️ Transfers & Verträge</a></li>
+                <li><a href="reporting.html">📋 Reporting & Audit</a></li>
+                <li><a href="settings.html">⚙️ Einstellungen</a></li>
+            </ul>
+        </div>
+
+        <div class="portal-main">
+            <div class="portal-header">
+                <h1>🏢 Teams & Lizenzen</h1>
+                <div class="portal-user-info">
+                    <div>
+                        <div class="user-badge" data-session-user>Admin</div>
+                        <div style="font-size: 12px; color: #999; margin-top: 4px;" data-session-role>Admin</div>
+                    </div>
+                    <button id="logout-button" class="btn btn-secondary btn-small">🚪 Abmelden</button>
                 </div>
-                <section class="panel">
-                    <div class="panel-header"><div><h3>Teams</h3></div></div>
-                    <table class="panel-table">
-                        <thead><tr><th>ID</th><th>Name</th><th>Nation</th><th>Kategorie</th><th>Manager</th><th>Status</th><th>Aktion</th></tr></thead>
-                        <tbody id="teams-table"></tbody>
-                    </table>
-                </section>
-                <section class="panel">
-                    <div class="panel-header"><div><h3>Mitglieder / Lizenzen</h3></div></div>
-                    <table class="panel-table">
-                        <thead><tr><th>ID</th><th>Team ID</th><th>Name</th><th>Rolle</th><th>Lizenz</th><th>Gültig bis</th><th>Status</th><th>Aktion</th></tr></thead>
-                        <tbody id="team-members-table"></tbody>
-                    </table>
-                </section>
-            </section>
-        </main>
+            </div>
+
+            <div class="portal-content">
+                <!-- Create Team Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>➕ Neues Team erstellen</h2>
+                    </div>
+                    <form id="create-team-form">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="form-group">
+                                <label>Team Name *</label>
+                                <input type="text" name="name" placeholder="z.B. Maximan Flyers" required />
+                            </div>
+                            <div class="form-group">
+                                <label>Kategorie *</label>
+                                <select name="category" required>
+                                    <option value="">-- Bitte auswählen --</option>
+                                    <option value="A">A (Elite)</option>
+                                    <option value="B">B (Regional)</option>
+                                    <option value="C">C (Nachwuchs)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Nation</label>
+                                <input type="text" name="nation" placeholder="z.B. Deutschland" />
+                            </div>
+                            <div class="form-group">
+                                <label>Kontaktperson</label>
+                                <input type="text" name="contact_person" placeholder="Name des Managers" />
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">➕ Team erstellen</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Teams List -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📋 Alle Teams</h2>
+                    </div>
+                    <div class="card-body">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Team</th>
+                                    <th>Kategorie</th>
+                                    <th>Nation</th>
+                                    <th>Manager</th>
+                                    <th>Status</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="teams-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- License Management -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📄 Lizenzverwaltung</h2>
+                    </div>
+                    <div class="card-body">
+                        <div style="margin-bottom: 20px;">
+                            <label style="margin-bottom: 10px;">Filter nach Status:</label>
+                            <div style="display: flex; gap: 10px;">
+                                <select id="license-filter" style="flex: 1;">
+                                    <option value="">-- Alle --</option>
+                                    <option value="gültig">✅ Gültig</option>
+                                    <option value="abgelaufen">❌ Abgelaufen</option>
+                                    <option value="in_prüfung">🔄 In Prüfung</option>
+                                </select>
+                            </div>
+                        </div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Person</th>
+                                    <th>Team</th>
+                                    <th>Lizenztyp</th>
+                                    <th>Gültig bis</th>
+                                    <th>Status</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="licenses-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
+
     <script src="portal.js"></script>
+    <script>
+        if (!isLoginPage()) {
+            document.addEventListener("DOMContentLoaded", async () => {
+                const form = document.getElementById("create-team-form");
+                if (form) {
+                    form.addEventListener("submit", async (e) => {
+                        e.preventDefault();
+                        const data = getFormData(form);
+                        try {
+                            await api("/teams", {
+                                method: "POST",
+                                body: JSON.stringify(data)
+                            });
+                            showToast(`Team ${data.name} erstellt! ✅`, "success");
+                            form.reset();
+                            loadTeams();
+                        } catch (error) {
+                            showToast(error.message, "error");
+                        }
+                    });
+                }
+            });
+
+            async function loadTeams() {
+                try {
+                    const teams = await api("/teams");
+                    const html = teams.map(t => `
+                        <tr>
+                            <td><strong>${t.name}</strong></td>
+                            <td><span class="badge badge-primary">${t.category || "—"}</span></td>
+                            <td>${t.nation || "—"}</td>
+                            <td>${t.contact_person || "—"}</td>
+                            <td>${statusBadge(t.status)}</td>
+                            <td>
+                                <button class="btn btn-small btn-secondary" onclick="editTeam(${t.id})">✏️</button>
+                                <button class="btn btn-small btn-danger" onclick="deleteTeam(${t.id})">🗑️</button>
+                            </td>
+                        </tr>
+                    `).join("");
+                    document.getElementById("teams-list").innerHTML = html || "<tr><td colspan='6' style='text-align: center; color: #999;'>Keine Teams vorhanden</td></tr>";
+                } catch (error) {
+                    console.error(error);
+                }
+            }
+
+            async function loadLicenses() {
+                try {
+                    const licenses = await api("/team-members");
+                    const html = licenses.map(l => `
+                        <tr>
+                            <td><strong>${l.name || "—"}</strong></td>
+                            <td>${l.team || "—"}</td>
+                            <td>${l.license_type || "—"}</td>
+                            <td>${l.license_valid_until ? new Date(l.license_valid_until).toLocaleDateString("de-DE") : "—"}</td>
+                            <td>${statusBadge(l.license_status)}</td>
+                            <td>
+                                <button class="btn btn-small btn-secondary">✏️</button>
+                                <button class="btn btn-small btn-danger">🗑️</button>
+                            </td>
+                        </tr>
+                    `).join("");
+                    document.getElementById("licenses-list").innerHTML = html || "<tr><td colspan='6' style='text-align: center; color: #999;'>Keine Lizenzen vorhanden</td></tr>";
+                } catch (error) {
+                    console.error(error);
+                }
+            }
+
+            function editTeam(teamId) {
+                showToast("Bearbeitungsfunktion folgt", "info");
+            }
+
+            function deleteTeam(teamId) {
+                confirmDelete("Team", async () => {
+                    try {
+                        await api(`/teams/${teamId}`, { method: "DELETE" });
+                        showToast("Team gelöscht ✅", "success");
+                        loadTeams();
+                    } catch (error) {
+                        showToast(error.message, "error");
+                    }
+                });
+            }
+
+            document.addEventListener("DOMContentLoaded", () => {
+                loadTeams();
+                loadLicenses();
+            });
+        }
+    </script>
 </body>
 </html>
