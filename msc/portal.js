@@ -1228,6 +1228,87 @@ async function loadTeams() {
     }
 }
 
+async function loadTeamManagerOptions(selectedId = "") {
+    const select = document.getElementById("create-team-manager");
+    if (!select) return;
+    const normalizedSelected = String(selectedId || "").trim();
+    try {
+        const [users, teams] = await Promise.all([api("/users"), api("/teams")]);
+        const assigned = new Set(
+            (Array.isArray(teams) ? teams : [])
+                .map((team) => String(team.manager_username || "").trim())
+                .filter(Boolean)
+        );
+        const managerOptions = (Array.isArray(users) ? users : [])
+            .filter((user) => String(user.role || "").trim().toLowerCase() === "teammanager")
+            .filter((user) => String(user.status || "").trim().toLowerCase() === "active")
+            .filter((user) => !assigned.has(String(user.username || "").trim()))
+            .map((user) => {
+                const value = String(user.id);
+                const selected = normalizedSelected && normalizedSelected === value ? "selected" : "";
+                return `<option value="${escapeHtml(value)}" ${selected}>${escapeHtml(user.name)} (${escapeHtml(user.username)})</option>`;
+            })
+            .join("");
+        select.innerHTML = `<option value="">-- Kein Teammanager zuweisen --</option>${managerOptions}`;
+    } catch (error) {
+        select.innerHTML = "<option value=''>Teammanager konnten nicht geladen werden</option>";
+    }
+}
+
+async function loadTeamLicenses() {
+    const tbody = document.getElementById("licenses-list");
+    if (!tbody) return;
+    try {
+        const dashboard = await api("/dashboard");
+        const filter = String(document.getElementById("license-filter")?.value || "").trim();
+        const licenses = Array.isArray(dashboard?.pendingLicenses) ? dashboard.pendingLicenses : [];
+        const filtered = filter
+            ? licenses.filter((entry) => String(entry.license_status || "").toLowerCase() === filter.toLowerCase())
+            : licenses;
+        const html = filtered.map((entry) => `
+            <tr>
+                <td><strong>${escapeHtml(entry.name || "—")}</strong></td>
+                <td>${escapeHtml(entry.team_name || "—")}</td>
+                <td>${escapeHtml(entry.license_type || "—")}</td>
+                <td>—</td>
+                <td>${statusBadge(entry.license_status || "pending")}</td>
+                <td>
+                    <button class="btn-small btn-secondary">Details</button>
+                </td>
+            </tr>
+        `).join("");
+        setTableRows(["licenses-list"], html, 6, "Keine Lizenzen vorhanden");
+    } catch (error) {
+        setTableRows(["licenses-list"], "", 6, "Lizenzen konnten nicht geladen werden");
+    }
+}
+
+async function setupTeamsPage() {
+    const form = document.getElementById("create-team-form");
+    if (form && !form.dataset.boundSubmit) {
+        form.dataset.boundSubmit = "1";
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const data = getFormData(form);
+            try {
+                await api("/teams", {
+                    method: "POST",
+                    body: JSON.stringify(data)
+                });
+                showToast(`Team ${data.name} wurde erstellt.`, "success");
+                form.reset();
+                await Promise.all([loadTeamManagerOptions(), loadTeams(), loadTeamLicenses()]);
+            } catch (error) {
+                showToast(error.message, "error");
+            }
+        });
+    }
+    document.getElementById("license-filter")?.addEventListener("change", () => {
+        loadTeamLicenses();
+    });
+    await Promise.all([loadTeamManagerOptions(), loadTeams(), loadTeamLicenses()]);
+}
+
 async function deleteTeam(id) {
     try {
         await api(`/teams/${id}`, { method: "DELETE" });
@@ -1366,7 +1447,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             } else if (page === "users.html") {
                 await setupUsersPage();
             } else if (page === "teams.html") {
-                await loadTeams();
+                await setupTeamsPage();
             } else if (page === "events.html") {
                 if (typeof window.refreshEventsPage === "function") {
                     await window.refreshEventsPage();
