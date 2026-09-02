@@ -11,6 +11,7 @@ const jwt = require("jsonwebtoken");
 const Database = require("better-sqlite3");
 
 const PORT = Number(process.env.PORT || 3000);
+const HOST = process.env.HOST || "0.0.0.0";
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const JWT_SECRET = process.env.JWT_SECRET || "";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
@@ -1054,7 +1055,7 @@ app.get("/{*path}", (req, res) => {
     res.sendFile(path.join(STATIC_ROOT, "index.html"));
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, HOST, () => {
     // eslint-disable-next-line no-console
-    console.log(`MSC backend running on http://localhost:${PORT}`);
+    console.log(`MSC backend running on http://${HOST}:${PORT}`);
 });
