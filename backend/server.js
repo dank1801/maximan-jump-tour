@@ -14,7 +14,19 @@ const PORT = Number(process.env.PORT || 3000);
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const JWT_SECRET = process.env.JWT_SECRET || "";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
-const DB_DIR = IS_PRODUCTION ? "/var/data" : path.join(__dirname, "..", ".runtime", "data");
+
+let DB_DIR = IS_PRODUCTION ? "/var/data" : path.join(__dirname, "..", ".runtime", "data");
+
+if (!fs.existsSync(DB_DIR)) {
+    try {
+        fs.mkdirSync(DB_DIR, { recursive: true });
+    } catch (error) {
+        console.warn(`Cannot create ${DB_DIR}: ${error.message}, falling back to local directory`);
+        DB_DIR = path.join(__dirname, "..", ".runtime", "data");
+        fs.mkdirSync(DB_DIR, { recursive: true });
+    }
+}
+
 const DB_PATH = path.join(DB_DIR, "msc-portal.db");
 const STATIC_ROOT = path.join(__dirname, "..");
 
@@ -22,10 +34,6 @@ if (IS_PRODUCTION && !JWT_SECRET) {
     throw new Error("JWT_SECRET must be set in production");
 }
 const EFFECTIVE_JWT_SECRET = JWT_SECRET || "dev-insecure-secret";
-
-if (!fs.existsSync(DB_DIR)) {
-    fs.mkdirSync(DB_DIR, { recursive: true });
-}
 
 const db = new Database(DB_PATH);
 db.pragma("foreign_keys = ON");
