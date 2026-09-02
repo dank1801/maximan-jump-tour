@@ -488,9 +488,10 @@ html, body {
 
 .tabs {
     display: flex;
+    flex-wrap: wrap;
     border-bottom: 1px solid var(--border);
     margin-bottom: 25px;
-    gap: 0;
+    gap: 4px;
 }
 
 .tab-button {
@@ -498,11 +499,19 @@ html, body {
     background: transparent;
     border: none;
     cursor: pointer;
+    position: relative;
+    z-index: 1;
+    pointer-events: auto;
     font-size: 14px;
     font-weight: 500;
     color: var(--gray);
     border-bottom: 3px solid transparent;
     transition: all 0.2s ease;
+}
+
+.tab-button:focus-visible {
+    outline: 2px solid var(--secondary);
+    outline-offset: 2px;
 }
 
 .tab-button:hover {
@@ -748,6 +757,20 @@ html, body {
 
     .kpi-grid {
         grid-template-columns: 1fr;
+    }
+
+    .tabs {
+        gap: 8px;
+        border-bottom: none;
+    }
+
+    .tab-button {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+    }
+
+    .tab-button.active {
+        border-color: var(--secondary);
     }
 
     .table {
