@@ -335,6 +335,12 @@ html, body {
     flex-wrap: wrap;
 }
 
+.actions-inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
 /* ===== BUTTONS ===== */
 
 .btn {
@@ -417,6 +423,21 @@ html, body {
 
 .points-scale-table input {
     max-width: 120px;
+}
+
+.rule-builder-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--lighter);
+    margin-bottom: 18px;
+}
+
+.rule-builder-strip .form-group {
+    margin-bottom: 0;
 }
 
 .table thead {
@@ -856,6 +877,10 @@ html, body {
     .table {
         min-width: 520px;
         font-size: 12px;
+    }
+
+    .actions-inline {
+        min-width: 240px;
     }
 
     .table th,

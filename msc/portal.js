@@ -201,7 +201,11 @@ function scheduleLiveRefresh() {
             } else if (page === "teams.html") {
                 await loadTeams();
             } else if (page === "events.html") {
-                await loadEvents();
+                if (typeof window.refreshEventsPage === "function") {
+                    await window.refreshEventsPage();
+                } else {
+                    await loadEvents();
+                }
             } else if (page === "points.html") {
                 await loadPointsRules();
             } else if (page === "transfers.html") {
@@ -967,6 +971,10 @@ async function deleteEvent(id) {
 async function loadPointsRules() {
     try {
         const rules = await api("/point-rules");
+        if (typeof window.refreshPointsPage === "function") {
+            await window.refreshPointsPage(rules);
+            return;
+        }
         const latestRule = Array.isArray(rules) ? rules[0] : null;
         if (latestRule) {
             const schema = document.querySelector("select[name='worldcup_schema']");
@@ -1054,7 +1062,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             } else if (page === "teams.html") {
                 await loadTeams();
             } else if (page === "events.html") {
-                await loadEvents();
+                if (typeof window.refreshEventsPage === "function") {
+                    await window.refreshEventsPage();
+                } else {
+                    await loadEvents();
+                }
             } else if (page === "points.html") {
                 await loadPointsRules();
             } else if (page === "transfers.html") {

@@ -37,41 +37,118 @@
             <div class="portal-content">
                 <div class="card">
                     <div class="card-header">
-                        <h2>Punkte-Regelsystem konfigurieren</h2>
+                        <h2>Regelwerk-Composer</h2>
                     </div>
                     <form id="points-rules-form">
                         <div class="tabs">
-                            <button class="tab-button active" type="button" data-tab="worldcup">Punkte-Skala</button>
-                            <button class="tab-button" type="button" data-tab="team">Team-Wertung</button>
-                            <button class="tab-button" type="button" data-tab="bonus">Bonuspunkte</button>
-                            <button class="tab-button" type="button" data-tab="tiebreak">Tie-Break</button>
+                            <button class="tab-button active" type="button" data-tab="points-basics">Profil</button>
+                            <button class="tab-button" type="button" data-tab="points-scale">Punkte-Skala</button>
+                            <button class="tab-button" type="button" data-tab="points-bonus">Bonus-Engine</button>
+                            <button class="tab-button" type="button" data-tab="points-tiebreak">Tie-Break</button>
+                            <button class="tab-button" type="button" data-tab="points-preview">Vorschau</button>
                         </div>
 
-                        <div id="worldcup" class="tab-content active">
+                        <div id="points-basics" class="tab-content active">
                             <div class="grid-2">
                                 <div class="form-group">
-                                    <label>Regel-Name *</label>
-                                    <input type="text" name="rule_name" placeholder="z.B. Saison 2026 Standard" required />
+                                    <label>Regelname *</label>
+                                    <input type="text" name="rule_name" placeholder="Beispiel: Saison 2026/27 - Gesamtwertung" required />
+                                    <div class="help-text">Der Name erscheint später in der Regelauswahl.</div>
                                 </div>
                                 <div class="form-group">
-                                    <label>Vorlage *</label>
-                                    <select id="worldcup-schema" name="worldcup_schema" required>
+                                    <label>Template *</label>
+                                    <select id="rule-template" name="rule_template" required>
                                         <option value="">-- Bitte auswählen --</option>
-                                        <option value="top_10">Top 10</option>
-                                        <option value="top_30">Top 30</option>
-                                        <option value="top_50">Top 50</option>
-                                        <option value="custom">Individuell</option>
+                                    </select>
+                                    <div id="template-description" class="help-text">Wähle ein Grund-Template und passe es danach an.</div>
+                                </div>
+                            </div>
+                            <div class="grid-3">
+                                <div class="form-group">
+                                    <label>Wettkampfbereich</label>
+                                    <select name="event_scope">
+                                        <option value="all">Alle Wettkämpfe</option>
+                                        <option value="qualification">Nur Qualifikation</option>
+                                        <option value="knockout">Nur KO-Phase</option>
+                                        <option value="finalissimo">Nur Finalissimo</option>
+                                        <option value="team">Nur Team-Wertung</option>
+                                        <option value="super_team">Nur Super-Team</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Wertungsmodus</label>
+                                    <select name="competition_mode">
+                                        <option value="season">Saison-Gesamt</option>
+                                        <option value="event">Einzelevent</option>
+                                        <option value="series">Block/Serie</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Regelstatus</label>
+                                    <select name="rule_active">
+                                        <option value="active">Aktiv</option>
+                                        <option value="inactive">Als Entwurf speichern</option>
                                     </select>
                                 </div>
                             </div>
-
-                            <div class="form-actions">
-                                <button type="button" class="btn btn-secondary btn-small" id="preset-top-10">Top-10 laden</button>
-                                <button type="button" class="btn btn-secondary btn-small" id="preset-top-30">Top-30 laden</button>
-                                <button type="button" class="btn btn-secondary btn-small" id="preset-top-50">Top-50 laden</button>
-                                <button type="button" class="btn btn-secondary btn-small" id="clear-scale">Leeren</button>
+                            <div class="grid-2">
+                                <div class="form-group">
+                                    <label>Team-Berechnung</label>
+                                    <select name="team_calc">
+                                        <option value="sum">Summe aller Athleten</option>
+                                        <option value="avg">Durchschnitt</option>
+                                        <option value="best_n">Nur beste N Athleten</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Beste N Athleten</label>
+                                    <input type="number" name="team_top_n" min="1" max="30" value="3" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Schlechteste Ergebnisse streichen</label>
+                                    <input type="number" name="team_drop_worst" min="0" max="10" value="0" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Rundung</label>
+                                    <select name="team_rounding">
+                                        <option value="none">Keine Rundung</option>
+                                        <option value="round">Kaufmännisch</option>
+                                        <option value="floor">Abrunden</option>
+                                        <option value="ceil">Aufrunden</option>
+                                    </select>
+                                </div>
                             </div>
+                            <div class="form-group">
+                                <label>Interne Hinweise</label>
+                                <textarea name="rule_notes" placeholder="Beispiel: Gültig ab Event 3, Sonderbonus nur in Finalrunde."></textarea>
+                            </div>
+                        </div>
 
+                        <div id="points-scale" class="tab-content">
+                            <div class="rule-builder-strip">
+                                <div class="form-group">
+                                    <label>Maximaler Platz</label>
+                                    <input type="number" id="generator-max-rank" min="1" max="200" value="30" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Punkte Platz 1</label>
+                                    <input type="number" id="generator-first-points" min="1" value="100" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Abzug pro Rang</label>
+                                    <input type="number" id="generator-step" min="0" step="0.5" value="3" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Minimale Punkte</label>
+                                    <input type="number" id="generator-min-points" min="0" value="1" />
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary btn-small" id="generate-scale">Skala erzeugen</button>
+                                <button type="button" class="btn btn-secondary btn-small" id="normalize-scale">Ränge automatisch sortieren</button>
+                                <button type="button" class="btn btn-secondary btn-small" id="clear-scale">Skala leeren</button>
+                                <button type="button" class="btn btn-primary btn-small" id="add-points-row">Zeile hinzufügen</button>
+                            </div>
                             <div class="table-responsive">
                                 <table class="table points-scale-table">
                                     <thead>
@@ -84,110 +161,78 @@
                                     <tbody id="points-scale-body"></tbody>
                                 </table>
                             </div>
+                        </div>
+
+                        <div id="points-bonus" class="tab-content">
                             <div class="form-actions">
-                                <button type="button" class="btn btn-primary btn-small" id="add-points-row">Zeile hinzufügen</button>
+                                <button type="button" class="btn btn-secondary btn-small" id="add-bonus-profile">Bonus-Regel hinzufügen</button>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Aktiv</th>
+                                            <th>Trigger</th>
+                                            <th>Fixpunkte</th>
+                                            <th>Multiplikator</th>
+                                            <th>Schwellwert</th>
+                                            <th>Geltung</th>
+                                            <th>Aktion</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="bonus-profile-body"></tbody>
+                                </table>
                             </div>
                         </div>
 
-                        <div id="team" class="tab-content">
-                            <div class="grid-2">
-                                <div class="form-group">
-                                    <label>Berechnung *</label>
-                                    <select name="team_calc" required>
-                                        <option value="sum">Summe aller Athleten</option>
-                                        <option value="avg">Durchschnitt aller Athleten</option>
-                                        <option value="best_n">Nur beste N Athleten</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label>Anzahl N (bei „beste N“)</label>
-                                    <input type="number" name="team_top_n" min="1" max="20" value="3" />
-                                </div>
-                                <div class="form-group">
-                                    <label>Rundung</label>
-                                    <select name="team_rounding">
-                                        <option value="none">Keine Rundung</option>
-                                        <option value="round">Kaufmännisch runden</option>
-                                        <option value="floor">Abrunden</option>
-                                        <option value="ceil">Aufrunden</option>
-                                    </select>
-                                </div>
-                            </div>
+                        <div id="points-tiebreak" class="tab-content">
+                            <div id="tiebreak-grid" class="grid-2"></div>
                         </div>
 
-                        <div id="bonus" class="tab-content">
-                            <div class="grid-2">
-                                <div class="form-group">
-                                    <label>Rekord-Bonus</label>
-                                    <div class="checkbox-item">
-                                        <input type="checkbox" name="bonus_record" value="true" />
-                                        <label>Aktivieren</label>
-                                    </div>
-                                    <input type="number" name="record_bonus_points" min="0" value="10" />
-                                </div>
-                                <div class="form-group">
-                                    <label>Serien-Bonus (z.B. 3 Siege)</label>
-                                    <div class="checkbox-item">
-                                        <input type="checkbox" name="bonus_series" value="true" />
-                                        <label>Aktivieren</label>
-                                    </div>
-                                    <input type="number" name="series_bonus_points" min="0" value="25" />
-                                </div>
-                                <div class="form-group">
-                                    <label>Double-Points Event</label>
-                                    <div class="checkbox-item">
-                                        <input type="checkbox" name="bonus_double" value="true" />
-                                        <label>Aktivieren</label>
-                                    </div>
-                                    <input type="number" name="double_multiplier" min="1" step="0.1" value="2" />
-                                </div>
+                        <div id="points-preview" class="tab-content">
+                            <div class="card-subsection">
+                                <h3>Regel-Zusammenfassung</h3>
+                                <div id="rule-summary" class="help-text">Noch keine Daten vorhanden.</div>
                             </div>
-                        </div>
-
-                        <div id="tiebreak" class="tab-content">
-                            <div class="grid-2">
-                                <div class="form-group">
-                                    <label>Tie-Break Regel 1 *</label>
-                                    <select name="tiebreak_1" required>
-                                        <option value="">-- Bitte auswählen --</option>
-                                        <option value="most_wins">Meiste Siege</option>
-                                        <option value="best_single">Beste Einzelplatzierung</option>
-                                        <option value="last_event">Letzte Event-Platzierung</option>
-                                        <option value="most_podiums">Meiste Podien</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label>Tie-Break Regel 2 *</label>
-                                    <select name="tiebreak_2" required>
-                                        <option value="">-- Bitte auswählen --</option>
-                                        <option value="most_wins">Meiste Siege</option>
-                                        <option value="best_single">Beste Einzelplatzierung</option>
-                                        <option value="last_event">Letzte Event-Platzierung</option>
-                                        <option value="most_podiums">Meiste Podien</option>
-                                    </select>
+                            <div class="card-subsection">
+                                <h3>Punkte-Vorschau (Top 20)</h3>
+                                <div class="table-responsive">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>Platz</th>
+                                                <th>Punkte</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="points-preview-body"></tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
 
                         <div class="form-actions">
-                            <button type="submit" class="btn btn-primary">Regeln speichern</button>
+                            <button type="submit" class="btn btn-primary" id="save-rule-button">Regel speichern</button>
+                            <button type="button" class="btn btn-secondary" id="reset-rule-button">Editor zurücksetzen</button>
                         </div>
                     </form>
                 </div>
 
                 <div class="card">
                     <div class="card-header">
-                        <h2>Punkte-Vorschau</h2>
+                        <h2>Gespeicherte Regeln</h2>
                     </div>
                     <div class="card-body">
                         <table class="table">
                             <thead>
                                 <tr>
-                                    <th>Platz</th>
-                                    <th>Punkte</th>
+                                    <th>Name</th>
+                                    <th>Typ</th>
+                                    <th>Status</th>
+                                    <th>Erstellt</th>
+                                    <th>Aktionen</th>
                                 </tr>
                             </thead>
-                            <tbody id="points-preview-body"></tbody>
+                            <tbody id="point-rules-list"></tbody>
                         </table>
                     </div>
                 </div>
@@ -201,7 +246,52 @@
             const form = document.getElementById("points-rules-form");
             const scaleBody = document.getElementById("points-scale-body");
             const previewBody = document.getElementById("points-preview-body");
-            const schemaSelect = document.getElementById("worldcup-schema");
+            const bonusBody = document.getElementById("bonus-profile-body");
+            const templateSelect = document.getElementById("rule-template");
+            const templateDescription = document.getElementById("template-description");
+            const tieBreakGrid = document.getElementById("tiebreak-grid");
+
+            const TIE_BREAK_OPTIONS = [
+                { value: "", label: "Nicht verwenden" },
+                { value: "most_wins", label: "Meiste Siege" },
+                { value: "most_second_places", label: "Meiste zweite Plätze" },
+                { value: "most_third_places", label: "Meiste dritte Plätze" },
+                { value: "best_single", label: "Beste Einzelplatzierung" },
+                { value: "head_to_head", label: "Direkter Vergleich" },
+                { value: "best_final_round", label: "Bestes Finalrundenergebnis" },
+                { value: "last_event", label: "Bestes Ergebnis im letzten Event" },
+                { value: "lot_draw", label: "Losentscheid" }
+            ];
+
+            const BONUS_TRIGGER_OPTIONS = [
+                { value: "record", label: "Rekord-Bonus" },
+                { value: "streak", label: "Serien-Bonus" },
+                { value: "mastery", label: "Mastery-Bonus" },
+                { value: "momentum", label: "Momentum-Bonus" },
+                { value: "clean_sweep", label: "Clean-Sweep Bonus" },
+                { value: "finalissimo_double", label: "Finalissimo Double-Points" }
+            ];
+
+            const state = {
+                templates: [],
+                rules: [],
+                editingRuleId: null,
+                touched: false,
+                firstHydrationDone: false
+            };
+
+            function field(name) {
+                return form?.elements?.namedItem(name);
+            }
+
+            function setFieldValue(name, value) {
+                const input = field(name);
+                if (input) input.value = value;
+            }
+
+            function markTouched() {
+                state.touched = true;
+            }
 
             function createScaleRow(rank = "", points = "") {
                 const row = document.createElement("tr");
@@ -214,161 +304,452 @@
             }
 
             function collectScale() {
+                const seen = new Set();
                 return Array.from(scaleBody.querySelectorAll("tr"))
                     .map((row) => {
                         const rank = Number(row.querySelector(".scale-rank")?.value);
                         const points = Number(row.querySelector(".scale-points")?.value);
                         return { rank, points };
                     })
-                    .filter((entry) => Number.isFinite(entry.rank) && entry.rank > 0 && Number.isFinite(entry.points))
-                    .sort((a, b) => a.rank - b.rank);
+                    .filter((entry) => Number.isInteger(entry.rank) && entry.rank > 0 && Number.isFinite(entry.points) && entry.points >= 0)
+                    .sort((a, b) => a.rank - b.rank)
+                    .filter((entry) => {
+                        if (seen.has(entry.rank)) return false;
+                        seen.add(entry.rank);
+                        return true;
+                    });
             }
 
             function renderPreview() {
-                const scale = collectScale().slice(0, 10);
-                const html = scale.map((entry) => `<tr><td>${entry.rank}</td><td>${entry.points}</td></tr>`).join("");
-                previewBody.innerHTML = html || "<tr><td colspan='2' class='table-empty'>Noch keine Punkte-Skala konfiguriert.</td></tr>";
+                const scale = collectScale();
+                const top = scale.slice(0, 20);
+                previewBody.innerHTML = top.length
+                    ? top.map((entry) => `<tr><td>${entry.rank}</td><td>${entry.points}</td></tr>`).join("")
+                    : "<tr><td colspan='2' class='table-empty'>Noch keine Punkte-Skala vorhanden.</td></tr>";
+
+                const tieBreak = collectTieBreak();
+                const bonusProfiles = collectBonusProfiles().filter((entry) => entry.enabled);
+                const summary = [
+                    `Skala: ${scale.length} Platzierungen`,
+                    `Teammodus: ${field("team_calc")?.value || "sum"} (Top N: ${field("team_top_n")?.value || "3"}, Drop-Worst: ${field("team_drop_worst")?.value || "0"})`,
+                    `Aktive Bonusregeln: ${bonusProfiles.length}`,
+                    `Tie-Break-Kaskade: ${tieBreak.length > 0 ? tieBreak.join(" → ") : "nicht definiert"}`
+                ];
+                document.getElementById("rule-summary").textContent = summary.join(" | ");
             }
 
-            function applyPreset(type) {
+            function applyGeneratedScale() {
+                const maxRank = Math.max(1, Number(document.getElementById("generator-max-rank").value) || 1);
+                const firstPoints = Math.max(1, Number(document.getElementById("generator-first-points").value) || 1);
+                const step = Math.max(0, Number(document.getElementById("generator-step").value) || 0);
+                const minPoints = Math.max(0, Number(document.getElementById("generator-min-points").value) || 0);
                 scaleBody.innerHTML = "";
-                const maxRank = type === "top_10" ? 10 : type === "top_50" ? 50 : 30;
                 for (let rank = 1; rank <= maxRank; rank += 1) {
-                    const points = Math.max(1, maxRank + 1 - rank);
-                    createScaleRow(rank, points);
+                    const points = Math.max(minPoints, firstPoints - ((rank - 1) * step));
+                    createScaleRow(rank, Number(points.toFixed(2)));
                 }
+                markTouched();
                 renderPreview();
             }
 
-            document.getElementById("preset-top-10")?.addEventListener("click", () => {
-                schemaSelect.value = "top_10";
-                applyPreset("top_10");
-            });
-            document.getElementById("preset-top-30")?.addEventListener("click", () => {
-                schemaSelect.value = "top_30";
-                applyPreset("top_30");
-            });
-            document.getElementById("preset-top-50")?.addEventListener("click", () => {
-                schemaSelect.value = "top_50";
-                applyPreset("top_50");
-            });
-            document.getElementById("clear-scale")?.addEventListener("click", () => {
+            function normalizeScaleRanks() {
+                const scale = collectScale();
+                scaleBody.innerHTML = "";
+                scale.forEach((entry) => createScaleRow(entry.rank, entry.points));
+                markTouched();
+                renderPreview();
+            }
+
+            function createTieBreakFields() {
+                tieBreakGrid.innerHTML = "";
+                for (let index = 1; index <= 8; index += 1) {
+                    const wrapper = document.createElement("div");
+                    wrapper.className = "form-group";
+                    const options = TIE_BREAK_OPTIONS
+                        .map((option) => `<option value="${option.value}">${option.label}</option>`)
+                        .join("");
+                    wrapper.innerHTML = `
+                        <label>Priorität ${index}</label>
+                        <select name="tiebreak_${index}">
+                            ${options}
+                        </select>
+                    `;
+                    tieBreakGrid.appendChild(wrapper);
+                }
+            }
+
+            function collectTieBreak() {
+                const selected = [];
+                const seen = new Set();
+                for (let index = 1; index <= 8; index += 1) {
+                    const value = String(field(`tiebreak_${index}`)?.value || "").trim();
+                    if (!value || seen.has(value)) continue;
+                    seen.add(value);
+                    selected.push(value);
+                }
+                return selected;
+            }
+
+            function setTieBreak(values = []) {
+                for (let index = 1; index <= 8; index += 1) {
+                    const tieBreakField = field(`tiebreak_${index}`);
+                    if (tieBreakField) tieBreakField.value = values[index - 1] || "";
+                }
+            }
+
+            function createBonusRow(profile = {}) {
+                const row = document.createElement("tr");
+                const triggerOptions = BONUS_TRIGGER_OPTIONS
+                    .map((option) => `<option value="${option.value}" ${option.value === profile.trigger ? "selected" : ""}>${option.label}</option>`)
+                    .join("");
+                row.innerHTML = `
+                    <td><input type="checkbox" class="bonus-enabled" ${profile.enabled === false ? "" : "checked"} /></td>
+                    <td><select class="bonus-trigger">${triggerOptions}</select></td>
+                    <td><input type="number" class="bonus-points" min="0" step="0.1" value="${profile.points ?? 0}" /></td>
+                    <td><input type="number" class="bonus-multiplier" min="0.1" step="0.1" value="${profile.multiplier ?? 1}" /></td>
+                    <td><input type="number" class="bonus-threshold" min="1" step="1" value="${profile.threshold ?? 1}" /></td>
+                    <td>
+                        <select class="bonus-scope">
+                            <option value="all" ${profile.appliesTo === "all" ? "selected" : ""}>Alle</option>
+                            <option value="qualification" ${profile.appliesTo === "qualification" ? "selected" : ""}>Qualifikation</option>
+                            <option value="knockout" ${profile.appliesTo === "knockout" ? "selected" : ""}>KO-Phase</option>
+                            <option value="finalissimo" ${profile.appliesTo === "finalissimo" ? "selected" : ""}>Finalissimo</option>
+                            <option value="team" ${profile.appliesTo === "team" ? "selected" : ""}>Team</option>
+                            <option value="super_team" ${profile.appliesTo === "super_team" ? "selected" : ""}>Super-Team</option>
+                        </select>
+                    </td>
+                    <td><button type="button" class="btn btn-danger btn-small remove-bonus-row">Entfernen</button></td>
+                `;
+                bonusBody.appendChild(row);
+            }
+
+            function collectBonusProfiles() {
+                return Array.from(bonusBody.querySelectorAll("tr")).map((row) => ({
+                    enabled: row.querySelector(".bonus-enabled")?.checked !== false,
+                    trigger: row.querySelector(".bonus-trigger")?.value || "record",
+                    points: Number(row.querySelector(".bonus-points")?.value) || 0,
+                    multiplier: Number(row.querySelector(".bonus-multiplier")?.value) || 1,
+                    threshold: Number(row.querySelector(".bonus-threshold")?.value) || 1,
+                    appliesTo: row.querySelector(".bonus-scope")?.value || "all"
+                }));
+            }
+
+            function resetEditor() {
+                form.reset();
+                state.editingRuleId = null;
+                state.touched = false;
+                document.getElementById("save-rule-button").textContent = "Regel speichern";
+                bonusBody.innerHTML = "";
+                createBonusRow();
+                setTieBreak(["most_wins", "best_single", "last_event"]);
                 scaleBody.innerHTML = "";
                 createScaleRow(1, 100);
                 createScaleRow(2, 80);
                 createScaleRow(3, 60);
-                schemaSelect.value = "custom";
                 renderPreview();
-            });
+            }
 
-            document.getElementById("add-points-row")?.addEventListener("click", () => {
-                const currentRows = collectScale();
-                const nextRank = currentRows.length > 0 ? currentRows[currentRows.length - 1].rank + 1 : 1;
-                createScaleRow(nextRank, 0);
-                renderPreview();
-            });
+            function fillTemplateSelect() {
+                const options = state.templates
+                    .map((template) => `<option value="${escapeHtml(template.id)}">${escapeHtml(template.label)}</option>`)
+                    .join("");
+                templateSelect.innerHTML = `<option value="">-- Bitte auswählen --</option>${options}<option value="custom">Individuell (leer)</option>`;
+            }
 
-            scaleBody.addEventListener("input", renderPreview);
-            scaleBody.addEventListener("click", (event) => {
-                const button = event.target.closest(".remove-scale-row");
-                if (!button) return;
-                button.closest("tr")?.remove();
-                renderPreview();
-            });
-
-            schemaSelect?.addEventListener("change", () => {
-                if (schemaSelect.value === "top_10" || schemaSelect.value === "top_30" || schemaSelect.value === "top_50") {
-                    applyPreset(schemaSelect.value);
-                }
-            });
-
-            async function hydrateFromLatestRule() {
-                try {
-                    const rules = await api("/point-rules");
-                    const latest = Array.isArray(rules) ? rules[0] : null;
-                    if (!latest) return;
-
-                    const config = latest.config_json ? JSON.parse(latest.config_json) : {};
-                    form.rule_name.value = latest.name || "";
-                    form.worldcup_schema.value = latest.rule_type || "custom";
-                    form.team_calc.value = config.team?.method || "sum";
-                    form.team_top_n.value = config.team?.topN || 3;
-                    form.team_rounding.value = config.team?.rounding || "none";
-                    form.tiebreak_1.value = config.tieBreak?.[0] || "";
-                    form.tiebreak_2.value = config.tieBreak?.[1] || "";
-                    form.bonus_record.checked = Boolean(config.bonus?.recordEnabled);
-                    form.bonus_series.checked = Boolean(config.bonus?.seriesEnabled);
-                    form.bonus_double.checked = Boolean(config.bonus?.doubleEnabled);
-                    form.record_bonus_points.value = config.bonus?.recordPoints ?? 10;
-                    form.series_bonus_points.value = config.bonus?.seriesPoints ?? 25;
-                    form.double_multiplier.value = config.bonus?.doubleMultiplier ?? 2;
-
+            function applyTemplateById(templateId) {
+                if (templateId === "custom") {
                     scaleBody.innerHTML = "";
-                    const scale = Array.isArray(config.pointsScale) ? config.pointsScale : [];
-                    if (scale.length === 0) {
-                        createScaleRow(1, 100);
-                        createScaleRow(2, 80);
-                        createScaleRow(3, 60);
-                    } else {
-                        scale.forEach((entry) => createScaleRow(entry.rank, entry.points));
-                    }
+                    createScaleRow(1, 100);
+                    bonusBody.innerHTML = "";
+                    createBonusRow();
+                    setTieBreak(["most_wins", "best_single", "last_event"]);
+                    templateDescription.textContent = "Individuelle Konfiguration gestartet.";
+                    markTouched();
                     renderPreview();
+                    return;
+                }
+                const template = state.templates.find((entry) => entry.id === templateId);
+                if (!template) return;
+                templateDescription.textContent = template.description || "Template geladen.";
+                const config = template.config || {};
+                scaleBody.innerHTML = "";
+                const scale = Array.isArray(config.pointsScale) ? config.pointsScale : [];
+                if (scale.length === 0) {
+                    createScaleRow(1, 100);
+                } else {
+                    scale.forEach((entry) => createScaleRow(entry.rank, entry.points));
+                }
+                bonusBody.innerHTML = "";
+                const bonusProfiles = Array.isArray(config.bonusProfiles) ? config.bonusProfiles : [];
+                if (bonusProfiles.length === 0) {
+                    createBonusRow();
+                } else {
+                    bonusProfiles.forEach((profile) => createBonusRow(profile));
+                }
+                setFieldValue("team_calc", config.team?.method || "sum");
+                setFieldValue("team_top_n", config.team?.topN ?? 3);
+                setFieldValue("team_drop_worst", config.team?.dropWorst ?? 0);
+                setFieldValue("team_rounding", config.team?.rounding || "none");
+                setTieBreak(Array.isArray(config.tieBreak) ? config.tieBreak : []);
+                markTouched();
+                renderPreview();
+            }
+
+            function hydrateFromRule(rule, editMode = false) {
+                if (!rule) return;
+                let config = {};
+                try {
+                    config = rule.config_json ? JSON.parse(rule.config_json) : {};
                 } catch (error) {
+                    config = {};
+                }
+                setFieldValue("rule_name", editMode ? (rule.name || "") : `${rule.name || "Regel"} (Kopie)`);
+                setFieldValue("rule_template", rule.rule_type || "custom");
+                setFieldValue("rule_active", rule.active === 1 ? "active" : "inactive");
+                setFieldValue("event_scope", config.meta?.eventScope || "all");
+                setFieldValue("competition_mode", config.meta?.competitionMode || "season");
+                setFieldValue("rule_notes", config.meta?.notes || "");
+
+                setFieldValue("team_calc", config.team?.method || "sum");
+                setFieldValue("team_top_n", config.team?.topN ?? 3);
+                setFieldValue("team_drop_worst", config.team?.dropWorst ?? 0);
+                setFieldValue("team_rounding", config.team?.rounding || "none");
+
+                scaleBody.innerHTML = "";
+                const scale = Array.isArray(config.pointsScale) ? config.pointsScale : [];
+                if (scale.length === 0) {
                     createScaleRow(1, 100);
                     createScaleRow(2, 80);
                     createScaleRow(3, 60);
-                    renderPreview();
+                } else {
+                    scale.forEach((entry) => createScaleRow(entry.rank, entry.points));
+                }
+
+                bonusBody.innerHTML = "";
+                const bonusProfiles = Array.isArray(config.bonusProfiles) ? config.bonusProfiles : [];
+                if (bonusProfiles.length === 0) {
+                    createBonusRow();
+                } else {
+                    bonusProfiles.forEach((profile) => createBonusRow(profile));
+                }
+
+                setTieBreak(Array.isArray(config.tieBreak) ? config.tieBreak : []);
+                state.editingRuleId = editMode ? rule.id : null;
+                document.getElementById("save-rule-button").textContent = editMode ? "Regel aktualisieren" : "Regel speichern";
+                state.touched = false;
+                renderPreview();
+            }
+
+            function renderRulesTable() {
+                const tbody = document.getElementById("point-rules-list");
+                const html = state.rules.map((rule) => `
+                    <tr>
+                        <td><strong>${escapeHtml(rule.name)}</strong></td>
+                        <td>${escapeHtml(rule.rule_type)}</td>
+                        <td>${rule.active === 1 ? "<span class='badge badge-success'>Aktiv</span>" : "<span class='badge badge-info'>Entwurf</span>"}</td>
+                        <td>${rule.created_at ? new Date(rule.created_at).toLocaleString("de-DE") : "—"}</td>
+                        <td class="actions-inline">
+                            <button type="button" class="btn btn-small btn-secondary" data-copy-rule="${rule.id}">Als Vorlage laden</button>
+                            <button type="button" class="btn btn-small btn-secondary" data-edit-rule="${rule.id}">Direkt bearbeiten</button>
+                            <button type="button" class="btn btn-small btn-primary" data-activate-rule="${rule.id}" ${rule.active === 1 ? "disabled" : ""}>Aktiv setzen</button>
+                            <button type="button" class="btn btn-small btn-danger" data-delete-rule="${rule.id}">Löschen</button>
+                        </td>
+                    </tr>
+                `).join("");
+                tbody.innerHTML = html || "<tr><td colspan='5' class='table-empty'>Noch keine Punkteregeln vorhanden.</td></tr>";
+
+                tbody.querySelectorAll("[data-copy-rule]").forEach((buttonNode) => {
+                    buttonNode.addEventListener("click", () => {
+                        const id = Number(buttonNode.getAttribute("data-copy-rule"));
+                        const rule = state.rules.find((entry) => entry.id === id);
+                        hydrateFromRule(rule, false);
+                        const tabButton = document.querySelector(".tab-button[data-tab='points-basics']");
+                        if (tabButton) activateTab(tabButton);
+                    });
+                });
+                tbody.querySelectorAll("[data-edit-rule]").forEach((buttonNode) => {
+                    buttonNode.addEventListener("click", () => {
+                        const id = Number(buttonNode.getAttribute("data-edit-rule"));
+                        const rule = state.rules.find((entry) => entry.id === id);
+                        hydrateFromRule(rule, true);
+                    });
+                });
+                tbody.querySelectorAll("[data-activate-rule]").forEach((buttonNode) => {
+                    buttonNode.addEventListener("click", async () => {
+                        const id = Number(buttonNode.getAttribute("data-activate-rule"));
+                        try {
+                            await api(`/point-rules/${id}/activate`, { method: "POST" });
+                            showToast("Regel wurde aktiviert.", "success");
+                            await loadRules();
+                        } catch (error) {
+                            showToast(error.message, "error");
+                        }
+                    });
+                });
+                tbody.querySelectorAll("[data-delete-rule]").forEach((buttonNode) => {
+                    buttonNode.addEventListener("click", () => {
+                        const id = Number(buttonNode.getAttribute("data-delete-rule"));
+                        const rule = state.rules.find((entry) => entry.id === id);
+                        if (!rule) return;
+                        confirmDelete(`Punkteregel ${rule.name}`, async () => {
+                            try {
+                                await api(`/point-rules/${rule.id}`, { method: "DELETE" });
+                                showToast("Punkteregel gelöscht.", "success");
+                                await loadRules();
+                            } catch (error) {
+                                showToast(error.message, "error");
+                            }
+                        });
+                    });
+                });
+            }
+
+            async function loadTemplates() {
+                try {
+                    const result = await api("/point-rule-templates");
+                    state.templates = Array.isArray(result?.templates) ? result.templates : [];
+                } catch (error) {
+                    state.templates = [
+                        { id: "top_10", label: "Top 10", description: "Klassische Top-10-Wertung", config: {} },
+                        { id: "top_30", label: "Top 30", description: "Klassische Top-30-Wertung", config: {} },
+                        { id: "custom", label: "Individuell", description: "Komplett frei konfigurierbar", config: {} }
+                    ];
+                }
+                fillTemplateSelect();
+            }
+
+            async function loadRules(rulesInput) {
+                const rules = Array.isArray(rulesInput) ? rulesInput : await api("/point-rules");
+                state.rules = Array.isArray(rules) ? rules : [];
+                renderRulesTable();
+                if (!state.firstHydrationDone && state.rules.length > 0) {
+                    const active = state.rules.find((entry) => entry.active === 1) || state.rules[0];
+                    hydrateFromRule(active, false);
+                    state.firstHydrationDone = true;
                 }
             }
 
-            form?.addEventListener("submit", async (event) => {
+            window.refreshPointsPage = async (rulesFromRefresh) => {
+                await loadRules(rulesFromRefresh);
+                if (!state.touched) {
+                    renderPreview();
+                }
+            };
+
+            templateSelect.addEventListener("change", () => {
+                applyTemplateById(templateSelect.value);
+            });
+
+            document.getElementById("generate-scale").addEventListener("click", applyGeneratedScale);
+            document.getElementById("normalize-scale").addEventListener("click", normalizeScaleRanks);
+            document.getElementById("clear-scale").addEventListener("click", () => {
+                scaleBody.innerHTML = "";
+                createScaleRow(1, 100);
+                markTouched();
+                renderPreview();
+            });
+            document.getElementById("add-points-row").addEventListener("click", () => {
+                const scale = collectScale();
+                const nextRank = scale.length > 0 ? scale[scale.length - 1].rank + 1 : 1;
+                createScaleRow(nextRank, 0);
+                markTouched();
+                renderPreview();
+            });
+
+            document.getElementById("add-bonus-profile").addEventListener("click", () => {
+                createBonusRow();
+                markTouched();
+                renderPreview();
+            });
+
+            bonusBody.addEventListener("click", (event) => {
+                const removeButton = event.target.closest(".remove-bonus-row");
+                if (!removeButton) return;
+                removeButton.closest("tr")?.remove();
+                if (bonusBody.querySelectorAll("tr").length === 0) {
+                    createBonusRow();
+                }
+                markTouched();
+                renderPreview();
+            });
+
+            form.addEventListener("input", () => {
+                markTouched();
+                renderPreview();
+            });
+
+            form.addEventListener("submit", async (event) => {
                 event.preventDefault();
-                const data = getFormData(form);
-                const pointsScale = collectScale();
-                if (pointsScale.length === 0) {
-                    showToast("Bitte mindestens eine Punkte-Zeile anlegen.", "error");
+                const scale = collectScale();
+                if (scale.length === 0) {
+                    showToast("Bitte mindestens eine gültige Punktezeile anlegen.", "error");
                     return;
                 }
 
                 const payload = {
-                    name: data.rule_name || `Regel ${new Date().toLocaleString("de-DE")}`,
-                    ruleType: data.worldcup_schema || "custom",
+                    name: String(field("rule_name")?.value || "").trim(),
+                    ruleType: field("rule_template")?.value || "custom",
+                    active: field("rule_active")?.value === "active",
                     config: {
-                        pointsScale,
+                        pointsScale: scale,
                         team: {
-                            method: data.team_calc || "sum",
-                            topN: Number(data.team_top_n) || 3,
-                            rounding: data.team_rounding || "none"
+                            method: field("team_calc")?.value || "sum",
+                            topN: Number(field("team_top_n")?.value) || 3,
+                            dropWorst: Number(field("team_drop_worst")?.value) || 0,
+                            rounding: field("team_rounding")?.value || "none"
                         },
-                        bonus: {
-                            recordEnabled: Boolean(data.bonus_record),
-                            recordPoints: Number(data.record_bonus_points) || 0,
-                            seriesEnabled: Boolean(data.bonus_series),
-                            seriesPoints: Number(data.series_bonus_points) || 0,
-                            doubleEnabled: Boolean(data.bonus_double),
-                            doubleMultiplier: Number(data.double_multiplier) || 1
-                        },
-                        tieBreak: [data.tiebreak_1, data.tiebreak_2].filter(Boolean)
-                    },
-                    active: true
+                        bonusProfiles: collectBonusProfiles(),
+                        tieBreak: collectTieBreak(),
+                        meta: {
+                            eventScope: field("event_scope")?.value || "all",
+                            competitionMode: field("competition_mode")?.value || "season",
+                            notes: String(field("rule_notes")?.value || "").trim()
+                        }
+                    }
                 };
 
+                if (!payload.name) {
+                    showToast("Bitte einen Regelnamen vergeben.", "error");
+                    return;
+                }
+
                 try {
-                    await api("/point-rules", {
-                        method: "POST",
-                        body: JSON.stringify(payload)
-                    });
+                    if (state.editingRuleId) {
+                        await api(`/point-rules/${state.editingRuleId}`, {
+                            method: "PATCH",
+                            body: JSON.stringify(payload)
+                        });
+                    } else {
+                        await api("/point-rules", {
+                            method: "POST",
+                            body: JSON.stringify(payload)
+                        });
+                    }
+
                     await api("/settings", {
                         method: "POST",
                         body: JSON.stringify({ key: "point_rules_current", value: payload })
                     });
-                    showToast("Punkte-Regeln gespeichert.", "success");
+                    showToast("Punkteregel gespeichert.", "success");
+                    state.editingRuleId = null;
+                    state.touched = false;
+                    document.getElementById("save-rule-button").textContent = "Regel speichern";
+                    await loadRules();
                 } catch (error) {
                     showToast(error.message, "error");
                 }
             });
 
-            document.addEventListener("DOMContentLoaded", hydrateFromLatestRule);
+            document.getElementById("reset-rule-button").addEventListener("click", () => {
+                resetEditor();
+            });
+
+            document.addEventListener("DOMContentLoaded", async () => {
+                createTieBreakFields();
+                await loadTemplates();
+                resetEditor();
+                await loadRules();
+            });
         }
     </script>
 </body>

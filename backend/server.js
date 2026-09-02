@@ -301,6 +301,36 @@ const DEFAULT_ROLE_DEFINITIONS = [
     }
 ];
 
+const POINT_RULE_TEMPLATE_IDS = [
+    "top_10",
+    "top_30",
+    "top_50",
+    "maedzn_2026",
+    "microjump_2026",
+    "puenki_2026",
+    "finalissimo_2026"
+];
+
+const TIE_BREAK_OPTIONS = [
+    "most_wins",
+    "most_second_places",
+    "most_third_places",
+    "best_single",
+    "head_to_head",
+    "best_final_round",
+    "last_event",
+    "lot_draw"
+];
+
+const BONUS_TRIGGER_OPTIONS = [
+    "record",
+    "streak",
+    "mastery",
+    "momentum",
+    "clean_sweep",
+    "finalissimo_double"
+];
+
 function normalizeRole(role) {
     return String(role || "").trim().toLowerCase();
 }
@@ -326,6 +356,247 @@ function signToken(user) {
 function parsePermissions(value) {
     const list = Array.isArray(value) ? value : [];
     return [...new Set(list.map((entry) => String(entry || "").trim()).filter(Boolean))];
+}
+
+function buildDescendingScale(maxRank, startPoints, step, minimumPoints = 1) {
+    const safeMax = Math.max(1, Number(maxRank) || 1);
+    const safeStart = Math.max(1, Number(startPoints) || 1);
+    const safeStep = Math.max(0, Number(step) || 0);
+    const safeMin = Math.max(0, Number(minimumPoints) || 0);
+    return Array.from({ length: safeMax }, (_, index) => {
+        const rank = index + 1;
+        const points = Math.max(safeMin, safeStart - (index * safeStep));
+        return { rank, points: Number(points.toFixed(2)) };
+    });
+}
+
+function pointRuleTemplates() {
+    return [
+        {
+            id: "top_10",
+            label: "Top 10",
+            description: "Klassische lineare Top-10-Wertung.",
+            ruleType: "top_10",
+            config: {
+                pointsScale: buildDescendingScale(10, 100, 9, 10),
+                team: { method: "sum", topN: 3, rounding: "none", dropWorst: 0 },
+                bonusProfiles: [],
+                tieBreak: ["most_wins", "best_single", "last_event"]
+            }
+        },
+        {
+            id: "top_30",
+            label: "Top 30",
+            description: "Breite Saisonwertung mit Punkten bis Platz 30.",
+            ruleType: "top_30",
+            config: {
+                pointsScale: buildDescendingScale(30, 120, 4, 2),
+                team: { method: "best_n", topN: 4, rounding: "none", dropWorst: 1 },
+                bonusProfiles: [],
+                tieBreak: ["most_wins", "most_second_places", "best_single", "last_event"]
+            }
+        },
+        {
+            id: "top_50",
+            label: "Top 50",
+            description: "Sehr breite Wertung für große Starterfelder.",
+            ruleType: "top_50",
+            config: {
+                pointsScale: buildDescendingScale(50, 150, 3, 1),
+                team: { method: "best_n", topN: 5, rounding: "none", dropWorst: 1 },
+                bonusProfiles: [],
+                tieBreak: ["most_wins", "most_second_places", "most_third_places", "best_single", "last_event"]
+            }
+        },
+        {
+            id: "maedzn_2026",
+            label: "Mädzn 2026/27",
+            description: "Regelwerksnahes Setup mit Mastery- und Momentum-Bonus.",
+            ruleType: "msc_2026",
+            config: {
+                pointsScale: buildDescendingScale(30, 100, 3, 3),
+                team: { method: "best_n", topN: 4, rounding: "none", dropWorst: 1 },
+                bonusProfiles: [
+                    { trigger: "mastery", points: 12, multiplier: 1, threshold: 2, appliesTo: "all", enabled: true },
+                    { trigger: "momentum", points: 8, multiplier: 1, threshold: 3, appliesTo: "all", enabled: true }
+                ],
+                tieBreak: ["most_wins", "best_final_round", "head_to_head", "last_event"]
+            }
+        },
+        {
+            id: "microjump_2026",
+            label: "MicroJump 2026/27",
+            description: "Kompakte Punkteverteilung mit Fokus auf Konstanz.",
+            ruleType: "msc_2026",
+            config: {
+                pointsScale: buildDescendingScale(20, 80, 3, 2),
+                team: { method: "avg", topN: 3, rounding: "round", dropWorst: 0 },
+                bonusProfiles: [
+                    { trigger: "streak", points: 10, multiplier: 1, threshold: 3, appliesTo: "qualification", enabled: true }
+                ],
+                tieBreak: ["most_wins", "most_second_places", "best_single", "last_event"]
+            }
+        },
+        {
+            id: "puenki_2026",
+            label: "Pünki 2026/27",
+            description: "Setup mit Bonus für Clean-Sweep pro Block.",
+            ruleType: "msc_2026",
+            config: {
+                pointsScale: buildDescendingScale(25, 90, 3, 2),
+                team: { method: "best_n", topN: 3, rounding: "none", dropWorst: 0 },
+                bonusProfiles: [
+                    { trigger: "clean_sweep", points: 15, multiplier: 1, threshold: 1, appliesTo: "knockout", enabled: true }
+                ],
+                tieBreak: ["most_wins", "head_to_head", "best_single", "last_event"]
+            }
+        },
+        {
+            id: "finalissimo_2026",
+            label: "Finalissimo 2026/27",
+            description: "Finalmodus mit Double-Points Bonusprofil.",
+            ruleType: "msc_2026",
+            config: {
+                pointsScale: buildDescendingScale(16, 120, 6, 4),
+                team: { method: "sum", topN: 2, rounding: "none", dropWorst: 0 },
+                bonusProfiles: [
+                    { trigger: "finalissimo_double", points: 0, multiplier: 2, threshold: 1, appliesTo: "finalissimo", enabled: true }
+                ],
+                tieBreak: ["most_wins", "best_final_round", "head_to_head", "lot_draw"]
+            }
+        }
+    ];
+}
+
+function normalizePointScale(value) {
+    if (!Array.isArray(value)) return [];
+    const seen = new Set();
+    const sanitized = [];
+    value.forEach((entry) => {
+        const rank = Number(entry?.rank);
+        const points = Number(entry?.points);
+        if (!Number.isInteger(rank) || rank <= 0 || rank > 500) return;
+        if (!Number.isFinite(points) || points < 0) return;
+        if (seen.has(rank)) return;
+        seen.add(rank);
+        sanitized.push({ rank, points: Number(points.toFixed(2)) });
+    });
+    return sanitized.sort((a, b) => a.rank - b.rank);
+}
+
+function normalizeBonusProfiles(value) {
+    if (Array.isArray(value)) {
+        return value
+            .map((profile) => {
+                const trigger = String(profile?.trigger || "").trim();
+                if (!BONUS_TRIGGER_OPTIONS.includes(trigger)) return null;
+                const points = Number(profile?.points ?? 0);
+                const multiplier = Number(profile?.multiplier ?? 1);
+                const threshold = Number(profile?.threshold ?? 1);
+                return {
+                    trigger,
+                    points: Number.isFinite(points) && points >= 0 ? Number(points.toFixed(2)) : 0,
+                    multiplier: Number.isFinite(multiplier) && multiplier > 0 ? Number(multiplier.toFixed(2)) : 1,
+                    threshold: Number.isInteger(threshold) && threshold > 0 ? threshold : 1,
+                    appliesTo: String(profile?.appliesTo || "all").trim() || "all",
+                    enabled: profile?.enabled !== false
+                };
+            })
+            .filter(Boolean);
+    }
+
+    // Backward compatibility for legacy bonus object format.
+    const legacy = value && typeof value === "object" ? value : {};
+    const mapped = [];
+    if (legacy.recordEnabled) {
+        mapped.push({
+            trigger: "record",
+            points: Number(legacy.recordPoints) || 0,
+            multiplier: 1,
+            threshold: 1,
+            appliesTo: "all",
+            enabled: true
+        });
+    }
+    if (legacy.seriesEnabled) {
+        mapped.push({
+            trigger: "streak",
+            points: Number(legacy.seriesPoints) || 0,
+            multiplier: 1,
+            threshold: 3,
+            appliesTo: "all",
+            enabled: true
+        });
+    }
+    if (legacy.doubleEnabled) {
+        mapped.push({
+            trigger: "finalissimo_double",
+            points: 0,
+            multiplier: Number(legacy.doubleMultiplier) || 2,
+            threshold: 1,
+            appliesTo: "finalissimo",
+            enabled: true
+        });
+    }
+    return mapped;
+}
+
+function normalizePointRuleConfig(config) {
+    const input = config && typeof config === "object" ? config : {};
+    const pointsScale = normalizePointScale(input.pointsScale || []);
+    const tieBreakRaw = Array.isArray(input.tieBreak) ? input.tieBreak : [];
+    const tieBreak = [...new Set(tieBreakRaw
+        .map((entry) => String(entry || "").trim())
+        .filter((entry) => TIE_BREAK_OPTIONS.includes(entry))
+    )].slice(0, 8);
+    const teamInput = input.team && typeof input.team === "object" ? input.team : {};
+    const topN = Number(teamInput.topN);
+    const dropWorst = Number(teamInput.dropWorst);
+    const team = {
+        method: ["sum", "avg", "best_n"].includes(teamInput.method) ? teamInput.method : "sum",
+        topN: Number.isInteger(topN) && topN > 0 && topN <= 30 ? topN : 3,
+        rounding: ["none", "round", "floor", "ceil"].includes(teamInput.rounding) ? teamInput.rounding : "none",
+        dropWorst: Number.isInteger(dropWorst) && dropWorst >= 0 && dropWorst <= 10 ? dropWorst : 0
+    };
+
+    const bonusProfiles = normalizeBonusProfiles(input.bonusProfiles || input.bonus);
+    const metaInput = input.meta && typeof input.meta === "object" ? input.meta : {};
+    const meta = {
+        eventScope: String(metaInput.eventScope || "all").trim(),
+        competitionMode: String(metaInput.competitionMode || "season").trim(),
+        notes: String(metaInput.notes || "").trim()
+    };
+    return { pointsScale, tieBreak, team, bonusProfiles, meta };
+}
+
+function validatePointRulePayload(payload) {
+    const errors = [];
+    const name = String(payload?.name || "").trim();
+    const ruleType = String(payload?.ruleType || "").trim();
+    if (!name) errors.push("Regelname fehlt.");
+    if (!ruleType) errors.push("Regeltyp fehlt.");
+    const config = normalizePointRuleConfig(payload?.config || {});
+    if (config.pointsScale.length === 0) errors.push("Mindestens ein Punktewert ist erforderlich.");
+    if (config.tieBreak.length === 0) errors.push("Mindestens ein Tie-Break-Kriterium ist erforderlich.");
+    const invalidTemplate = POINT_RULE_TEMPLATE_IDS.includes(ruleType) || ruleType === "custom" || ruleType === "msc_2026";
+    if (!invalidTemplate) errors.push("Unbekannter Regeltyp.");
+    return {
+        errors,
+        normalized: {
+            name,
+            ruleType,
+            config,
+            active: payload?.active === false ? 0 : 1
+        }
+    };
+}
+
+function parseConfigJsonSafely(value) {
+    try {
+        return JSON.parse(value || "{}");
+    } catch (error) {
+        return {};
+    }
 }
 
 function seedDefaultRoles() {
@@ -1240,16 +1511,105 @@ app.get("/api/point-rules", authRequired, requirePermission("point_rules.read"),
     res.json(db.prepare("SELECT * FROM point_rules ORDER BY id DESC").all());
 });
 
+app.get("/api/point-rule-templates", authRequired, requirePermission("point_rules.read"), (_req, res) => {
+    res.json({ templates: pointRuleTemplates() });
+});
+
 app.post("/api/point-rules", authRequired, requirePermission("point_rules.write"), (req, res) => {
-    const { name, ruleType, config, active } = req.body || {};
-    if (!requireFields(res, req.body || {}, ["name", "ruleType"])) return;
-    const configJson = JSON.stringify(config || {});
-    const result = db
-        .prepare("INSERT INTO point_rules (name, rule_type, config_json, active) VALUES (?, ?, ?, ?)")
-        .run(name.trim(), ruleType.trim(), configJson, active === false ? 0 : 1);
+    const { errors, normalized } = validatePointRulePayload(req.body || {});
+    if (errors.length > 0) {
+        res.status(400).json({ error: errors.join(" ") });
+        return;
+    }
+    const configJson = JSON.stringify(normalized.config);
+    if (normalized.active === 1) {
+        db.prepare("UPDATE point_rules SET active = 0 WHERE active = 1").run();
+    }
+    let result;
+    try {
+        result = db
+            .prepare("INSERT INTO point_rules (name, rule_type, config_json, active) VALUES (?, ?, ?, ?)")
+            .run(normalized.name, normalized.ruleType, configJson, normalized.active);
+    } catch (error) {
+        res.status(409).json({ error: "Regelname existiert bereits" });
+        return;
+    }
     const created = db.prepare("SELECT * FROM point_rules WHERE id = ?").get(result.lastInsertRowid);
     logAudit(req.user, "CREATE_POINT_RULE", "point_rules", created.id, created.name);
     res.status(201).json(created);
+});
+
+app.patch("/api/point-rules/:id", authRequired, requirePermission("point_rules.write"), (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Invalid point rule id" });
+        return;
+    }
+    const existing = db.prepare("SELECT id, name, rule_type, config_json, active FROM point_rules WHERE id = ?").get(id);
+    if (!existing) {
+        res.status(404).json({ error: "Point rule not found" });
+        return;
+    }
+
+    const merged = {
+        name: req.body?.name ?? existing.name,
+        ruleType: req.body?.ruleType ?? existing.rule_type,
+        config: req.body?.config ?? parseConfigJsonSafely(existing.config_json),
+        active: req.body?.active ?? (existing.active === 1)
+    };
+    const { errors, normalized } = validatePointRulePayload(merged);
+    if (errors.length > 0) {
+        res.status(400).json({ error: errors.join(" ") });
+        return;
+    }
+    if (normalized.active === 1) {
+        db.prepare("UPDATE point_rules SET active = 0 WHERE id != ?").run(id);
+    }
+    try {
+        db.prepare(
+            "UPDATE point_rules SET name = ?, rule_type = ?, config_json = ?, active = ? WHERE id = ?"
+        ).run(normalized.name, normalized.ruleType, JSON.stringify(normalized.config), normalized.active, id);
+    } catch (error) {
+        res.status(409).json({ error: "Regelname existiert bereits" });
+        return;
+    }
+
+    const updated = db.prepare("SELECT * FROM point_rules WHERE id = ?").get(id);
+    logAudit(req.user, "UPDATE_POINT_RULE", "point_rules", id, updated.name);
+    res.json(updated);
+});
+
+app.post("/api/point-rules/:id/activate", authRequired, requirePermission("point_rules.write"), (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Invalid point rule id" });
+        return;
+    }
+    const existing = db.prepare("SELECT id, name FROM point_rules WHERE id = ?").get(id);
+    if (!existing) {
+        res.status(404).json({ error: "Point rule not found" });
+        return;
+    }
+    db.prepare("UPDATE point_rules SET active = 0 WHERE active = 1").run();
+    db.prepare("UPDATE point_rules SET active = 1 WHERE id = ?").run(id);
+    const activated = db.prepare("SELECT * FROM point_rules WHERE id = ?").get(id);
+    if (activated) {
+        const settingValue = JSON.stringify({
+            name: activated.name,
+            ruleType: activated.rule_type,
+            config: parseConfigJsonSafely(activated.config_json),
+            active: true
+        });
+        db.prepare(
+            `INSERT INTO settings (key, value_json, updated_at)
+             VALUES ('point_rules_current', ?, CURRENT_TIMESTAMP)
+             ON CONFLICT(key) DO UPDATE SET
+               value_json = excluded.value_json,
+               updated_at = CURRENT_TIMESTAMP`
+        ).run(settingValue);
+    }
+    logAudit(req.user, "ACTIVATE_POINT_RULE", "point_rules", id, existing.name);
+    res.json({ id, active: true });
 });
 
 app.delete("/api/point-rules/:id", authRequired, requirePermission("point_rules.write"), (req, res) => {

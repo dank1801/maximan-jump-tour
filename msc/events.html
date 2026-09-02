@@ -66,9 +66,8 @@
                                     <label>Saison *</label>
                                     <select name="season_id" required>
                                         <option value="">-- Bitte auswählen --</option>
-                                        <option value="1">Sommer 2026</option>
-                                        <option value="2">Winter 2026/27</option>
                                     </select>
+                                    <div class="help-text">Saisons werden aus dem Backend geladen.</div>
                                 </div>
                             </div>
                         </div>
@@ -91,6 +90,7 @@
                                         <label>Super-Team Format</label>
                                     </div>
                                 </div>
+                                <div class="help-text">Wähle genau das Format, für das später Regeln und Tie-Breaks gelten sollen.</div>
                             </div>
                             <div class="form-group">
                                 <label>Kategorien</label>
@@ -113,8 +113,9 @@
 
                         <!-- Tab 3: Preview -->
                         <div id="event-preview" class="tab-content">
-                            <div class="help-text">
-                                Hier wird eine Übersicht der Eingaben angezeigt
+                            <div class="card-subsection">
+                                <h3>Vorschau</h3>
+                                <div id="event-preview-content" class="help-text">Bitte trage die Eventdaten ein.</div>
                             </div>
                         </div>
 
@@ -152,10 +153,91 @@
     <script src="portal.js"></script>
     <script>
         if (!isLoginPage()) {
-            // Form submit
-            document.getElementById("create-event-form")?.addEventListener("submit", async (e) => {
-                e.preventDefault();
-                const data = getFormData(document.getElementById("create-event-form"));
+            const form = document.getElementById("create-event-form");
+            const seasonSelect = form?.querySelector("select[name='season_id']");
+            const previewContent = document.getElementById("event-preview-content");
+
+            function renderEventPreview() {
+                if (!form || !previewContent) return;
+                const data = getFormData(form);
+                const selectedSeason = seasonSelect?.selectedOptions?.[0]?.textContent || "—";
+                const categories = Array.from(form.querySelectorAll("input[name='categories']:checked")).map((node) => node.value);
+                const selectedFormat = form.querySelector("input[name='format']:checked")?.value || "—";
+                const statusText = "geplant";
+                previewContent.innerHTML = `
+                    Name: <strong>${escapeHtml(data.name || "—")}</strong> | 
+                    Ort: <strong>${escapeHtml(data.location || "—")}</strong> | 
+                    Datum: <strong>${escapeHtml(data.date || "—")}</strong> | 
+                    Saison: <strong>${escapeHtml(selectedSeason)}</strong> | 
+                    Format: <strong>${escapeHtml(selectedFormat)}</strong> | 
+                    Kategorien: <strong>${escapeHtml(categories.join(", ") || "—")}</strong> | 
+                    Status: <strong>${statusText}</strong>
+                `;
+            }
+
+            async function loadSeasonsForEvents() {
+                if (!seasonSelect) return;
+                try {
+                    const seasons = await api("/seasons");
+                    const options = Array.isArray(seasons)
+                        ? seasons.map((season) => `<option value="${season.id}">${escapeHtml(season.name || `Saison ${season.id}`)}</option>`).join("")
+                        : "";
+                    seasonSelect.innerHTML = `<option value="">-- Bitte auswählen --</option>${options}`;
+                    seasonSelect.required = true;
+                } catch (error) {
+                    seasonSelect.innerHTML = "<option value=''>Keine Saisons verfügbar</option>";
+                    seasonSelect.required = false;
+                }
+            }
+
+            async function renderEventsTable() {
+                try {
+                    const events = await api("/events");
+                    const html = events.map((eventEntry) => `
+                        <tr>
+                            <td><strong>${escapeHtml(eventEntry.name || "—")}</strong></td>
+                            <td>${escapeHtml(eventEntry.location || "—")}</td>
+                            <td>${eventEntry.event_date ? new Date(eventEntry.event_date).toLocaleDateString("de-DE") : "—"}</td>
+                            <td>${escapeHtml(eventEntry.event_type || "—")}</td>
+                            <td>${statusBadge(eventEntry.status || "planned")}</td>
+                            <td>
+                                <button class="btn btn-small btn-secondary" onclick="editEventModal(${eventEntry.id})">Bearbeiten</button>
+                                <button class="btn btn-small btn-danger" data-delete-event="${eventEntry.id}">Löschen</button>
+                            </td>
+                        </tr>
+                    `).join("");
+                    document.getElementById("events-list").innerHTML = html || "<tr><td colspan='6' class='table-empty'>Keine Events vorhanden</td></tr>";
+                    document.querySelectorAll("[data-delete-event]").forEach((buttonNode) => {
+                        buttonNode.addEventListener("click", () => {
+                            const id = Number(buttonNode.getAttribute("data-delete-event"));
+                            const eventEntry = events.find((entry) => entry.id === id);
+                            if (!eventEntry) return;
+                            confirmDelete(`Event ${eventEntry.name}`, async () => {
+                                try {
+                                    await api(`/events/${id}`, { method: "DELETE" });
+                                    showToast("Event gelöscht.", "success");
+                                    await renderEventsTable();
+                                } catch (error) {
+                                    showToast(error.message, "error");
+                                }
+                            });
+                        });
+                    });
+                } catch (error) {
+                    showToast("Events konnten nicht geladen werden.", "error");
+                }
+            }
+
+            window.refreshEventsPage = async () => {
+                await Promise.all([loadSeasonsForEvents(), renderEventsTable()]);
+                renderEventPreview();
+            };
+
+            form?.addEventListener("input", renderEventPreview);
+            form?.addEventListener("change", renderEventPreview);
+            form?.addEventListener("submit", async (event) => {
+                event.preventDefault();
+                const data = getFormData(form);
                 const payload = {
                     name: data.name,
                     location: data.location,
@@ -170,48 +252,17 @@
                         body: JSON.stringify(payload)
                     });
                     showToast(`Event ${data.name} wurde erstellt.`, "success");
-                    document.getElementById("create-event-form").reset();
-                    loadEvents();
+                    form.reset();
+                    renderEventPreview();
+                    await renderEventsTable();
                 } catch (error) {
                     showToast(error.message, "error");
                 }
             });
 
-            async function loadEvents() {
-                try {
-                    const events = await api("/events");
-                    const html = events.map(e => `
-                        <tr>
-                            <td><strong>${e.name}</strong></td>
-                            <td>${e.location || "—"}</td>
-                            <td>${e.event_date ? new Date(e.event_date).toLocaleDateString("de-DE") : "—"}</td>
-                            <td>${e.event_type || "—"}</td>
-                            <td>${statusBadge(e.status)}</td>
-                            <td>
-                                <button class="btn btn-small btn-secondary" onclick="editEventModal(${e.id})">Bearbeiten</button>
-                                <button class="btn btn-small btn-danger" onclick="deleteEvent(${e.id}, '${(e.name || "").replace(/'/g, "\\'")}')">Löschen</button>
-                            </td>
-                        </tr>
-                    `).join("");
-                    document.getElementById("events-list").innerHTML = html || "<tr><td colspan='6'>Keine Events vorhanden</td></tr>";
-                } catch (error) {
-                    console.error(error);
-                }
-            }
-
-            window.deleteEvent = async (id, name) => {
-                confirmDelete(`Event ${name || ""}`.trim(), async () => {
-                    try {
-                        await api(`/events/${id}`, { method: "DELETE" });
-                        showToast("Event gelöscht.", "success");
-                        loadEvents();
-                    } catch (error) {
-                        showToast(error.message, "error");
-                    }
-                });
-            };
-
-            document.addEventListener("DOMContentLoaded", loadEvents);
+            document.addEventListener("DOMContentLoaded", async () => {
+                await window.refreshEventsPage();
+            });
         }
     </script>
 </body>
