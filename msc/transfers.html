@@ -38,10 +38,10 @@
                 <!-- Transfer Window Config -->
                 <div class="card">
                     <div class="card-header">
-                        <h2>📅 Transferfenster-Konfiguration</h2>
+                        <h2>Transferfenster-Konfiguration</h2>
                     </div>
                     <form id="transfer-window-form">
-                        <div >
+                        <div class="grid-2">
                             <div class="form-group">
                                 <label>Fenster-Start *</label>
                                 <input type="date" name="start_date" required />
@@ -84,10 +84,10 @@
                 <!-- New Transfer Request -->
                 <div class="card">
                     <div class="card-header">
-                        <h2>➕ Neuen Transfer erstellen</h2>
+                        <h2>Neuen Transfer erstellen</h2>
                     </div>
                     <form id="create-transfer-form">
-                        <div >
+                        <div class="grid-2">
                             <div class="form-group">
                                 <label>Athlet *</label>
                                 <select name="athlete_id" required>
@@ -157,11 +157,11 @@
                         <div class="form-group" >
                             <label>Vertrag hochladen</label>
                             <input type="file" accept=".pdf,.doc,.docx" />
-                            <div >
+                            <div class="form-actions">
                                 <select>
                                     <option value="">-- Mit Athlet verknüpfen --</option>
                                 </select>
-                                <button class="btn btn-primary btn-small">⬆️ Hochladen</button>
+                                <button class="btn btn-primary btn-small">Hochladen</button>
                             </div>
                         </div>
                         <table class="table">
@@ -194,7 +194,7 @@
                         method: "POST",
                         body: JSON.stringify({ key: "transfer_window", value: data })
                     });
-                    showToast("Transferfenster aktualisiert ✅", "success");
+                    showToast("Transferfenster aktualisiert.", "success");
                 } catch (error) {
                     showToast(error.message, "error");
                 }
@@ -203,12 +203,20 @@
             document.getElementById("create-transfer-form")?.addEventListener("submit", async (e) => {
                 e.preventDefault();
                 const data = getFormData(document.getElementById("create-transfer-form"));
+                const payload = {
+                    athleteName: data.athlete_name || data.athlete_id || "",
+                    fromTeamId: data.from_team_id || null,
+                    toTeamId: data.to_team_id || null,
+                    status: "requested",
+                    isEmergency: data.transfer_type === "emergency",
+                    notes: data.notes || null
+                };
                 try {
                     await api("/transfers", {
                         method: "POST",
-                        body: JSON.stringify(data)
+                        body: JSON.stringify(payload)
                     });
-                    showToast("Transfer erstellt ✅", "success");
+                    showToast("Transfer erstellt.", "success");
                     document.getElementById("create-transfer-form").reset();
                     loadTransfers();
                 } catch (error) {
@@ -222,18 +230,18 @@
                     const html = transfers.map(t => `
                         <tr>
                             <td><strong>${t.athlete_name || "—"}</strong></td>
-                            <td>${t.from_team || "—"}</td>
-                            <td>${t.to_team || "—"}</td>
-                            <td>${t.transfer_type === "emergency" ? "⚠️" : "📋"} ${t.transfer_type || "—"}</td>
+                            <td>${t.from_team_name || "—"}</td>
+                            <td>${t.to_team_name || "—"}</td>
+                            <td>${t.is_emergency ? "Notfall" : "Normal"}</td>
                             <td>${statusBadge(t.status)}</td>
                             <td>${t.lock_until ? new Date(t.lock_until).toLocaleDateString("de-DE") : "—"}</td>
                             <td>
-                                <button class="btn btn-small btn-secondary">✏️</button>
-                                <button class="btn btn-small btn-success">Genehmigen</button>
+                                <button class="btn btn-small btn-secondary">Bearbeiten</button>
+                                <button class="btn btn-small btn-primary">Genehmigen</button>
                             </td>
                         </tr>
                     `).join("");
-                    document.getElementById("transfers-list").innerHTML = html || "<tr><td colspan='7'>Keine Transfers vorhanden</td></tr>";
+                    document.getElementById("transfers-list").innerHTML = html || "<tr><td colspan='7' class='table-empty'>Noch keine Transfers vorhanden.</td></tr>";
                 } catch (error) {
                     console.error(error);
                 }

@@ -41,7 +41,7 @@
                         <h2>Systemkonfiguration</h2>
                     </div>
                     <form id="system-config-form">
-                        <div >
+                        <div class="grid-2">
                             <div class="form-group">
                                 <label>Zeitzone *</label>
                                 <select name="timezone" required>
@@ -91,7 +91,7 @@
                     <form id="security-config-form">
                         <div class="form-group">
                             <label>Passwort-Richtlinien</label>
-                            <div >
+                            <div>
                                 <div class="form-group">
                                     <label>Minimale Passwortlänge</label>
                                     <input type="number" name="min_password_length" min="6" max="32" placeholder="8" value="8" />
@@ -116,9 +116,9 @@
                         <div class="form-group" >
                             <label>2-Faktor-Authentifizierung (2FA)</label>
                             <select name="two_factor_enabled" >
-                                <option value="optional">💭 Optional (Benutzer wählen)</option>
-                                <option value="required">🔐 Erforderlich (Alle)</option>
-                                <option value="disabled">❌ Deaktiviert</option>
+                                <option value="optional">Optional (Benutzer wählen)</option>
+                                <option value="required">Erforderlich (Alle)</option>
+                                <option value="disabled">Deaktiviert</option>
                             </select>
                         </div>
 
@@ -143,9 +143,9 @@
                         <p >Definiere die Anforderungen für jede Lizenzklasse</p>
                         
                         <!-- License Type A -->
-                        <div >
+                        <div class="card-subsection">
                             <h3 >A-Lizenz (Elite)</h3>
-                            <div >
+                            <div class="grid-2">
                                 <div class="form-group">
                                     <label>Mindestalter</label>
                                     <input type="number" name="a_min_age" placeholder="18" value="18" />
@@ -166,9 +166,9 @@
                         </div>
 
                         <!-- License Type B -->
-                        <div >
+                        <div class="card-subsection">
                             <h3 >B-Lizenz (Regional)</h3>
-                            <div >
+                            <div class="grid-2">
                                 <div class="form-group">
                                     <label>Mindestalter</label>
                                     <input type="number" name="b_min_age" placeholder="16" value="16" />
@@ -189,9 +189,9 @@
                         </div>
 
                         <!-- License Type C -->
-                        <div >
+                        <div class="card-subsection">
                             <h3 >C-Lizenz (Nachwuchs)</h3>
-                            <div >
+                            <div class="grid-2">
                                 <div class="form-group">
                                     <label>Mindestalter</label>
                                     <input type="number" name="c_min_age" placeholder="14" value="14" />
@@ -224,7 +224,7 @@
                     </div>
                     <div class="card-body">
                         <p >Diese Aktionen sind irreversibel!</p>
-                        <div >
+                        <div class="form-actions">
                             <button type="button" class="btn btn-danger" onclick="showDatabaseResetModal()">Datenbank zurücksetzen</button>
                             <button type="button" class="btn btn-warning" onclick="exportDatabase()">Datenbank sichern</button>
                         </div>
@@ -246,7 +246,7 @@
                         method: "POST",
                         body: JSON.stringify({ key: "system_config", value: data })
                     });
-                    showToast("Systemkonfiguration gespeichert ✅", "success");
+                    showToast("Systemkonfiguration gespeichert.", "success");
                 } catch (error) {
                     showToast(error.message, "error");
                 }
@@ -261,7 +261,7 @@
                         method: "POST",
                         body: JSON.stringify({ key: "security_config", value: data })
                     });
-                    showToast("Sicherheitseinstellungen gespeichert ✅", "success");
+                    showToast("Sicherheitseinstellungen gespeichert.", "success");
                 } catch (error) {
                     showToast(error.message, "error");
                 }
@@ -270,7 +270,7 @@
             function saveLicenseCategories() {
                 showToast("Lizenz-Kategorien werden gespeichert...", "info");
                 setTimeout(() => {
-                    showToast("Lizenz-Kategorien gespeichert ✅", "success");
+                    showToast("Lizenz-Kategorien gespeichert.", "success");
                 }, 1000);
             }
 

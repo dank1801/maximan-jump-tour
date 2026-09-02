@@ -44,21 +44,13 @@ function showToast(message, type = "success", duration = TOAST_TIMEOUT) {
         position: fixed;
         bottom: 20px;
         right: 20px;
-        min-width: 300px;
+        max-width: 420px;
         z-index: 9999;
         animation: slideInUp 0.3s ease;
     `;
-    
-    const icons = {
-        success: "✅",
-        error: "❌",
-        warning: "⚠️",
-        info: "ℹ️"
-    };
-    
+
     toast.innerHTML = `
         <div style="display: flex; gap: 10px; align-items: center;">
-            <span>${icons[type]}</span>
             <span>${message}</span>
             <button class="alert-close" style="border: none; background: none; cursor: pointer; font-size: 1.2em;">×</button>
         </div>
@@ -309,26 +301,35 @@ function tableRow(cells) {
     return `<tr>${cells.map((cell) => `<td>${cell ?? ""}</td>`).join("")}</tr>`;
 }
 
+function findByIds(ids) {
+    for (const id of ids) {
+        const element = document.getElementById(id);
+        if (element) return element;
+    }
+    return null;
+}
+
+function setTableRows(ids, html, colspan, emptyText) {
+    const target = findByIds(ids);
+    if (!target) return false;
+    target.innerHTML = html || `<tr><td colspan="${colspan}" class="table-empty">${emptyText}</td></tr>`;
+    return true;
+}
+
 function statusBadge(status) {
     const colors = {
         active: "success",
         inactive: "danger",
         pending: "warning",
-        in_prüfung: "info",
-        gültig: "success",
-        abgelaufen: "danger"
+        in_pruefung: "info",
+        gueltig: "success",
+        abgelaufen: "danger",
+        approved: "success",
+        requested: "warning"
     };
-    const icons = {
-        active: "✅",
-        inactive: "🔒",
-        pending: "⏳",
-        in_prüfung: "🔄",
-        gültig: "✅",
-        abgelaufen: "❌"
-    };
-    const color = colors[status?.toLowerCase()] || "info";
-    const icon = icons[status?.toLowerCase()] || "•";
-    return `<span class="badge badge-${color}">${icon} ${status}</span>`;
+    const normalized = String(status || "").toLowerCase().replace(/ü/g, "ue");
+    const color = colors[normalized] || "info";
+    return `<span class="badge badge-${color}">${status || "—"}</span>`;
 }
 
 function button(label, attrs = "") {
@@ -360,7 +361,7 @@ async function setupLoginPage() {
                 body: JSON.stringify(payload)
             });
             saveAuth({ token: result.token, user: result.user });
-            showToast("Willkommen! 🎉", "success", 1500);
+            showToast("Willkommen", "success", 1500);
             setTimeout(() => {
                 window.location.href = "dashboard.html";
             }, 500);
@@ -380,7 +381,7 @@ async function setupLoginPage() {
                 body: JSON.stringify(payload)
             });
             saveAuth({ token: result.token, user: result.user });
-            showToast("Admin erstellt! Willkommen 🎉", "success", 1500);
+            showToast("Admin erstellt. Willkommen.", "success", 1500);
             setTimeout(() => {
                 window.location.href = "dashboard.html";
             }, 500);
@@ -394,57 +395,63 @@ async function setupLoginPage() {
 
 async function loadDashboard() {
     const data = await api("/dashboard");
-    document.getElementById("kpi-users").textContent = data.stats.users;
-    document.getElementById("kpi-teams").textContent = data.stats.teams;
-    document.getElementById("kpi-events").textContent = data.stats.events;
-    document.getElementById("kpi-licenses").textContent = data.stats.pending_licenses;
+    const kpiUsers = document.getElementById("kpi-users");
+    const kpiTeams = document.getElementById("kpi-teams");
+    const kpiEvents = document.getElementById("kpi-events");
+    const kpiLicenses = document.getElementById("kpi-licenses");
+    if (kpiUsers) kpiUsers.textContent = data.stats.users;
+    if (kpiTeams) kpiTeams.textContent = data.stats.teams;
+    if (kpiEvents) kpiEvents.textContent = data.stats.events;
+    if (kpiLicenses) kpiLicenses.textContent = data.stats.licensesPending;
 
-    const licensesHtml = data.licenses.map(l => tableRow([
-        `<strong>${l.person}</strong>`,
-        l.team || "—",
-        l.type || "—",
-        statusBadge(l.status)
+    const licensesHtml = data.pendingLicenses.map(l => tableRow([
+        `<strong>${l.name || "—"}</strong>`,
+        l.team_name || "—",
+        l.license_type || "—",
+        statusBadge(l.license_status),
+        "—"
     ])).join("");
-    document.getElementById("licenses-table").innerHTML = licensesHtml || "<tr><td colspan='4' style='text-align: center; color: #999;'>Keine offenen Lizenzanträge</td></tr>";
+    setTableRows(["licenses-table", "licenses-tbody"], licensesHtml, 5, "Keine offenen Lizenzanträge");
 
-    const eventsHtml = data.events.map(e => tableRow([
+    const eventsHtml = data.nextEvents.map(e => tableRow([
         `<strong>${e.name}</strong>`,
         e.location || "—",
-        e.date ? new Date(e.date).toLocaleDateString("de-DE") : "—",
+        e.event_date ? new Date(e.event_date).toLocaleDateString("de-DE") : "—",
         statusBadge(e.status)
     ])).join("");
-    document.getElementById("events-table").innerHTML = eventsHtml || "<tr><td colspan='4' style='text-align: center; color: #999;'>Keine kommenden Events</td></tr>";
+    setTableRows(["events-table", "events-tbody"], eventsHtml, 4, "Keine kommenden Events");
 
-    const auditHtml = data.audit.slice(0, 10).map(a => tableRow([
+    const auditHtml = data.recentAudit.slice(0, 10).map(a => tableRow([
         a.created_at ? new Date(a.created_at).toLocaleTimeString("de-DE") : "—",
         a.actor_username || "—",
         a.action || "—",
-        a.details || "—"
+        a.entity_type || "—"
     ])).join("");
-    document.getElementById("audit-table").innerHTML = auditHtml || "<tr><td colspan='4' style='text-align: center; color: #999;'>Kein Audit-Log vorhanden</td></tr>";
+    setTableRows(["audit-table", "audit-tbody"], auditHtml, 4, "Noch keine Systemaktivitäten");
 }
 
 // ============ USERS ============
 
 async function loadUsers() {
     const users = await api("/users");
-    const container = document.getElementById("users-list");
+    const container = findByIds(["users-list", "users-list-tbody"]);
+    if (!container) return;
     
     const html = users.map(u => `
         <tr>
             <td><strong>${u.name}</strong></td>
             <td><code>${u.username}</code></td>
-            <td><span class="badge badge-primary">${u.role}</span></td>
+            <td><span class="badge badge-info">${u.role}</span></td>
             <td>${statusBadge(u.status)}</td>
             <td>${u.last_login_at ? new Date(u.last_login_at).toLocaleDateString("de-DE") : "—"}</td>
             <td>
-                <button class="btn btn-small btn-secondary" data-edit-user="${u.id}">✏️</button>
-                <button class="btn btn-small btn-danger" data-delete-user="${u.id}">🗑️</button>
+                <button class="btn btn-small btn-secondary" data-edit-user="${u.id}">Bearbeiten</button>
+                <button class="btn btn-small btn-danger" data-delete-user="${u.id}">Löschen</button>
             </td>
         </tr>
     `).join("");
     
-    container.innerHTML = html || `<tr><td colspan='6' style='text-align: center; color: #999;'>Keine Benutzer vorhanden</td></tr>`;
+    container.innerHTML = html || `<tr><td colspan='6' class="table-empty">Keine Benutzer vorhanden</td></tr>`;
     
     // Wire up edit handlers
     document.querySelectorAll("[data-edit-user]").forEach(btn => {
@@ -536,24 +543,25 @@ async function loadTeams() {
             <tr>
                 <td><strong>${t.name}</strong></td>
                 <td>${t.category || "—"}</td>
-                <td>${t.athlete_count || 0}</td>
-                <td><span class="badge" style="background: ${t.status === "active" ? "#27ae60" : "#95a5a6"};">${t.status || "pending"}</span></td>
+                <td>${t.nation || "—"}</td>
+                <td>${t.manager_username || "—"}</td>
+                <td>${statusBadge(t.status || "pending")}</td>
                 <td>
-                    <button class="btn-small btn-secondary" onclick="editTeamModal(${t.id})">✏️ Bearbeiten</button>
-                    <button class="btn-small btn-danger" onclick="confirmDelete('Team ${t.name}', () => deleteTeam(${t.id}))">🗑️ Löschen</button>
+                    <button class="btn-small btn-secondary" onclick="editTeamModal(${t.id})">Bearbeiten</button>
+                    <button class="btn-small btn-danger" onclick="confirmDelete('Team ${t.name}', () => deleteTeam(${t.id}))">Löschen</button>
                 </td>
             </tr>
         `).join("");
-        document.getElementById("teams-list-tbody").innerHTML = html || "<tr><td colspan='5' style='text-align: center; color: #999;'>Keine Teams vorhanden</td></tr>";
+        setTableRows(["teams-list-tbody", "teams-list"], html, 6, "Keine Teams vorhanden");
     } catch (error) {
-        showToast(error.message, "error");
+        showToast("Teams konnten nicht geladen werden.", "error");
     }
 }
 
 async function deleteTeam(id) {
     try {
         await api(`/teams/${id}`, { method: "DELETE" });
-        showToast("Team gelöscht ✅", "success");
+        showToast("Team gelöscht.", "success");
         await loadTeams();
     } catch (error) {
         showToast(error.message, "error");
@@ -570,24 +578,24 @@ async function loadEvents() {
                 <td><strong>${e.name}</strong></td>
                 <td>${e.event_type || "—"}</td>
                 <td>${e.location || "—"}</td>
-                <td>${new Date(e.date).toLocaleDateString("de-DE")}</td>
-                <td><span class="badge" style="background: ${e.status === "confirmed" ? "#3498db" : "#f39c12"};">${e.status || "pending"}</span></td>
+                <td>${e.event_date ? new Date(e.event_date).toLocaleDateString("de-DE") : "—"}</td>
+                <td>${statusBadge(e.status || "pending")}</td>
                 <td>
-                    <button class="btn-small btn-secondary" onclick="editEventModal(${e.id})">✏️ Bearbeiten</button>
-                    <button class="btn-small btn-danger" onclick="confirmDelete('Event ${e.name}', () => deleteEvent(${e.id}))">🗑️ Löschen</button>
+                    <button class="btn-small btn-secondary" onclick="editEventModal(${e.id})">Bearbeiten</button>
+                    <button class="btn-small btn-danger" onclick="confirmDelete('Event ${e.name}', () => deleteEvent(${e.id}))">Löschen</button>
                 </td>
             </tr>
         `).join("");
-        document.getElementById("events-list-tbody").innerHTML = html || "<tr><td colspan='6' style='text-align: center; color: #999;'>Keine Events vorhanden</td></tr>";
+        setTableRows(["events-list-tbody", "events-list"], html, 6, "Keine Events vorhanden");
     } catch (error) {
-        showToast(error.message, "error");
+        showToast("Events konnten nicht geladen werden.", "error");
     }
 }
 
 async function deleteEvent(id) {
     try {
         await api(`/events/${id}`, { method: "DELETE" });
-        showToast("Event gelöscht ✅", "success");
+        showToast("Event gelöscht.", "success");
         await loadEvents();
     } catch (error) {
         showToast(error.message, "error");
@@ -598,15 +606,14 @@ async function deleteEvent(id) {
 
 async function loadPointsRules() {
     try {
-        const rules = await api("/points-rules");
-        if (rules) {
-            document.getElementById("world-cup-schema").value = rules.world_cup_schema || "top_30";
-            document.getElementById("team-calc-method").value = rules.team_calc_method || "sum";
-            document.querySelector("input[name='bonus_record']").checked = rules.bonus_record;
-            document.querySelector("input[name='bonus_series']").checked = rules.bonus_series;
+        const rules = await api("/point-rules");
+        const latestRule = Array.isArray(rules) ? rules[0] : null;
+        if (latestRule) {
+            const schema = document.querySelector("select[name='worldcup_schema']");
+            if (schema) schema.value = latestRule.rule_type || "top_30";
         }
     } catch (error) {
-        console.error("Fehler beim Laden der Punkte-Regeln:", error);
+        // Optional data; no user-facing error needed for empty rule set.
     }
 }
 
@@ -618,17 +625,19 @@ async function loadTransfers() {
         const html = transfers.map(t => `
             <tr>
                 <td><strong>${t.athlete_name || "—"}</strong></td>
-                <td>${t.from_team || "—"} ➜ ${t.to_team || "—"}</td>
-                <td><span class="badge" style="background: ${t.status === "approved" ? "#27ae60" : "#f39c12"};">${t.status || "pending"}</span></td>
-                <td>${new Date(t.transfer_date).toLocaleDateString("de-DE")}</td>
+                <td>${t.from_team_name || "—"}</td>
+                <td>${t.to_team_name || "—"}</td>
+                <td>${t.is_emergency ? "Notfall" : "Normal"}</td>
+                <td>${statusBadge(t.status || "requested")}</td>
+                <td>${t.lock_until ? new Date(t.lock_until).toLocaleDateString("de-DE") : "—"}</td>
                 <td>
-                    <button class="btn-small btn-secondary" onclick="editTransferModal(${t.id})">✏️ Details</button>
+                    <button class="btn-small btn-secondary" onclick="editTransferModal(${t.id})">Details</button>
                 </td>
             </tr>
         `).join("");
-        document.getElementById("transfers-list-tbody").innerHTML = html || "<tr><td colspan='5' style='text-align: center; color: #999;'>Keine Transfers vorhanden</td></tr>";
+        setTableRows(["transfers-list-tbody", "transfers-list"], html, 7, "Noch keine Transfers vorhanden");
     } catch (error) {
-        showToast(error.message, "error");
+        showToast("Transfers konnten nicht geladen werden.", "error");
     }
 }
 
@@ -641,18 +650,27 @@ async function loadAuditLog() {
             <tr>
                 <td>${l.created_at ? new Date(l.created_at).toLocaleString("de-DE") : "—"}</td>
                 <td><strong>${l.actor_username || "—"}</strong></td>
-                <td><span class="badge" style="background: #3498db;">${l.action || "—"}</span></td>
+                <td><span class="badge badge-info">${l.action || "—"}</span></td>
                 <td>${l.entity_type || "—"}</td>
-                <td style="font-size: 12px; color: #999;">${l.details ? l.details.substring(0, 50) + "..." : "—"}</td>
+                <td>${l.details ? l.details.substring(0, 50) + "..." : "—"}</td>
             </tr>
         `).join("");
-        const tbody = document.getElementById("audit-log-tbody");
-        if (tbody) {
-            tbody.innerHTML = html || "<tr><td colspan='5' style='text-align: center; color: #999;'>Keine Einträge vorhanden</td></tr>";
-        }
+        setTableRows(["audit-log-tbody"], html, 5, "Noch keine Einträge vorhanden");
     } catch (error) {
-        console.error("Fehler beim Laden des Audit-Logs:", error);
+        showToast("Audit-Log konnte nicht geladen werden.", "error");
     }
+}
+
+function editTeamModal() {
+    showToast("Bearbeiten ist in Kürze verfügbar.", "info");
+}
+
+function editEventModal() {
+    showToast("Bearbeiten ist in Kürze verfügbar.", "info");
+}
+
+function editTransferModal() {
+    showToast("Detailansicht ist in Kürze verfügbar.", "info");
 }
 
 // ============ INIT ============

@@ -44,8 +44,8 @@
                         <div class="tabs">
                             <button class="tab-button active" type="button" data-tab="worldcup">Weltcup-Punkte</button>
                             <button class="tab-button" type="button" data-tab="team">Team-Punkte</button>
-                            <button class="tab-button" type="button" data-tab="bonus">⭐ Bonuspunkte</button>
-                            <button class="tab-button" type="button" data-tab="tiebreak">🎯 Tie-Break</button>
+                            <button class="tab-button" type="button" data-tab="bonus">Bonuspunkte</button>
+                            <button class="tab-button" type="button" data-tab="tiebreak">Tie-Break</button>
                         </div>
 
                         <!-- Tab 1: World Cup -->
@@ -80,7 +80,7 @@
                                 <div class="radio-group">
                                     <div class="radio-item">
                                         <input type="radio" name="team_calc" value="sum" required />
-                                        <label>➕ Summe der Athleten-Punkte</label>
+                                        <label>Summe der Athleten-Punkte</label>
                                     </div>
                                     <div class="radio-item">
                                         <input type="radio" name="team_calc" value="avg" />
@@ -88,7 +88,7 @@
                                     </div>
                                     <div class="radio-item">
                                         <input type="radio" name="team_calc" value="best_3" />
-                                        <label>🥇 Besten 3 Athleten</label>
+                                        <label>Besten 3 Athleten</label>
                                     </div>
                                 </div>
                             </div>
@@ -99,7 +99,7 @@
                             <div class="checkbox-group">
                                 <div class="checkbox-item">
                                     <input type="checkbox" name="bonus_record" value="true" />
-                                    <label>🚀 Bonuspunkte für Neuen Rekord (+10 Punkte)</label>
+                                    <label>Bonuspunkte für neuen Rekord (+10 Punkte)</label>
                                 </div>
                                 <div class="checkbox-item">
                                     <input type="checkbox" name="bonus_series" value="true" />
@@ -122,18 +122,18 @@
                                 <label>Tie-Break Regel 1 (Priorität: Höher)</label>
                                 <select name="tiebreak_1" required>
                                     <option value="">-- Bitte auswählen --</option>
-                                    <option value="most_wins">🥇 Meiste Siege</option>
-                                    <option value="best_single">🎯 Beste Einzelplatzierung</option>
-                                    <option value="last_event">📅 Letzte Event-Platzierung</option>
+                                    <option value="most_wins">Meiste Siege</option>
+                                    <option value="best_single">Beste Einzelplatzierung</option>
+                                    <option value="last_event">Letzte Event-Platzierung</option>
                                 </select>
                             </div>
                             <div class="form-group">
                                 <label>Tie-Break Regel 2 (Priorität: Mittel)</label>
                                 <select name="tiebreak_2" required>
                                     <option value="">-- Bitte auswählen --</option>
-                                    <option value="most_wins">🥇 Meiste Siege</option>
-                                    <option value="best_single">🎯 Beste Einzelplatzierung</option>
-                                    <option value="last_event">📅 Letzte Event-Platzierung</option>
+                                    <option value="most_wins">Meiste Siege</option>
+                                    <option value="best_single">Beste Einzelplatzierung</option>
+                                    <option value="last_event">Letzte Event-Platzierung</option>
                                 </select>
                             </div>
                         </div>
@@ -177,7 +177,7 @@
                         <h2>Gesamtwertungen</h2>
                     </div>
                     <div class="card-body">
-                        <div >
+                        <div class="grid-2">
                             <div>
                                 <h3 >Weltcup Einzelwertung</h3>
                                 <table class="table">
@@ -235,7 +235,7 @@
                         method: "POST",
                         body: JSON.stringify({ key: "point_rules", value: data })
                     });
-                    showToast("Punkte-Regeln gespeichert! ✅", "success");
+                    showToast("Punkte-Regeln gespeichert.", "success");
                 } catch (error) {
                     showToast(error.message, "error");
                 }

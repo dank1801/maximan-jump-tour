@@ -41,7 +41,7 @@
                         <h2>Live-Ergebnisse</h2>
                     </div>
                     <div class="card-body">
-                        <div >
+                        <div class="grid-2">
                             <div class="form-group">
                                 <label>Event auswählen</label>
                                 <select id="live-event-selector">
@@ -67,7 +67,7 @@
                             </thead>
                             <tbody></tbody>
                         </table>
-                        <div >
+                        <div class="form-actions">
                             <button class="btn btn-primary">Ergebnisse importieren</button>
                             <button class="btn btn-secondary">Exportieren (CSV)</button>
                             <button class="btn btn-secondary">PDF Bericht</button>
@@ -82,7 +82,7 @@
                     </div>
                     <div class="card-body">
                         <div class="tabs">
-                            <button class="tab-button active" type="button" data-tab="standings-individual">🏃 Einzeln</button>
+                            <button class="tab-button active" type="button" data-tab="standings-individual">Einzeln</button>
                             <button class="tab-button" type="button" data-tab="standings-team">Teams</button>
                             <button class="tab-button" type="button" data-tab="standings-series">Serien</button>
                         </div>
@@ -151,7 +151,7 @@
                         <h2>Audit-Log (Alle Systemaktivitäten)</h2>
                     </div>
                     <div class="card-body">
-                        <div >
+                        <div class="grid-3">
                             <div class="form-group">
                                 <label>Nach Benutzer filtern</label>
                                 <select id="audit-user-filter">
@@ -162,7 +162,7 @@
                                 <label>Nach Aktion filtern</label>
                                 <select id="audit-action-filter">
                                     <option value="">-- Alle --</option>
-                                    <option value="CREATE">➕ Erstellt</option>
+                                    <option value="CREATE">Erstellt</option>
                                     <option value="UPDATE">Aktualisiert</option>
                                     <option value="DELETE">Gelöscht</option>
                                     <option value="LOGIN">Anmeldung</option>
@@ -172,7 +172,7 @@
                                 <label>Zeitraum</label>
                                 <select id="audit-timerange-filter">
                                     <option value="">-- Alle Zeit --</option>
-                                    <option value="today">📅 Heute</option>
+                                    <option value="today">Heute</option>
                                     <option value="week">Diese Woche</option>
                                     <option value="month">Diesen Monat</option>
                                 </select>
@@ -190,7 +190,7 @@
                             </thead>
                             <tbody id="audit-log-tbody"></tbody>
                         </table>
-                        <div >
+                        <div class="form-actions">
                             <button class="btn btn-secondary">Audit-Log exportieren</button>
                         </div>
                     </div>
@@ -203,7 +203,7 @@
                     </div>
                     <div class="card-body">
                         <form id="create-publication-form" >
-                            <div >
+                            <div class="grid-2">
                                 <div class="form-group">
                                     <label>Titel *</label>
                                     <input type="text" name="title" placeholder="z.B. Ergebnisliste Event XY" required />

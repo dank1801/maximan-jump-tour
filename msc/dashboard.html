@@ -124,56 +124,5 @@
     </div>
 
     <script src="portal.js"></script>
-    <script>
-        if (!isLoginPage()) {
-            async function loadDashboard() {
-                try {
-                    const stats = await api("/stats");
-                    document.getElementById("kpi-users").textContent = stats.total_users || 0;
-                    document.getElementById("kpi-teams").textContent = stats.total_teams || 0;
-                    document.getElementById("kpi-events").textContent = stats.total_events || 0;
-                    document.getElementById("kpi-licenses").textContent = stats.pending_licenses || 0;
-
-                    const licenses = await api("/licenses?status=pending");
-                    const licensesHtml = (licenses || []).slice(0, 5).map(l => `
-                        <tr>
-                            <td><strong>${l.person_name || "—"}</strong></td>
-                            <td>${l.team_name || "—"}</td>
-                            <td>${l.license_type || "—"}</td>
-                            <td><span class="badge badge-warning">${l.status || "—"}</span></td>
-                            <td><button class="btn-small btn-secondary">Details</button></td>
-                        </tr>
-                    `).join("");
-                    document.getElementById("licenses-tbody").innerHTML = licensesHtml || "<tr><td colspan='5' style='text-align: center; color: var(--gray);'>Keine Einträge</td></tr>";
-
-                    const events = await api("/events?limit=5");
-                    const eventsHtml = (events || []).map(e => `
-                        <tr>
-                            <td><strong>${e.name || "—"}</strong></td>
-                            <td>${e.location || "—"}</td>
-                            <td>${e.date ? new Date(e.date).toLocaleDateString("de-DE") : "—"}</td>
-                            <td><span class="badge badge-info">${e.status || "—"}</span></td>
-                        </tr>
-                    `).join("");
-                    document.getElementById("events-tbody").innerHTML = eventsHtml || "<tr><td colspan='4' style='text-align: center; color: var(--gray);'>Keine Einträge</td></tr>";
-
-                    const logs = await api("/audit-logs?limit=5");
-                    const logsHtml = (logs || []).map(l => `
-                        <tr>
-                            <td>${l.created_at ? new Date(l.created_at).toLocaleString("de-DE") : "—"}</td>
-                            <td>${l.actor_username || "—"}</td>
-                            <td><span class="badge badge-info">${l.action || "—"}</span></td>
-                            <td>${l.entity_type || "—"}</td>
-                        </tr>
-                    `).join("");
-                    document.getElementById("audit-tbody").innerHTML = logsHtml || "<tr><td colspan='4' style='text-align: center; color: var(--gray);'>Keine Einträge</td></tr>";
-                } catch (error) {
-                    console.error(error);
-                }
-            }
-
-            document.addEventListener("DOMContentLoaded", loadDashboard);
-        }
-    </script>
 </body>
 </html>

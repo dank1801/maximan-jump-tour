@@ -38,10 +38,10 @@
                 <!-- Create Team Card -->
                 <div class="card">
                     <div class="card-header">
-                        <h2>➕ Neues Team erstellen</h2>
+                        <h2>Neues Team erstellen</h2>
                     </div>
                     <form id="create-team-form">
-                        <div >
+                        <div class="grid-2">
                             <div class="form-group">
                                 <label>Team Name *</label>
                                 <input type="text" name="name" placeholder="z.B. Maximan Flyers" required />
@@ -65,7 +65,7 @@
                             </div>
                         </div>
                         <div class="form-actions">
-                            <button type="submit" class="btn btn-primary">➕ Team erstellen</button>
+                            <button type="submit" class="btn btn-primary">Team erstellen</button>
                         </div>
                     </form>
                 </div>
@@ -98,14 +98,14 @@
                         <h2>Lizenzverwaltung</h2>
                     </div>
                     <div class="card-body">
-                        <div >
+                        <div class="form-group">
                             <label >Filter nach Status:</label>
-                            <div >
+                            <div>
                                 <select id="license-filter">
                                     <option value="">-- Alle --</option>
                                     <option value="gültig">Gültig</option>
-                                    <option value="abgelaufen">❌ Abgelaufen</option>
-                                    <option value="in_prüfung">🔄 In Prüfung</option>
+                                    <option value="abgelaufen">Abgelaufen</option>
+                                    <option value="in_prüfung">In Prüfung</option>
                                 </select>
                             </div>
                         </div>
@@ -142,7 +142,7 @@
                                 method: "POST",
                                 body: JSON.stringify(data)
                             });
-                            showToast(`Team ${data.name} erstellt! ✅`, "success");
+                            showToast(`Team ${data.name} wurde erstellt.`, "success");
                             form.reset();
                             loadTeams();
                         } catch (error) {
@@ -163,8 +163,8 @@
                             <td>${t.contact_person || "—"}</td>
                             <td>${statusBadge(t.status)}</td>
                             <td>
-                                <button class="btn btn-small btn-secondary" onclick="editTeam(${t.id})">✏️</button>
-                                <button class="btn btn-small btn-danger" onclick="deleteTeam(${t.id})">🗑️</button>
+                                <button class="btn btn-small btn-secondary" onclick="editTeam(${t.id})">Bearbeiten</button>
+                                <button class="btn btn-small btn-danger" onclick="deleteTeam(${t.id})">Löschen</button>
                             </td>
                         </tr>
                     `).join("");
@@ -176,17 +176,18 @@
 
             async function loadLicenses() {
                 try {
-                    const licenses = await api("/team-members");
+                    const dashboard = await api("/dashboard");
+                    const licenses = dashboard.pendingLicenses || [];
                     const html = licenses.map(l => `
                         <tr>
                             <td><strong>${l.name || "—"}</strong></td>
-                            <td>${l.team || "—"}</td>
+                            <td>${l.team_name || "—"}</td>
                             <td>${l.license_type || "—"}</td>
-                            <td>${l.license_valid_until ? new Date(l.license_valid_until).toLocaleDateString("de-DE") : "—"}</td>
+                            <td>—</td>
                             <td>${statusBadge(l.license_status)}</td>
                             <td>
-                                <button class="btn btn-small btn-secondary">✏️</button>
-                                <button class="btn btn-small btn-danger">🗑️</button>
+                                <button class="btn btn-small btn-secondary">Details</button>
+                                <button class="btn btn-small btn-danger">Löschen</button>
                             </td>
                         </tr>
                     `).join("");
@@ -204,7 +205,7 @@
                 confirmDelete("Team", async () => {
                     try {
                         await api(`/teams/${teamId}`, { method: "DELETE" });
-                        showToast("Team gelöscht ✅", "success");
+                        showToast("Team gelöscht.", "success");
                         loadTeams();
                     } catch (error) {
                         showToast(error.message, "error");

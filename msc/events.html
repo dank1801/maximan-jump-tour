@@ -38,18 +38,18 @@
                 <!-- Create Event -->
                 <div class="card">
                     <div class="card-header">
-                        <h2>➕ Neuen Event erstellen</h2>
+                        <h2>Neuen Event erstellen</h2>
                     </div>
                     <form id="create-event-form">
                         <div class="tabs">
                             <button class="tab-button active" type="button" data-tab="event-basics">Basisdaten</button>
                             <button class="tab-button" type="button" data-tab="event-format">Format</button>
-                            <button class="tab-button" type="button" data-tab="event-preview">👁️ Übersicht</button>
+                            <button class="tab-button" type="button" data-tab="event-preview">Übersicht</button>
                         </div>
 
                         <!-- Tab 1: Basics -->
                         <div id="event-basics" class="tab-content active">
-                            <div >
+                            <div class="grid-2">
                                 <div class="form-group">
                                     <label>Event Name *</label>
                                     <input type="text" name="name" placeholder="z.B. SeaBar Trilogie" required />
@@ -80,7 +80,7 @@
                                 <div class="radio-group">
                                     <div class="radio-item">
                                         <input type="radio" name="format" value="individual" required />
-                                        <label>🏃 Einzelwettkampf</label>
+                                        <label>Einzelwettkampf</label>
                                     </div>
                                     <div class="radio-item">
                                         <input type="radio" name="format" value="team" />
@@ -88,7 +88,7 @@
                                     </div>
                                     <div class="radio-item">
                                         <input type="radio" name="format" value="super_team" />
-                                        <label>👨‍👩‍👧‍👦 Super-Team Format</label>
+                                        <label>Super-Team Format</label>
                                     </div>
                                 </div>
                             </div>
@@ -113,7 +113,7 @@
 
                         <!-- Tab 3: Preview -->
                         <div id="event-preview" class="tab-content">
-                            <div >
+                            <div class="help-text">
                                 Hier wird eine Übersicht der Eingaben angezeigt
                             </div>
                         </div>
@@ -168,12 +168,20 @@
             document.getElementById("create-event-form")?.addEventListener("submit", async (e) => {
                 e.preventDefault();
                 const data = getFormData(document.getElementById("create-event-form"));
+                const payload = {
+                    name: data.name,
+                    location: data.location,
+                    eventDate: data.date,
+                    seasonId: data.season_id,
+                    eventType: data.format,
+                    status: "planned"
+                };
                 try {
                     await api("/events", {
                         method: "POST",
-                        body: JSON.stringify(data)
+                        body: JSON.stringify(payload)
                     });
-                    showToast(`Event ${data.name} erstellt! ✅`, "success");
+                    showToast(`Event ${data.name} wurde erstellt.`, "success");
                     document.getElementById("create-event-form").reset();
                     loadEvents();
                 } catch (error) {
@@ -188,12 +196,12 @@
                         <tr>
                             <td><strong>${e.name}</strong></td>
                             <td>${e.location || "—"}</td>
-                            <td>${e.date ? new Date(e.date).toLocaleDateString("de-DE") : "—"}</td>
-                            <td>${e.format || "—"}</td>
+                            <td>${e.event_date ? new Date(e.event_date).toLocaleDateString("de-DE") : "—"}</td>
+                            <td>${e.event_type || "—"}</td>
                             <td>${statusBadge(e.status)}</td>
                             <td>
-                                <button class="btn btn-small btn-secondary">✏️</button>
-                                <button class="btn btn-small btn-danger">🗑️</button>
+                                <button class="btn btn-small btn-secondary">Bearbeiten</button>
+                                <button class="btn btn-small btn-danger">Löschen</button>
                             </td>
                         </tr>
                     `).join("");
