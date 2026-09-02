@@ -9,7 +9,7 @@ COPY . .
 
 ENV NODE_ENV=production
 ENV PORT=3000
-ENV DB_DIR=/app/.runtime
+ENV DB_DIR=/var/data
 
 EXPOSE 3000
 
