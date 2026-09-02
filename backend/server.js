@@ -44,6 +44,17 @@ const wsClients = new Map();
 
 function initDb() {
     db.exec(`
+        CREATE TABLE IF NOT EXISTS roles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            description TEXT,
+            permissions_json TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            is_system INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE,
@@ -188,6 +199,108 @@ function initDb() {
     `);
 }
 
+const ALL_PERMISSIONS = [
+    "dashboard.read",
+    "audit.read",
+    "users.read",
+    "users.write",
+    "roles.read",
+    "roles.write",
+    "teams.read",
+    "teams.write",
+    "team_members.read",
+    "team_members.write",
+    "seasons.read",
+    "seasons.write",
+    "events.read",
+    "events.write",
+    "jury_decisions.read",
+    "jury_decisions.write",
+    "point_rules.read",
+    "point_rules.write",
+    "event_scores.read",
+    "event_scores.write",
+    "transfers.read",
+    "transfers.write",
+    "contracts.read",
+    "contracts.write",
+    "publications.read",
+    "publications.write",
+    "settings.read",
+    "settings.write"
+];
+
+const DEFAULT_ROLE_DEFINITIONS = [
+    {
+        name: "MSC Admin",
+        description: "Voller Zugriff auf alle Bereiche.",
+        permissions: [...ALL_PERMISSIONS]
+    },
+    {
+        name: "Teammanager",
+        description: "Verwaltet Teams, Mitglieder und Teamdaten.",
+        permissions: [
+            "dashboard.read",
+            "teams.read",
+            "teams.write",
+            "team_members.read",
+            "team_members.write",
+            "events.read",
+            "point_rules.read",
+            "event_scores.read",
+            "transfers.read",
+            "contracts.read"
+        ]
+    },
+    {
+        name: "Jury",
+        description: "Pflegt Wettkämpfe, Punktregeln und Jury-Entscheidungen.",
+        permissions: [
+            "dashboard.read",
+            "events.read",
+            "events.write",
+            "jury_decisions.read",
+            "jury_decisions.write",
+            "point_rules.read",
+            "point_rules.write",
+            "event_scores.read",
+            "event_scores.write",
+            "teams.read",
+            "team_members.read",
+            "transfers.read",
+            "publications.read"
+        ]
+    },
+    {
+        name: "Lizenzstelle",
+        description: "Bearbeitet Lizenz- und Vertragsprozesse.",
+        permissions: [
+            "dashboard.read",
+            "teams.read",
+            "team_members.read",
+            "team_members.write",
+            "transfers.read",
+            "transfers.write",
+            "contracts.read",
+            "contracts.write",
+            "audit.read"
+        ]
+    },
+    {
+        name: "Reporter",
+        description: "Erstellt Veröffentlichungen und Reporting-Ausgaben.",
+        permissions: [
+            "dashboard.read",
+            "events.read",
+            "point_rules.read",
+            "event_scores.read",
+            "publications.read",
+            "publications.write",
+            "audit.read"
+        ]
+    }
+];
+
 function normalizeRole(role) {
     return String(role || "").trim().toLowerCase();
 }
@@ -210,6 +323,25 @@ function signToken(user) {
     );
 }
 
+function parsePermissions(value) {
+    const list = Array.isArray(value) ? value : [];
+    return [...new Set(list.map((entry) => String(entry || "").trim()).filter(Boolean))];
+}
+
+function seedDefaultRoles() {
+    const upsert = db.prepare(
+        `INSERT INTO roles (name, description, permissions_json, status, is_system, updated_at)
+         VALUES (?, ?, ?, 'active', 1, CURRENT_TIMESTAMP)
+         ON CONFLICT(name) DO UPDATE SET
+           description = excluded.description,
+           permissions_json = excluded.permissions_json,
+           updated_at = CURRENT_TIMESTAMP`
+    );
+    DEFAULT_ROLE_DEFINITIONS.forEach((role) => {
+        upsert.run(role.name, role.description, JSON.stringify(role.permissions));
+    });
+}
+
 function getBearerToken(authorizationHeader) {
     if (!authorizationHeader) return null;
     const [scheme, token] = authorizationHeader.split(" ");
@@ -225,7 +357,30 @@ function authRequired(req, res, next) {
     }
     try {
         const payload = jwt.verify(token, EFFECTIVE_JWT_SECRET);
-        req.user = payload;
+        const dbUser = db
+            .prepare("SELECT id, username, name, email, role, status FROM users WHERE id = ?")
+            .get(payload.sub);
+        if (!dbUser || dbUser.status !== "active") {
+            res.status(401).json({ error: "User account is not active" });
+            return;
+        }
+
+        const roleRow = db
+            .prepare("SELECT permissions_json FROM roles WHERE name = ? AND status = 'active'")
+            .get(dbUser.role);
+        const defaultRole = DEFAULT_ROLE_DEFINITIONS.find(
+            (entry) => normalizeRole(entry.name) === normalizeRole(dbUser.role)
+        );
+        let permissions = defaultRole ? [...defaultRole.permissions] : [];
+        if (roleRow?.permissions_json) {
+            try {
+                permissions = parsePermissions(JSON.parse(roleRow.permissions_json));
+            } catch (error) {
+                permissions = parsePermissions(permissions);
+            }
+        }
+
+        req.user = { ...payload, ...dbUser, permissions };
         next();
     } catch (error) {
         res.status(401).json({ error: "Invalid or expired token" });
@@ -236,6 +391,28 @@ function requireRoles(allowedRoles) {
     return (req, res, next) => {
         if (!hasAnyRole(req.user.role, allowedRoles)) {
             res.status(403).json({ error: "Insufficient permissions" });
+            return;
+        }
+        next();
+    };
+}
+
+function requirePermission(permission) {
+    return (req, res, next) => {
+        const userPermissions = parsePermissions(req.user?.permissions || []);
+        if (!userPermissions.includes(permission)) {
+            res.status(403).json({ error: `Missing permission: ${permission}` });
+            return;
+        }
+        next();
+    };
+}
+
+function requireAnyPermission(permissions) {
+    return (req, res, next) => {
+        const userPermissions = parsePermissions(req.user?.permissions || []);
+        if (!permissions.some((permission) => userPermissions.includes(permission))) {
+            res.status(403).json({ error: `Missing one of permissions: ${permissions.join(", ")}` });
             return;
         }
         next();
@@ -311,6 +488,13 @@ function requireFields(res, payload, fields) {
     return true;
 }
 
+function resolveActiveRoleName(roleName) {
+    const row = db
+        .prepare("SELECT name FROM roles WHERE LOWER(name) = LOWER(?) AND status = 'active'")
+        .get(String(roleName || "").trim());
+    return row?.name || null;
+}
+
 const app = express();
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
@@ -327,6 +511,7 @@ app.use(rateLimit({
 app.use(express.json({ limit: "1mb" }));
 
 initDb();
+seedDefaultRoles();
 
 const ADMIN_ROLES = ["msc admin", "admin", "root-admin"];
 const TEAM_WRITE_ROLES = [...ADMIN_ROLES, "teammanager"];
@@ -409,7 +594,178 @@ app.get("/api/auth/me", authRequired, (req, res) => {
     res.json({ user });
 });
 
-app.get("/api/dashboard", authRequired, (_, res) => {
+app.get("/api/permissions", authRequired, requirePermission("roles.read"), (_req, res) => {
+    res.json({ permissions: ALL_PERMISSIONS });
+});
+
+app.get("/api/roles", authRequired, requirePermission("roles.read"), (_req, res) => {
+    const rows = db.prepare(
+        `SELECT r.id, r.name, r.description, r.status, r.is_system, r.permissions_json, r.created_at, r.updated_at,
+                (SELECT COUNT(*) FROM users u WHERE LOWER(u.role) = LOWER(r.name)) AS user_count
+         FROM roles r
+         ORDER BY r.name ASC`
+    ).all();
+    const mapped = rows.map((row) => {
+        let permissions = [];
+        try {
+            permissions = parsePermissions(JSON.parse(row.permissions_json || "[]"));
+        } catch (error) {
+            permissions = [];
+        }
+        return {
+            id: row.id,
+            name: row.name,
+            description: row.description,
+            status: row.status,
+            is_system: row.is_system === 1,
+            user_count: row.user_count,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            permissions
+        };
+    });
+    res.json(mapped);
+});
+
+app.post("/api/roles", authRequired, requirePermission("roles.write"), (req, res) => {
+    const { name, description, permissions, status } = req.body || {};
+    if (!requireFields(res, req.body || {}, ["name"])) return;
+    const normalizedPermissions = parsePermissions(permissions || []);
+    const invalid = normalizedPermissions.filter((entry) => !ALL_PERMISSIONS.includes(entry));
+    if (invalid.length > 0) {
+        res.status(400).json({ error: `Unknown permissions: ${invalid.join(", ")}` });
+        return;
+    }
+    try {
+        const result = db.prepare(
+            `INSERT INTO roles (name, description, permissions_json, status, is_system, updated_at)
+             VALUES (?, ?, ?, ?, 0, CURRENT_TIMESTAMP)`
+        ).run(
+            String(name).trim(),
+            description ? String(description).trim() : null,
+            JSON.stringify(normalizedPermissions),
+            status === "inactive" ? "inactive" : "active"
+        );
+        const created = db.prepare("SELECT id, name, description, status, is_system, created_at, updated_at FROM roles WHERE id = ?").get(result.lastInsertRowid);
+        logAudit(req.user, "CREATE_ROLE", "roles", created.id, created.name);
+        res.status(201).json({
+            ...created,
+            is_system: created.is_system === 1,
+            permissions: normalizedPermissions
+        });
+    } catch (error) {
+        res.status(409).json({ error: "Role already exists" });
+    }
+});
+
+app.patch("/api/roles/:id", authRequired, requirePermission("roles.write"), (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Invalid role id" });
+        return;
+    }
+    const existing = db.prepare("SELECT id, name, is_system FROM roles WHERE id = ?").get(id);
+    if (!existing) {
+        res.status(404).json({ error: "Role not found" });
+        return;
+    }
+
+    const updates = [];
+    const values = [];
+    if (req.body?.name !== undefined) {
+        const nextName = String(req.body.name || "").trim();
+        if (!nextName) {
+            res.status(400).json({ error: "Role name cannot be empty" });
+            return;
+        }
+        if (existing.is_system === 1 && nextName.toLowerCase() !== String(existing.name || "").toLowerCase()) {
+            res.status(400).json({ error: "System role names cannot be changed" });
+            return;
+        }
+        updates.push("name = ?");
+        values.push(nextName);
+    }
+    if (req.body?.description !== undefined) {
+        updates.push("description = ?");
+        values.push(req.body.description ? String(req.body.description).trim() : null);
+    }
+    if (req.body?.status !== undefined) {
+        const nextStatus = req.body.status === "inactive" ? "inactive" : "active";
+        updates.push("status = ?");
+        values.push(nextStatus);
+    }
+    if (req.body?.permissions !== undefined) {
+        const normalizedPermissions = parsePermissions(req.body.permissions);
+        const invalid = normalizedPermissions.filter((entry) => !ALL_PERMISSIONS.includes(entry));
+        if (invalid.length > 0) {
+            res.status(400).json({ error: `Unknown permissions: ${invalid.join(", ")}` });
+            return;
+        }
+        updates.push("permissions_json = ?");
+        values.push(JSON.stringify(normalizedPermissions));
+    }
+    if (updates.length === 0) {
+        res.status(400).json({ error: "No updatable fields provided" });
+        return;
+    }
+
+    updates.push("updated_at = CURRENT_TIMESTAMP");
+    values.push(id);
+    try {
+        db.prepare(`UPDATE roles SET ${updates.join(", ")} WHERE id = ?`).run(...values);
+    } catch (error) {
+        res.status(409).json({ error: "Role name already exists" });
+        return;
+    }
+
+    const updated = db.prepare(
+        "SELECT id, name, description, status, is_system, created_at, updated_at, permissions_json FROM roles WHERE id = ?"
+    ).get(id);
+    let permissions = [];
+    try {
+        permissions = parsePermissions(JSON.parse(updated.permissions_json || "[]"));
+    } catch (error) {
+        permissions = [];
+    }
+    logAudit(req.user, "UPDATE_ROLE", "roles", id, JSON.stringify(req.body || {}));
+    res.json({
+        id: updated.id,
+        name: updated.name,
+        description: updated.description,
+        status: updated.status,
+        is_system: updated.is_system === 1,
+        created_at: updated.created_at,
+        updated_at: updated.updated_at,
+        permissions
+    });
+});
+
+app.delete("/api/roles/:id", authRequired, requirePermission("roles.write"), (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Invalid role id" });
+        return;
+    }
+    const role = db.prepare("SELECT id, name, is_system FROM roles WHERE id = ?").get(id);
+    if (!role) {
+        res.status(404).json({ error: "Role not found" });
+        return;
+    }
+    if (role.is_system === 1) {
+        res.status(400).json({ error: "System roles cannot be deleted" });
+        return;
+    }
+    const assigned = db.prepare("SELECT COUNT(*) AS count FROM users WHERE LOWER(role) = LOWER(?)").get(role.name).count;
+    if (assigned > 0) {
+        res.status(409).json({ error: "Role is assigned to users and cannot be deleted" });
+        return;
+    }
+    db.prepare("DELETE FROM roles WHERE id = ?").run(id);
+    logAudit(req.user, "DELETE_ROLE", "roles", id, role.name);
+    res.status(204).send();
+});
+
+app.get("/api/dashboard", authRequired, requirePermission("dashboard.read"), (_, res) => {
     const stats = {
         users: db.prepare("SELECT COUNT(*) AS count FROM users WHERE status = 'active'").get().count,
         teams: db.prepare("SELECT COUNT(*) AS count FROM teams WHERE status = 'active'").get().count,
@@ -445,7 +801,7 @@ app.get("/api/dashboard", authRequired, (_, res) => {
     res.json({ stats, recentAudit, nextEvents, pendingLicenses });
 });
 
-app.get("/api/audit-logs", authRequired, (req, res) => {
+app.get("/api/audit-logs", authRequired, requirePermission("audit.read"), (req, res) => {
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
     const rows = db.prepare(
         `SELECT id, created_at, actor_username, action, entity_type, entity_id, details
@@ -456,7 +812,7 @@ app.get("/api/audit-logs", authRequired, (req, res) => {
     res.json(rows);
 });
 
-app.get("/api/users", authRequired, (req, res) => {
+app.get("/api/users", authRequired, requirePermission("users.read"), (req, res) => {
     const rows = db.prepare(
         `SELECT id, username, name, email, role, status, last_login_at, created_at
          FROM users
@@ -465,22 +821,34 @@ app.get("/api/users", authRequired, (req, res) => {
     res.json(rows);
 });
 
-app.post("/api/users", authRequired, requireRoles(ADMIN_ROLES), (req, res) => {
-    const { username, name, email, role, password } = req.body || {};
+app.post("/api/users", authRequired, requirePermission("users.write"), (req, res) => {
+    const { username, name, email, role, password, status } = req.body || {};
     if (!requireFields(res, req.body || {}, ["username", "name", "email", "role", "password"])) return;
+    const resolvedRole = resolveActiveRoleName(role);
+    if (!resolvedRole) {
+        res.status(400).json({ error: "Unknown or inactive role" });
+        return;
+    }
     const hash = bcrypt.hashSync(password, 12);
     const result = db
         .prepare(
             `INSERT INTO users (username, name, email, role, password_hash, status)
-             VALUES (?, ?, ?, ?, ?, 'active')`
+             VALUES (?, ?, ?, ?, ?, ?)`
         )
-        .run(username.trim(), name.trim(), email.trim().toLowerCase(), role.trim(), hash);
+        .run(
+            username.trim(),
+            name.trim(),
+            email.trim().toLowerCase(),
+            resolvedRole,
+            hash,
+            status === "inactive" ? "inactive" : "active"
+        );
     const created = db.prepare("SELECT id, username, name, email, role, status, created_at FROM users WHERE id = ?").get(result.lastInsertRowid);
     logAudit(req.user, "CREATE_USER", "users", created.id, `${created.username} (${created.role})`);
     res.status(201).json(created);
 });
 
-app.patch("/api/users/:id", authRequired, requireRoles(ADMIN_ROLES), (req, res) => {
+app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req, res) => {
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid user id" });
@@ -495,12 +863,27 @@ app.patch("/api/users/:id", authRequired, requireRoles(ADMIN_ROLES), (req, res) 
     const allowed = ["name", "email", "role", "status"];
     const updates = [];
     const values = [];
+    let invalidRole = false;
     allowed.forEach((field) => {
         if (req.body[field] !== undefined) {
+            if (field === "role") {
+                const resolvedRole = resolveActiveRoleName(req.body[field]);
+                if (!resolvedRole) {
+                    invalidRole = true;
+                    return;
+                }
+                updates.push(`${field} = ?`);
+                values.push(resolvedRole);
+                return;
+            }
             updates.push(`${field} = ?`);
             values.push(field === "email" ? String(req.body[field]).trim().toLowerCase() : String(req.body[field]).trim());
         }
     });
+    if (invalidRole) {
+        res.status(400).json({ error: "Unknown or inactive role" });
+        return;
+    }
     if (req.body.password) {
         updates.push("password_hash = ?");
         values.push(bcrypt.hashSync(String(req.body.password), 12));
@@ -517,7 +900,7 @@ app.patch("/api/users/:id", authRequired, requireRoles(ADMIN_ROLES), (req, res) 
     res.json(updated);
 });
 
-app.delete("/api/users/:id", authRequired, requireRoles(ADMIN_ROLES), (req, res) => {
+app.delete("/api/users/:id", authRequired, requirePermission("users.write"), (req, res) => {
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid user id" });
@@ -532,7 +915,7 @@ app.delete("/api/users/:id", authRequired, requireRoles(ADMIN_ROLES), (req, res)
     res.status(204).send();
 });
 
-app.get("/api/teams", authRequired, (_, res) => {
+app.get("/api/teams", authRequired, requirePermission("teams.read"), (_, res) => {
     const rows = db.prepare(
         `SELECT t.id, t.name, t.nation, t.category, t.status, t.created_at, u.username AS manager_username
          FROM teams t
@@ -542,7 +925,7 @@ app.get("/api/teams", authRequired, (_, res) => {
     res.json(rows);
 });
 
-app.post("/api/teams", authRequired, requireRoles(TEAM_WRITE_ROLES), (req, res) => {
+app.post("/api/teams", authRequired, requirePermission("teams.write"), (req, res) => {
     const { name, nation, category, managerUserId } = req.body || {};
     if (!requireFields(res, req.body || {}, ["name"])) return;
     const managerId = managerUserId ? parseId(managerUserId) : null;
@@ -557,7 +940,7 @@ app.post("/api/teams", authRequired, requireRoles(TEAM_WRITE_ROLES), (req, res) 
     res.status(201).json(created);
 });
 
-app.patch("/api/teams/:id", authRequired, requireRoles(TEAM_WRITE_ROLES), (req, res) => {
+app.patch("/api/teams/:id", authRequired, requirePermission("teams.write"), (req, res) => {
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid team id" });
@@ -590,7 +973,7 @@ app.patch("/api/teams/:id", authRequired, requireRoles(TEAM_WRITE_ROLES), (req, 
     res.json(updated);
 });
 
-app.delete("/api/teams/:id", authRequired, requireRoles(TEAM_WRITE_ROLES), (req, res) => {
+app.delete("/api/teams/:id", authRequired, requirePermission("teams.write"), (req, res) => {
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid team id" });
@@ -605,7 +988,7 @@ app.delete("/api/teams/:id", authRequired, requireRoles(TEAM_WRITE_ROLES), (req,
     res.status(204).send();
 });
 
-app.get("/api/teams/:id/members", authRequired, (req, res) => {
+app.get("/api/teams/:id/members", authRequired, requirePermission("team_members.read"), (req, res) => {
     const teamId = parseId(req.params.id);
     if (!teamId) {
         res.status(400).json({ error: "Invalid team id" });
@@ -615,7 +998,7 @@ app.get("/api/teams/:id/members", authRequired, (req, res) => {
     res.json(rows);
 });
 
-app.post("/api/teams/:id/members", authRequired, requireRoles(TEAM_WRITE_ROLES), (req, res) => {
+app.post("/api/teams/:id/members", authRequired, requirePermission("team_members.write"), (req, res) => {
     const teamId = parseId(req.params.id);
     if (!teamId) {
         res.status(400).json({ error: "Invalid team id" });
@@ -634,7 +1017,7 @@ app.post("/api/teams/:id/members", authRequired, requireRoles(TEAM_WRITE_ROLES),
     res.status(201).json(created);
 });
 
-app.patch("/api/team-members/:id", authRequired, requireRoles(TEAM_WRITE_ROLES), (req, res) => {
+app.patch("/api/team-members/:id", authRequired, requirePermission("team_members.write"), (req, res) => {
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid member id" });
@@ -671,7 +1054,7 @@ app.patch("/api/team-members/:id", authRequired, requireRoles(TEAM_WRITE_ROLES),
     res.json(updated);
 });
 
-app.delete("/api/team-members/:id", authRequired, requireRoles(TEAM_WRITE_ROLES), (req, res) => {
+app.delete("/api/team-members/:id", authRequired, requirePermission("team_members.write"), (req, res) => {
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid member id" });
@@ -686,11 +1069,11 @@ app.delete("/api/team-members/:id", authRequired, requireRoles(TEAM_WRITE_ROLES)
     res.status(204).send();
 });
 
-app.get("/api/seasons", authRequired, (_, res) => {
+app.get("/api/seasons", authRequired, requirePermission("seasons.read"), (_, res) => {
     res.json(db.prepare("SELECT * FROM seasons ORDER BY id DESC").all());
 });
 
-app.post("/api/seasons", authRequired, requireRoles(ADMIN_ROLES), (req, res) => {
+app.post("/api/seasons", authRequired, requirePermission("seasons.write"), (req, res) => {
     const { name, startDate, endDate, pointsRules, status } = req.body || {};
     if (!requireFields(res, req.body || {}, ["name"])) return;
     const result = db
@@ -704,7 +1087,7 @@ app.post("/api/seasons", authRequired, requireRoles(ADMIN_ROLES), (req, res) => 
     res.status(201).json(created);
 });
 
-app.delete("/api/seasons/:id", authRequired, requireRoles(ADMIN_ROLES), (req, res) => {
+app.delete("/api/seasons/:id", authRequired, requirePermission("seasons.write"), (req, res) => {
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid season id" });
@@ -719,7 +1102,7 @@ app.delete("/api/seasons/:id", authRequired, requireRoles(ADMIN_ROLES), (req, re
     res.status(204).send();
 });
 
-app.get("/api/events", authRequired, (_, res) => {
+app.get("/api/events", authRequired, requirePermission("events.read"), (_, res) => {
     const rows = db.prepare(
         `SELECT e.*, s.name AS season_name
          FROM events e
@@ -729,7 +1112,7 @@ app.get("/api/events", authRequired, (_, res) => {
     res.json(rows);
 });
 
-app.post("/api/events", authRequired, requireRoles(JURY_WRITE_ROLES), (req, res) => {
+app.post("/api/events", authRequired, requirePermission("events.write"), (req, res) => {
     const { name, location, eventDate, seasonId, eventType, status } = req.body || {};
     if (!requireFields(res, req.body || {}, ["name"])) return;
     const result = db
@@ -750,7 +1133,7 @@ app.post("/api/events", authRequired, requireRoles(JURY_WRITE_ROLES), (req, res)
     res.status(201).json(created);
 });
 
-app.patch("/api/events/:id", authRequired, requireRoles(JURY_WRITE_ROLES), (req, res) => {
+app.patch("/api/events/:id", authRequired, requirePermission("events.write"), (req, res) => {
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid event id" });
@@ -791,7 +1174,7 @@ app.patch("/api/events/:id", authRequired, requireRoles(JURY_WRITE_ROLES), (req,
     res.json(updated);
 });
 
-app.delete("/api/events/:id", authRequired, requireRoles(JURY_WRITE_ROLES), (req, res) => {
+app.delete("/api/events/:id", authRequired, requirePermission("events.write"), (req, res) => {
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid event id" });
@@ -806,7 +1189,7 @@ app.delete("/api/events/:id", authRequired, requireRoles(JURY_WRITE_ROLES), (req
     res.status(204).send();
 });
 
-app.get("/api/jury-decisions", authRequired, (req, res) => {
+app.get("/api/jury-decisions", authRequired, requirePermission("jury_decisions.read"), (req, res) => {
     const eventId = req.query.eventId ? parseId(req.query.eventId) : null;
     if (req.query.eventId && !eventId) {
         res.status(400).json({ error: "Invalid event id" });
@@ -824,7 +1207,7 @@ app.get("/api/jury-decisions", authRequired, (req, res) => {
     res.json(rows);
 });
 
-app.post("/api/jury-decisions", authRequired, requireRoles(JURY_WRITE_ROLES), (req, res) => {
+app.post("/api/jury-decisions", authRequired, requirePermission("jury_decisions.write"), (req, res) => {
     const { eventId, decisionType, notes } = req.body || {};
     if (!requireFields(res, req.body || {}, ["decisionType", "notes"])) return;
     const result = db
@@ -838,7 +1221,7 @@ app.post("/api/jury-decisions", authRequired, requireRoles(JURY_WRITE_ROLES), (r
     res.status(201).json(created);
 });
 
-app.delete("/api/jury-decisions/:id", authRequired, requireRoles(JURY_WRITE_ROLES), (req, res) => {
+app.delete("/api/jury-decisions/:id", authRequired, requirePermission("jury_decisions.write"), (req, res) => {
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid decision id" });
@@ -853,11 +1236,11 @@ app.delete("/api/jury-decisions/:id", authRequired, requireRoles(JURY_WRITE_ROLE
     res.status(204).send();
 });
 
-app.get("/api/point-rules", authRequired, (_, res) => {
+app.get("/api/point-rules", authRequired, requirePermission("point_rules.read"), (_, res) => {
     res.json(db.prepare("SELECT * FROM point_rules ORDER BY id DESC").all());
 });
 
-app.post("/api/point-rules", authRequired, requireRoles(JURY_WRITE_ROLES), (req, res) => {
+app.post("/api/point-rules", authRequired, requirePermission("point_rules.write"), (req, res) => {
     const { name, ruleType, config, active } = req.body || {};
     if (!requireFields(res, req.body || {}, ["name", "ruleType"])) return;
     const configJson = JSON.stringify(config || {});
@@ -869,7 +1252,7 @@ app.post("/api/point-rules", authRequired, requireRoles(JURY_WRITE_ROLES), (req,
     res.status(201).json(created);
 });
 
-app.delete("/api/point-rules/:id", authRequired, requireRoles(JURY_WRITE_ROLES), (req, res) => {
+app.delete("/api/point-rules/:id", authRequired, requirePermission("point_rules.write"), (req, res) => {
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid point rule id" });
@@ -884,7 +1267,7 @@ app.delete("/api/point-rules/:id", authRequired, requireRoles(JURY_WRITE_ROLES),
     res.status(204).send();
 });
 
-app.get("/api/event-scores", authRequired, (req, res) => {
+app.get("/api/event-scores", authRequired, requirePermission("event_scores.read"), (req, res) => {
     const eventId = req.query.eventId ? parseId(req.query.eventId) : null;
     if (req.query.eventId && !eventId) {
         res.status(400).json({ error: "Invalid event id" });
@@ -904,7 +1287,7 @@ app.get("/api/event-scores", authRequired, (req, res) => {
     res.json(rows);
 });
 
-app.post("/api/event-scores", authRequired, requireRoles(JURY_WRITE_ROLES), (req, res) => {
+app.post("/api/event-scores", authRequired, requirePermission("event_scores.write"), (req, res) => {
     const { eventId, entryName, rankPosition, points, bonusPoints, notes } = req.body || {};
     if (!requireFields(res, req.body || {}, ["entryName"])) return;
     const result = db
@@ -925,7 +1308,7 @@ app.post("/api/event-scores", authRequired, requireRoles(JURY_WRITE_ROLES), (req
     res.status(201).json(created);
 });
 
-app.delete("/api/event-scores/:id", authRequired, requireRoles(JURY_WRITE_ROLES), (req, res) => {
+app.delete("/api/event-scores/:id", authRequired, requirePermission("event_scores.write"), (req, res) => {
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid score id" });
@@ -940,7 +1323,7 @@ app.delete("/api/event-scores/:id", authRequired, requireRoles(JURY_WRITE_ROLES)
     res.status(204).send();
 });
 
-app.get("/api/transfers", authRequired, (_, res) => {
+app.get("/api/transfers", authRequired, requirePermission("transfers.read"), (_, res) => {
     const rows = db.prepare(
         `SELECT tr.*, tf.name AS from_team_name, tt.name AS to_team_name
          FROM transfers tr
@@ -951,7 +1334,7 @@ app.get("/api/transfers", authRequired, (_, res) => {
     res.json(rows);
 });
 
-app.post("/api/transfers", authRequired, requireRoles(ADMIN_ROLES), (req, res) => {
+app.post("/api/transfers", authRequired, requirePermission("transfers.write"), (req, res) => {
     const { athleteName, fromTeamId, toTeamId, status, lockUntil, isEmergency, notes } = req.body || {};
     if (!requireFields(res, req.body || {}, ["athleteName"])) return;
     const result = db
@@ -973,7 +1356,7 @@ app.post("/api/transfers", authRequired, requireRoles(ADMIN_ROLES), (req, res) =
     res.status(201).json(created);
 });
 
-app.delete("/api/transfers/:id", authRequired, requireRoles(ADMIN_ROLES), (req, res) => {
+app.delete("/api/transfers/:id", authRequired, requirePermission("transfers.write"), (req, res) => {
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid transfer id" });
@@ -988,11 +1371,11 @@ app.delete("/api/transfers/:id", authRequired, requireRoles(ADMIN_ROLES), (req, 
     res.status(204).send();
 });
 
-app.get("/api/contracts", authRequired, (_, res) => {
+app.get("/api/contracts", authRequired, requirePermission("contracts.read"), (_, res) => {
     res.json(db.prepare("SELECT * FROM contracts ORDER BY id DESC").all());
 });
 
-app.post("/api/contracts", authRequired, requireRoles(ADMIN_ROLES), (req, res) => {
+app.post("/api/contracts", authRequired, requirePermission("contracts.write"), (req, res) => {
     const { fileName, entityType, entityId, status, expiresAt } = req.body || {};
     if (!requireFields(res, req.body || {}, ["fileName", "entityType"])) return;
     const result = db
@@ -1006,7 +1389,7 @@ app.post("/api/contracts", authRequired, requireRoles(ADMIN_ROLES), (req, res) =
     res.status(201).json(created);
 });
 
-app.delete("/api/contracts/:id", authRequired, requireRoles(ADMIN_ROLES), (req, res) => {
+app.delete("/api/contracts/:id", authRequired, requirePermission("contracts.write"), (req, res) => {
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid contract id" });
@@ -1021,11 +1404,11 @@ app.delete("/api/contracts/:id", authRequired, requireRoles(ADMIN_ROLES), (req, 
     res.status(204).send();
 });
 
-app.get("/api/publications", authRequired, (_, res) => {
+app.get("/api/publications", authRequired, requirePermission("publications.read"), (_, res) => {
     res.json(db.prepare("SELECT * FROM publications ORDER BY id DESC").all());
 });
 
-app.post("/api/publications", authRequired, requireRoles(REPORT_WRITE_ROLES), (req, res) => {
+app.post("/api/publications", authRequired, requirePermission("publications.write"), (req, res) => {
     const { title, format, status, publishedAt } = req.body || {};
     if (!requireFields(res, req.body || {}, ["title", "format"])) return;
     const result = db
@@ -1036,7 +1419,7 @@ app.post("/api/publications", authRequired, requireRoles(REPORT_WRITE_ROLES), (r
     res.status(201).json(created);
 });
 
-app.delete("/api/publications/:id", authRequired, requireRoles(REPORT_WRITE_ROLES), (req, res) => {
+app.delete("/api/publications/:id", authRequired, requirePermission("publications.write"), (req, res) => {
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid publication id" });
@@ -1051,7 +1434,7 @@ app.delete("/api/publications/:id", authRequired, requireRoles(REPORT_WRITE_ROLE
     res.status(204).send();
 });
 
-app.get("/api/settings", authRequired, (_, res) => {
+app.get("/api/settings", authRequired, requirePermission("settings.read"), (_, res) => {
     const rows = db.prepare("SELECT key, value_json, updated_at FROM settings ORDER BY key ASC").all();
     const mapped = rows.map((row) => {
         let parsedValue = null;
@@ -1065,7 +1448,7 @@ app.get("/api/settings", authRequired, (_, res) => {
     res.json(mapped);
 });
 
-app.post("/api/settings", authRequired, requireRoles(ADMIN_ROLES), (req, res) => {
+app.post("/api/settings", authRequired, requirePermission("settings.write"), (req, res) => {
     const key = String(req.body?.key || "").trim();
     if (!key) {
         res.status(400).json({ error: "Missing setting key" });
@@ -1083,7 +1466,7 @@ app.post("/api/settings", authRequired, requireRoles(ADMIN_ROLES), (req, res) =>
     res.json({ key, value: req.body?.value ?? null });
 });
 
-app.put("/api/settings/:key", authRequired, requireRoles(ADMIN_ROLES), (req, res) => {
+app.put("/api/settings/:key", authRequired, requirePermission("settings.write"), (req, res) => {
     const key = String(req.params.key || "").trim();
     if (!key) {
         res.status(400).json({ error: "Missing setting key" });

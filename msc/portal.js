@@ -197,7 +197,7 @@ function scheduleLiveRefresh() {
             if (page === "dashboard.html") {
                 await loadDashboard();
             } else if (page === "users.html") {
-                await loadUsers();
+                await Promise.all([loadUsers(), loadRolesAndPermissions()]);
             } else if (page === "teams.html") {
                 await loadTeams();
             } else if (page === "events.html") {
@@ -393,6 +393,15 @@ function tableRow(cells) {
     return `<tr>${cells.map((cell) => `<td>${cell ?? ""}</td>`).join("")}</tr>`;
 }
 
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+}
+
 function findByIds(ids) {
     for (const id of ids) {
         const element = document.getElementById(id);
@@ -524,46 +533,239 @@ async function loadDashboard() {
 
 // ============ USERS ============
 
+const PERMISSION_LABELS = {
+    "dashboard.read": "Dashboard lesen",
+    "users.read": "Benutzer lesen",
+    "users.write": "Benutzer verwalten",
+    "roles.read": "Rollen lesen",
+    "roles.write": "Rollen verwalten",
+    "teams.read": "Teams lesen",
+    "teams.write": "Teams verwalten",
+    "team_members.read": "Teammitglieder lesen",
+    "team_members.write": "Teammitglieder verwalten",
+    "events.read": "Events lesen",
+    "events.write": "Events verwalten",
+    "jury_decisions.read": "Jury-Entscheide lesen",
+    "jury_decisions.write": "Jury-Entscheide verwalten",
+    "point_rules.read": "Punkteregeln lesen",
+    "point_rules.write": "Punkteregeln verwalten",
+    "event_scores.read": "Event-Punkte lesen",
+    "event_scores.write": "Event-Punkte verwalten",
+    "transfers.read": "Transfers lesen",
+    "transfers.write": "Transfers verwalten",
+    "contracts.read": "Verträge lesen",
+    "contracts.write": "Verträge verwalten",
+    "publications.read": "Publikationen lesen",
+    "publications.write": "Publikationen verwalten",
+    "audit.read": "Audit-Logs lesen",
+    "settings.read": "Einstellungen lesen",
+    "settings.write": "Einstellungen verwalten"
+};
+
+const usersPageState = {
+    users: [],
+    roles: [],
+    permissions: [],
+    editingRoleId: null
+};
+
+function permissionLabel(permission) {
+    return PERMISSION_LABELS[permission] || permission;
+}
+
+function renderRoleSelectOptions(selectedRole = "") {
+    const options = usersPageState.roles
+        .filter((role) => role.status === "active")
+        .map((role) => `<option value="${escapeHtml(role.name)}" ${role.name === selectedRole ? "selected" : ""}>${escapeHtml(role.name)}</option>`)
+        .join("");
+    return `<option value="" disabled ${selectedRole ? "" : "selected"}>Rolle auswählen</option>${options}`;
+}
+
+function renderCreateUserRoleSelect() {
+    const select = document.getElementById("create-user-role");
+    if (!select) return;
+    select.innerHTML = renderRoleSelectOptions();
+}
+
+function permissionGroupName(permission) {
+    return permission.split(".")[0] || "allgemein";
+}
+
+function groupedPermissions(permissions) {
+    return permissions.reduce((groups, permission) => {
+        const group = permissionGroupName(permission);
+        if (!groups[group]) groups[group] = [];
+        groups[group].push(permission);
+        return groups;
+    }, {});
+}
+
+function renderPermissionMatrix(selected = []) {
+    const container = document.getElementById("permission-matrix");
+    if (!container) return;
+    const groups = groupedPermissions(usersPageState.permissions);
+    const selectedSet = new Set(selected);
+    const sections = Object.entries(groups).map(([group, permissions]) => {
+        const rows = permissions.map((permission) => `
+            <label class="permission-item">
+                <input type="checkbox" name="permissions" value="${escapeHtml(permission)}" ${selectedSet.has(permission) ? "checked" : ""} />
+                <span>${escapeHtml(permissionLabel(permission))}</span>
+            </label>
+        `).join("");
+        return `
+            <div class="permission-group">
+                <h4>${escapeHtml(group.replaceAll("_", " "))}</h4>
+                <div class="permission-list">${rows}</div>
+            </div>
+        `;
+    }).join("");
+    container.innerHTML = sections || `<p class="table-empty">Keine Berechtigungen verfügbar.</p>`;
+}
+
+function readRoleFormPayload() {
+    const form = document.getElementById("role-form");
+    const formData = new FormData(form);
+    const permissions = formData.getAll("permissions");
+    return {
+        name: String(formData.get("name") || "").trim(),
+        description: String(formData.get("description") || "").trim(),
+        status: formData.get("status") === "inactive" ? "inactive" : "active",
+        permissions
+    };
+}
+
+function resetRoleForm() {
+    const form = document.getElementById("role-form");
+    if (!form) return;
+    form.reset();
+    const status = form.querySelector("select[name='status']");
+    if (status) status.value = "active";
+    const nameInput = form.querySelector("input[name='name']");
+    if (nameInput) nameInput.disabled = false;
+    usersPageState.editingRoleId = null;
+    const submit = document.getElementById("role-submit-button");
+    if (submit) submit.textContent = "Rolle erstellen";
+    const cancel = document.getElementById("role-cancel-edit");
+    if (cancel) cancel.classList.add("hidden");
+    renderPermissionMatrix([]);
+}
+
+function fillRoleForm(role) {
+    const form = document.getElementById("role-form");
+    if (!form || !role) return;
+    form.elements.name.value = role.name || "";
+    form.elements.name.disabled = role.is_system === true;
+    form.elements.description.value = role.description || "";
+    form.elements.status.value = role.status === "inactive" ? "inactive" : "active";
+    renderPermissionMatrix(Array.isArray(role.permissions) ? role.permissions : []);
+    usersPageState.editingRoleId = role.id;
+    const submit = document.getElementById("role-submit-button");
+    if (submit) submit.textContent = "Rolle speichern";
+    const cancel = document.getElementById("role-cancel-edit");
+    if (cancel) cancel.classList.remove("hidden");
+}
+
+async function loadRolesAndPermissions() {
+    const [roles, permissionPayload] = await Promise.all([api("/roles"), api("/permissions")]);
+    usersPageState.roles = Array.isArray(roles) ? roles : [];
+    usersPageState.permissions = Array.isArray(permissionPayload?.permissions) ? permissionPayload.permissions : [];
+    renderCreateUserRoleSelect();
+    renderPermissionMatrix([]);
+    renderRolesTable();
+}
+
+function renderRolesTable() {
+    const tbody = document.getElementById("roles-list-tbody");
+    if (!tbody) return;
+    const html = usersPageState.roles.map((role) => {
+        const preview = (role.permissions || []).slice(0, 4).map((p) => `<span class="permission-pill">${escapeHtml(permissionLabel(p))}</span>`).join("");
+        const extra = (role.permissions || []).length > 4 ? `<span class="permission-pill">+${(role.permissions || []).length - 4} weitere</span>` : "";
+        return `
+            <tr>
+                <td><strong>${escapeHtml(role.name)}</strong></td>
+                <td>${escapeHtml(role.description || "—")}</td>
+                <td>${statusBadge(role.status)}</td>
+                <td><div class="permission-pill-list">${preview}${extra}</div></td>
+                <td>${role.user_count || 0}</td>
+                <td>
+                    <button class="btn btn-small btn-secondary" data-edit-role="${role.id}">Bearbeiten</button>
+                    <button class="btn btn-small btn-danger" data-delete-role="${role.id}" ${role.is_system ? "disabled" : ""}>Löschen</button>
+                </td>
+            </tr>
+        `;
+    }).join("");
+    tbody.innerHTML = html || `<tr><td colspan="6" class="table-empty">Keine Rollen vorhanden</td></tr>`;
+
+    document.querySelectorAll("[data-edit-role]").forEach((buttonNode) => {
+        buttonNode.addEventListener("click", () => {
+            const roleId = Number(buttonNode.getAttribute("data-edit-role"));
+            const role = usersPageState.roles.find((entry) => entry.id === roleId);
+            fillRoleForm(role);
+            const tabButton = document.querySelector(".tab-button[data-tab='tab-roles-editor']");
+            if (tabButton) activateTab(tabButton);
+        });
+    });
+
+    document.querySelectorAll("[data-delete-role]").forEach((buttonNode) => {
+        buttonNode.addEventListener("click", () => {
+            const roleId = Number(buttonNode.getAttribute("data-delete-role"));
+            const role = usersPageState.roles.find((entry) => entry.id === roleId);
+            if (!role) return;
+            confirmDelete(`Rolle ${role.name}`, async () => {
+                try {
+                    await api(`/roles/${role.id}`, { method: "DELETE" });
+                    showToast(`Rolle ${role.name} wurde gelöscht`, "success");
+                    await loadRolesAndPermissions();
+                    await loadUsers();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+        });
+    });
+}
+
 async function loadUsers() {
     const users = await api("/users");
+    usersPageState.users = Array.isArray(users) ? users : [];
     const container = findByIds(["users-list", "users-list-tbody"]);
     if (!container) return;
-    
-    const html = users.map(u => `
+
+    const html = usersPageState.users.map((user) => `
         <tr>
-            <td><strong>${u.name}</strong></td>
-            <td><code>${u.username}</code></td>
-            <td><span class="badge badge-info">${u.role}</span></td>
-            <td>${statusBadge(u.status)}</td>
-            <td>${u.last_login_at ? new Date(u.last_login_at).toLocaleDateString("de-DE") : "—"}</td>
+            <td><strong>${escapeHtml(user.name)}</strong></td>
+            <td><code>${escapeHtml(user.username)}</code></td>
+            <td>${escapeHtml(user.email || "—")}</td>
+            <td><span class="badge badge-info">${escapeHtml(user.role || "—")}</span></td>
+            <td>${statusBadge(user.status)}</td>
+            <td>${user.last_login_at ? new Date(user.last_login_at).toLocaleDateString("de-DE") : "—"}</td>
             <td>
-                <button class="btn btn-small btn-secondary" data-edit-user="${u.id}">Bearbeiten</button>
-                <button class="btn btn-small btn-danger" data-delete-user="${u.id}">Löschen</button>
+                <button class="btn btn-small btn-secondary" data-edit-user="${user.id}">Bearbeiten</button>
+                <button class="btn btn-small btn-danger" data-delete-user="${user.id}">Löschen</button>
             </td>
         </tr>
     `).join("");
-    
-    container.innerHTML = html || `<tr><td colspan='6' class="table-empty">Keine Benutzer vorhanden</td></tr>`;
-    
-    // Wire up edit handlers
-    document.querySelectorAll("[data-edit-user]").forEach(btn => {
-        btn.addEventListener("click", async () => {
-            const userId = btn.dataset.editUser;
-            const user = users.find(u => u.id == userId);
+
+    container.innerHTML = html || `<tr><td colspan="7" class="table-empty">Keine Benutzer vorhanden</td></tr>`;
+
+    document.querySelectorAll("[data-edit-user]").forEach((buttonNode) => {
+        buttonNode.addEventListener("click", () => {
+            const userId = Number(buttonNode.getAttribute("data-edit-user"));
+            const user = usersPageState.users.find((entry) => entry.id === userId);
             showEditUserModal(user);
         });
     });
-    
-    // Wire up delete handlers
-    document.querySelectorAll("[data-delete-user]").forEach(btn => {
-        btn.addEventListener("click", () => {
-            const userId = btn.dataset.deleteUser;
-            const user = users.find(u => u.id == userId);
+
+    document.querySelectorAll("[data-delete-user]").forEach((buttonNode) => {
+        buttonNode.addEventListener("click", () => {
+            const userId = Number(buttonNode.getAttribute("data-delete-user"));
+            const user = usersPageState.users.find((entry) => entry.id === userId);
+            if (!user) return;
             confirmDelete(user.name, async () => {
                 try {
                     await api(`/users/${userId}`, { method: "DELETE" });
                     showToast(`${user.name} wurde gelöscht`, "success");
-                    loadUsers();
+                    await loadUsers();
                 } catch (error) {
                     showToast(error.message, "error");
                 }
@@ -573,29 +775,28 @@ async function loadUsers() {
 }
 
 async function showEditUserModal(user) {
+    if (!user) return;
+    if (usersPageState.roles.length === 0) {
+        await loadRolesAndPermissions();
+    }
+    const roleOptions = renderRoleSelectOptions(user.role);
     const content = `
         <form id="edit-user-form">
             <div class="form-group">
                 <label>Benutzerkennung</label>
-                <input type="text" value="${user.username}" disabled />
+                <input type="text" value="${escapeHtml(user.username)}" disabled />
             </div>
             <div class="form-group">
                 <label>Name</label>
-                <input type="text" name="name" value="${user.name}" required />
+                <input type="text" name="name" value="${escapeHtml(user.name)}" required />
             </div>
             <div class="form-group">
                 <label>E-Mail</label>
-                <input type="email" name="email" value="${user.email}" required />
+                <input type="email" name="email" value="${escapeHtml(user.email || "")}" required />
             </div>
             <div class="form-group">
                 <label>Rolle</label>
-                <select name="role" required>
-                    <option value="MSC Admin" ${user.role === "MSC Admin" ? "selected" : ""}>MSC Admin</option>
-                    <option value="Teammanager" ${user.role === "Teammanager" ? "selected" : ""}>Teammanager</option>
-                    <option value="Jury" ${user.role === "Jury" ? "selected" : ""}>Jury / Wettkampfleitung</option>
-                    <option value="Lizenzstelle" ${user.role === "Lizenzstelle" ? "selected" : ""}>Lizenzstelle</option>
-                    <option value="Reporter" ${user.role === "Reporter" ? "selected" : ""}>Reporter / Media</option>
-                </select>
+                <select name="role" required>${roleOptions}</select>
             </div>
             <div class="form-group">
                 <label>Status</label>
@@ -604,26 +805,93 @@ async function showEditUserModal(user) {
                     <option value="inactive" ${user.status === "inactive" ? "selected" : ""}>Inaktiv</option>
                 </select>
             </div>
+            <div class="form-group">
+                <label>Neues Passwort (optional)</label>
+                <input type="password" name="password" placeholder="Nur bei Passwortwechsel ausfüllen" />
+            </div>
         </form>
     `;
-    
-    showModal(`Benutzer bearbeiten: ${user.name}`, content, [
+
+    showModal(`Benutzer bearbeiten: ${escapeHtml(user.name)}`, content, [
         { id: "cancel", label: "Abbrechen", primary: false, handler: () => {} },
-        { id: "save", label: "Speichern", primary: true, handler: async () => {
-            const form = document.getElementById("edit-user-form");
-            const data = getFormData(form);
+        {
+            id: "save",
+            label: "Speichern",
+            primary: true,
+            handler: async () => {
+                const form = document.getElementById("edit-user-form");
+                const data = getFormData(form);
+                if (!data.password) delete data.password;
+                try {
+                    await api(`/users/${user.id}`, {
+                        method: "PATCH",
+                        body: JSON.stringify(data)
+                    });
+                    showToast(`${user.name} wurde aktualisiert`, "success");
+                    await loadUsers();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            }
+        }
+    ]);
+}
+
+async function setupUsersPage() {
+    const createUserForm = document.getElementById("create-user-form");
+    if (createUserForm) {
+        createUserForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const data = getFormData(createUserForm);
             try {
-                await api(`/users/${user.id}`, {
-                    method: "PUT",
-                    body: JSON.stringify(data)
-                });
-                showToast(`${user.name} wurde aktualisiert`, "success");
-                loadUsers();
+                await api("/users", { method: "POST", body: JSON.stringify(data) });
+                createUserForm.reset();
+                renderCreateUserRoleSelect();
+                showToast("Benutzer erstellt", "success");
+                await loadUsers();
             } catch (error) {
                 showToast(error.message, "error");
             }
-        }}
-    ]);
+        });
+    }
+
+    const roleForm = document.getElementById("role-form");
+    if (roleForm) {
+        roleForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const payload = readRoleFormPayload();
+            if (!payload.name) {
+                showToast("Bitte einen Rollennamen eingeben.", "error");
+                return;
+            }
+            try {
+                if (usersPageState.editingRoleId) {
+                    await api(`/roles/${usersPageState.editingRoleId}`, {
+                        method: "PATCH",
+                        body: JSON.stringify(payload)
+                    });
+                    showToast("Rolle aktualisiert", "success");
+                } else {
+                    await api("/roles", {
+                        method: "POST",
+                        body: JSON.stringify(payload)
+                    });
+                    showToast("Rolle erstellt", "success");
+                }
+                resetRoleForm();
+                await loadRolesAndPermissions();
+                await loadUsers();
+            } catch (error) {
+                showToast(error.message, "error");
+            }
+        });
+    }
+
+    document.getElementById("role-cancel-edit")?.addEventListener("click", () => {
+        resetRoleForm();
+    });
+
+    await Promise.all([loadUsers(), loadRolesAndPermissions()]);
 }
 
 // ============ TEAMS PAGE ============
@@ -782,7 +1050,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (page === "dashboard.html") {
                 await loadDashboard();
             } else if (page === "users.html") {
-                await loadUsers();
+                await setupUsersPage();
             } else if (page === "teams.html") {
                 await loadTeams();
             } else if (page === "events.html") {

@@ -37,69 +37,114 @@
             <div class="portal-content">
                 <div class="card">
                     <div class="card-header">
-                        <h2>Neuen Benutzer erstellen</h2>
+                        <h2>Verwaltung</h2>
                     </div>
                     <div class="card-body">
-                        <form id="create-user-form" class="grid-2">
-                            <div class="form-group">
-                                <label>Benutzerkennung</label>
-                                <input type="text" name="username" required />
-                            </div>
-                            <div class="form-group">
-                                <label>Name</label>
-                                <input type="text" name="name" required />
-                            </div>
-                            <div class="form-group">
-                                <label>E-Mail</label>
-                                <input type="email" name="email" required />
-                            </div>
-                            <div class="form-group">
-                                <label>Rolle</label>
-                                <select name="role" required>
-                                    <option value="msc_admin">MSC Admin</option>
-                                    <option value="teammanager">Teammanager</option>
-                                    <option value="jury">Jury</option>
-                                    <option value="lizenzstelle">Lizenzstelle</option>
-                                    <option value="reporter">Reporter</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Passwort</label>
-                                <input type="password" name="password" required />
-                            </div>
-                            <div class="form-group">
-                                <label>Status</label>
-                                <select name="status" required>
-                                    <option value="active">Aktiv</option>
-                                    <option value="inactive">Inaktiv</option>
-                                </select>
-                            </div>
-                            <div class="form-actions">
-                                <button type="submit" class="btn btn-primary">Benutzer erstellen</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+                        <div class="tabs">
+                            <button class="tab-button active" data-tab="tab-users-admin">Benutzer verwalten</button>
+                            <button class="tab-button" data-tab="tab-roles-admin">Rollenübersicht</button>
+                            <button class="tab-button" data-tab="tab-roles-editor">Rollenrechte bearbeiten</button>
+                        </div>
 
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Benutzer</h2>
-                    </div>
-                    <div class="card-body">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Benutzerkennung</th>
-                                    <th>E-Mail</th>
-                                    <th>Rolle</th>
-                                    <th>Status</th>
-                                    <th>Letzter Login</th>
-                                    <th>Aktion</th>
-                                </tr>
-                            </thead>
-                            <tbody id="users-list-tbody"></tbody>
-                        </table>
+                        <div class="tab-content active" id="tab-users-admin">
+                            <form id="create-user-form" class="grid-2">
+                                <div class="form-group">
+                                    <label for="create-user-username">Benutzerkennung</label>
+                                    <input id="create-user-username" type="text" name="username" required placeholder="z. B. max.mueller" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="create-user-name">Vollständiger Name</label>
+                                    <input id="create-user-name" type="text" name="name" required placeholder="z. B. Max Müller" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="create-user-email">E-Mail</label>
+                                    <input id="create-user-email" type="email" name="email" required placeholder="z. B. max@verein.de" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="create-user-role">Rolle</label>
+                                    <select id="create-user-role" name="role" required></select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="create-user-password">Passwort</label>
+                                    <input id="create-user-password" type="password" name="password" required placeholder="Mindestens 8 Zeichen empfohlen" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="create-user-status">Status</label>
+                                    <select id="create-user-status" name="status" required>
+                                        <option value="active">Aktiv</option>
+                                        <option value="inactive">Inaktiv</option>
+                                    </select>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary">Benutzer erstellen</button>
+                                </div>
+                            </form>
+
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Benutzerkennung</th>
+                                            <th>E-Mail</th>
+                                            <th>Rolle</th>
+                                            <th>Status</th>
+                                            <th>Letzter Login</th>
+                                            <th>Aktion</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="users-list-tbody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="tab-content" id="tab-roles-admin">
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Rolle</th>
+                                            <th>Beschreibung</th>
+                                            <th>Status</th>
+                                            <th>Berechtigungen</th>
+                                            <th>Benutzer</th>
+                                            <th>Aktion</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="roles-list-tbody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="tab-content" id="tab-roles-editor">
+                            <form id="role-form">
+                                <div class="grid-2">
+                                    <div class="form-group">
+                                        <label for="role-name">Rollenname</label>
+                                        <input id="role-name" type="text" name="name" required placeholder="z. B. Event Koordinator" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="role-status">Status</label>
+                                        <select id="role-status" name="status" required>
+                                            <option value="active">Aktiv</option>
+                                            <option value="inactive">Inaktiv</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="role-description">Beschreibung</label>
+                                    <input id="role-description" type="text" name="description" placeholder="Kurze Beschreibung der Aufgabe und Verantwortung" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Berechtigungen</label>
+                                    <div id="permission-matrix" class="permission-matrix"></div>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="submit" id="role-submit-button" class="btn btn-primary">Rolle erstellen</button>
+                                    <button type="button" id="role-cancel-edit" class="btn btn-secondary hidden">Bearbeitung abbrechen</button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -107,22 +152,5 @@
     </div>
 
     <script src="portal.js"></script>
-    <script>
-        if (!isLoginPage()) {
-            document.getElementById("create-user-form")?.addEventListener("submit", async (e) => {
-                e.preventDefault();
-                const data = getFormData(document.getElementById("create-user-form"));
-                try {
-                    await api("/users", { method: "POST", body: JSON.stringify(data) });
-                    showToast("Benutzer erstellt", "success");
-                    loadUsers();
-                } catch (error) {
-                    showToast(error.message, "error");
-                }
-            });
-            
-            document.addEventListener("DOMContentLoaded", loadUsers);
-        }
-    </script>
 </body>
 </html>
