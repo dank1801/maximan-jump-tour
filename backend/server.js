@@ -14,7 +14,7 @@ const PORT = Number(process.env.PORT || 3000);
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const JWT_SECRET = process.env.JWT_SECRET || "";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
-const DB_DIR = path.join(__dirname, "..", ".runtime", "data");
+const DB_DIR = IS_PRODUCTION ? "/var/data" : path.join(__dirname, "..", ".runtime", "data");
 const DB_PATH = path.join(DB_DIR, "msc-portal.db");
 const STATIC_ROOT = path.join(__dirname, "..");
 
