@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Account aktivieren - MSC Portal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 420px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo h1 {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .logo p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .status {
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .status.loading {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .status.success {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+
+        .status.warning {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group input:disabled {
+            background: #f5f5f5;
+            color: #999;
+        }
+
+        .password-strength {
+            margin-top: 8px;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: none;
+        }
+
+        .password-strength.show {
+            display: block;
+        }
+
+        .password-strength.weak {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+
+        .password-strength.fair {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+
+        .password-strength.good {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #efefef;
+        }
+
+        .info-box {
+            background: #f5f5f5;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .info-box strong {
+            color: #333;
+        }
+
+        .text-center {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .text-center a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .text-center a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 30px 20px;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>🎿 MSC Portal</h1>
+            <p>Maximan Jump Tour - Verwaltungsportal</p>
+        </div>
+
+        <div id="loading-state" class="status loading" style="display: none;">
+            ⏳ Einladung wird validiert...
+        </div>
+
+        <div id="error-state" class="status error" style="display: none;"></div>
+
+        <div id="expired-state" class="status error" style="display: none;">
+            ⏱️ Diese Einladung ist abgelaufen. Bitte kontaktieren Sie einen Administrator.
+        </div>
+
+        <div id="success-state" class="status success" style="display: none;">
+            ✅ Account erfolgreich aktiviert!
+        </div>
+
+        <form id="invitation-form" style="display: none;">
+            <div class="info-box">
+                <strong>Willkommen!</strong><br>
+                Ein Administrator hat einen Account für Sie im MSC Portal erstellt.
+                Bitte setzen Sie jetzt Ihr Passwort, um Ihren Account zu aktivieren.
+            </div>
+
+            <div class="form-group">
+                <label>E-Mail-Adresse</label>
+                <input type="email" id="email" readonly />
+            </div>
+
+            <div class="form-group">
+                <label>Benutzername</label>
+                <input type="text" id="username" readonly />
+            </div>
+
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="name" readonly />
+            </div>
+
+            <div class="form-group">
+                <label>Rolle</label>
+                <input type="text" id="role" readonly />
+            </div>
+
+            <div class="form-group">
+                <label for="password">Passwort *</label>
+                <input 
+                    type="password" 
+                    id="password" 
+                    placeholder="Mindestens 8 Zeichen"
+                    required 
+                />
+                <div id="password-strength" class="password-strength"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="password-confirm">Passwort wiederholen *</label>
+                <input 
+                    type="password" 
+                    id="password-confirm" 
+                    placeholder="Passwort bestätigen"
+                    required 
+                />
+            </div>
+
+            <div class="button-group">
+                <button type="submit" class="btn-primary" id="submit-btn">
+                    Account aktivieren
+                </button>
+            </div>
+        </form>
+
+        <div id="redirect-info" style="display: none; margin-top: 20px;">
+            <p class="text-center">
+                Sie werden in Kürze zum Login weitergeleitet...
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const TOKEN = new URLSearchParams(window.location.search).get("token");
+        const FORM = document.getElementById("invitation-form");
+        const SUBMIT_BTN = document.getElementById("submit-btn");
+        const PASSWORD_INPUT = document.getElementById("password");
+        const PASSWORD_CONFIRM_INPUT = document.getElementById("password-confirm");
+        const PASSWORD_STRENGTH = document.getElementById("password-strength");
+
+        async function validateToken() {
+            document.getElementById("loading-state").style.display = "block";
+
+            if (!TOKEN) {
+                showError("Token ist erforderlich.");
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/invitations/${encodeURIComponent(TOKEN)}`);
+                
+                if (response.status === 410) {
+                    document.getElementById("loading-state").style.display = "none";
+                    document.getElementById("expired-state").style.display = "block";
+                    return;
+                }
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    showError(data.error || "Fehler beim Validieren der Einladung.");
+                    return;
+                }
+
+                const data = await response.json();
+                loadForm(data);
+            } catch (error) {
+                showError(`Fehler: ${error.message}`);
+            }
+        }
+
+        function loadForm(invitationData) {
+            document.getElementById("loading-state").style.display = "none";
+            document.getElementById("email").value = invitationData.email;
+            document.getElementById("username").value = invitationData.username;
+            document.getElementById("name").value = invitationData.name;
+            document.getElementById("role").value = invitationData.role;
+            FORM.style.display = "block";
+        }
+
+        function showError(message) {
+            document.getElementById("loading-state").style.display = "none";
+            document.getElementById("error-state").style.display = "block";
+            document.getElementById("error-state").textContent = "❌ " + message;
+        }
+
+        function checkPasswordStrength(password) {
+            if (password.length < 8) {
+                PASSWORD_STRENGTH.className = "password-strength show weak";
+                PASSWORD_STRENGTH.textContent = "⚠️ Passwort zu kurz (mindestens 8 Zeichen erforderlich)";
+                return false;
+            }
+
+            let strength = 0;
+            if (/[a-z]/.test(password)) strength++;
+            if (/[A-Z]/.test(password)) strength++;
+            if (/[0-9]/.test(password)) strength++;
+            if (/[^a-zA-Z0-9]/.test(password)) strength++;
+
+            PASSWORD_STRENGTH.className = "password-strength show";
+            if (strength < 2) {
+                PASSWORD_STRENGTH.className += " weak";
+                PASSWORD_STRENGTH.textContent = "⚠️ Schwaches Passwort (verwenden Sie Groß- und Kleinbuchstaben, Zahlen und Symbole)";
+                return false;
+            } else if (strength < 3) {
+                PASSWORD_STRENGTH.className += " fair";
+                PASSWORD_STRENGTH.textContent = "ℹ️ Mittleres Passwort (könnten Sie verbessern)";
+                return true;
+            } else {
+                PASSWORD_STRENGTH.className += " good";
+                PASSWORD_STRENGTH.textContent = "✅ Starkes Passwort";
+                return true;
+            }
+        }
+
+        PASSWORD_INPUT.addEventListener("input", (e) => {
+            checkPasswordStrength(e.target.value);
+        });
+
+        FORM.addEventListener("submit", async (e) => {
+            e.preventDefault();
+
+            const password = PASSWORD_INPUT.value.trim();
+            const passwordConfirm = PASSWORD_CONFIRM_INPUT.value.trim();
+
+            if (!password || password.length < 8) {
+                showError("Passwort muss mindestens 8 Zeichen lang sein.");
+                return;
+            }
+
+            if (password !== passwordConfirm) {
+                showError("Passwörter stimmen nicht überein.");
+                return;
+            }
+
+            SUBMIT_BTN.disabled = true;
+            SUBMIT_BTN.textContent = "Wird verarbeitet...";
+
+            try {
+                const response = await fetch(
+                    `/api/invitations/${encodeURIComponent(TOKEN)}/accept`,
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ password })
+                    }
+                );
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    showError(data.error || "Fehler beim Aktivieren des Accounts.");
+                    SUBMIT_BTN.disabled = false;
+                    SUBMIT_BTN.textContent = "Account aktivieren";
+                    return;
+                }
+
+                // Erfolg!
+                FORM.style.display = "none";
+                document.getElementById("success-state").style.display = "block";
+                document.getElementById("redirect-info").style.display = "block";
+
+                // Nach 2 Sekunden zum Login umleiten
+                setTimeout(() => {
+                    window.location.href = "/msc/login.html";
+                }, 2000);
+            } catch (error) {
+                showError(`Fehler: ${error.message}`);
+                SUBMIT_BTN.disabled = false;
+                SUBMIT_BTN.textContent = "Account aktivieren";
+            }
+        });
+
+        // Bei Load Token validieren
+        window.addEventListener("load", validateToken);
+    </script>
+</body>
+</html>

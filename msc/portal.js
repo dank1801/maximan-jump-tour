@@ -1101,6 +1101,24 @@ async function setupUsersPage() {
         const eventSelect = document.getElementById("create-user-event");
         const venueInput = createUserForm.querySelector("input[name='assignmentVenueCode']");
         const otherInput = createUserForm.querySelector("input[name='assignmentOtherScope']");
+        const sendInvitationCheckbox = document.getElementById("create-user-send-invitation");
+        const passwordFieldGroup = document.getElementById("password-field-group");
+        const passwordInput = document.getElementById("create-user-password");
+
+        // Toggle password field visibility based on send-invitation checkbox
+        function updatePasswordFieldVisibility() {
+            const sendInvitation = sendInvitationCheckbox.checked;
+            if (sendInvitation) {
+                passwordFieldGroup.style.display = "none";
+                passwordInput.removeAttribute("required");
+            } else {
+                passwordFieldGroup.style.display = "block";
+                passwordInput.setAttribute("required", "");
+            }
+        }
+
+        sendInvitationCheckbox?.addEventListener("change", updatePasswordFieldVisibility);
+        
         roleSelect?.addEventListener("change", () => {
             updateAssignmentFieldState(roleSelect.value, {
                 teamSelect,
@@ -1115,6 +1133,8 @@ async function setupUsersPage() {
             venueInput,
             otherInput
         });
+        updatePasswordFieldVisibility();
+
         createUserForm.addEventListener("submit", async (event) => {
             event.preventDefault();
             const data = getFormData(createUserForm);
@@ -1145,8 +1165,15 @@ async function setupUsersPage() {
             delete data.assignmentEventId;
             delete data.assignmentVenueCode;
             delete data.assignmentOtherScope;
+            delete data.sendInvitation;  // Handle separately
+
+            // Add sendInvitation flag if checkbox is checked
+            if (sendInvitationCheckbox.checked) {
+                data.sendInvitation = true;
+            }
+
             try {
-                await api("/users", { method: "POST", body: JSON.stringify(data) });
+                const response = await api("/users", { method: "POST", body: JSON.stringify(data) });
                 createUserForm.reset();
                 renderCreateUserRoleSelect();
                 renderCreateUserTeamSelect();
@@ -1157,7 +1184,15 @@ async function setupUsersPage() {
                     venueInput,
                     otherInput
                 });
-                showToast("Benutzer erstellt", "success");
+                updatePasswordFieldVisibility();
+                
+                if (response.invitation_sent) {
+                    showToast("Benutzer erstellt. Einladungs-E-Mail versendet.", "success");
+                } else if (response.sendInvitation) {
+                    showToast("Benutzer erstellt. (Hinweis: Email konnte nicht versendet werden)", "warning");
+                } else {
+                    showToast("Benutzer erstellt", "success");
+                }
                 await loadUsers();
             } catch (error) {
                 showToast(error.message, "error");

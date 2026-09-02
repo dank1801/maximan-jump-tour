@@ -84,8 +84,20 @@
                                     <input id="create-user-other" type="text" name="assignmentOtherScope" placeholder="z. B. Medical Team Nord" />
                                 </div>
                                 <div class="form-group">
+                                    <label>
+                                        <input 
+                                            id="create-user-send-invitation" 
+                                            type="checkbox" 
+                                            name="sendInvitation"
+                                            style="margin-right: 8px;"
+                                        />
+                                        Einladungs-E-Mail versenden (Benutzer setzt Passwort selbst)
+                                    </label>
+                                    <div class="help-text">Wenn aktiviert, wird eine E-Mail mit Aktivierungslink versendet. Der Benutzer setzt sein Passwort selbst.</div>
+                                </div>
+                                <div class="form-group" id="password-field-group">
                                     <label for="create-user-password">Passwort</label>
-                                    <input id="create-user-password" type="password" name="password" required placeholder="Mindestens 8 Zeichen empfohlen" />
+                                    <input id="create-user-password" type="password" name="password" placeholder="Mindestens 8 Zeichen empfohlen" />
                                 </div>
                                 <div class="form-group">
                                     <label for="create-user-status">Status</label>

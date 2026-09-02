@@ -11,6 +11,8 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const Database = require("better-sqlite3");
 const { WebSocketServer } = require("ws");
+const nodemailer = require("nodemailer");
+const crypto = require("crypto");
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -19,6 +21,10 @@ const JWT_SECRET = process.env.JWT_SECRET || "";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 const RENDER_DISK_MOUNT_PATH = process.env.RENDER_DISK_MOUNT_PATH || "";
 const REQUIRE_PERSISTENT_DB = process.env.REQUIRE_PERSISTENT_DB === "true";
+const BASE_URL = process.env.BASE_URL || (IS_PRODUCTION ? "https://maximan-jump-tour.onrender.com" : "http://localhost:3000");
+const INVITATION_TOKEN_EXPIRES_HOURS = 48;
+
+let emailTransporter = null;
 
 const DEFAULT_RUNTIME_DIR = path.join(__dirname, "..", ".runtime", "data");
 const PERSISTENT_DIR_CANDIDATES = [
@@ -308,6 +314,94 @@ function ensureRolesRequiredAssignmentsColumn() {
         db.prepare("ALTER TABLE roles ADD COLUMN required_assignments_json TEXT NOT NULL DEFAULT '[]'").run();
     }
 }
+
+function ensureInvitationsTable() {
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS invitations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            token TEXT NOT NULL UNIQUE,
+            user_id INTEGER NOT NULL,
+            email TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            expires_at TEXT NOT NULL,
+            accepted_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_invitations_token ON invitations(token);
+        CREATE INDEX IF NOT EXISTS idx_invitations_user_id ON invitations(user_id);
+    `);
+}
+
+async function initializeEmailTransporter() {
+    if (IS_PRODUCTION && process.env.SMTP_HOST) {
+        emailTransporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST,
+            port: parseInt(process.env.SMTP_PORT || "587"),
+            secure: process.env.SMTP_SECURE === "true",
+            auth: {
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASS
+            }
+        });
+    } else if (IS_PRODUCTION) {
+        console.warn("WARNUNG: Kein SMTP konfiguriert. Invitations werden nicht per Email versendet.");
+        emailTransporter = null;
+    } else {
+        try {
+            const testAccount = await nodemailer.createTestAccount();
+            emailTransporter = nodemailer.createTransport({
+                host: "smtp.ethereal.email",
+                port: 587,
+                secure: false,
+                auth: {
+                    user: testAccount.user,
+                    pass: testAccount.pass
+                }
+            });
+            console.log("Test-Email-Account konfiguriert. Preview-URLs werden in Logs angezeigt.");
+        } catch (err) {
+            console.error("Email-Transporter konnte nicht initialisiert werden:", err.message);
+            emailTransporter = null;
+        }
+    }
+    return emailTransporter;
+}
+
+async function sendInvitationEmail(email, token) {
+    if (!emailTransporter) {
+        console.warn(`Invitation-Email an ${email} konnte nicht versendet werden (Email nicht konfiguriert). Token: ${token}`);
+        return false;
+    }
+
+    const acceptUrl = `${BASE_URL}/accept-invitation.html?token=${encodeURIComponent(token)}`;
+    const mailOptions = {
+        from: process.env.SMTP_FROM || "noreply@maximan-jump-tour.local",
+        to: email,
+        subject: "Willkommen! MSC Portal Account aktivieren",
+        html: `
+            <h2>Willkommen zum MSC Portal!</h2>
+            <p>Ein Administrator hat einen Account für Sie erstellt.</p>
+            <p>Um Ihren Account zu aktivieren und ein Passwort zu setzen, bitte klicken Sie hier:</p>
+            <p><a href="${acceptUrl}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Account aktivieren</a></p>
+            <p>Dieser Link läuft in ${INVITATION_TOKEN_EXPIRES_HOURS} Stunden ab.</p>
+            <hr>
+            <p>Falls Sie diesen Link nicht angefordert haben, ignorieren Sie diese Email.</p>
+        `
+    };
+
+    try {
+        const info = await emailTransporter.sendMail(mailOptions);
+        if (!IS_PRODUCTION) {
+            console.log("Test-Email versendet. Preview-URL:", nodemailer.getTestMessageUrl(info));
+        }
+        return true;
+    } catch (err) {
+        console.error(`Fehler beim Versand von Invitation-Email an ${email}:`, err.message);
+        return false;
+    }
+}
+
 
 const ALL_PERMISSIONS = [
     "dashboard.read",
@@ -1171,6 +1265,7 @@ app.use(express.json({ limit: "1mb" }));
 initDb();
 migrateUsersEmailConstraint();
 ensureRolesRequiredAssignmentsColumn();
+ensureInvitationsTable();
 seedDefaultRoles();
 
 const ADMIN_ROLES = ["msc admin", "admin", "root-admin"];
@@ -1518,9 +1613,13 @@ app.get("/api/users", authRequired, requirePermission("users.read"), (req, res) 
     res.json(rows);
 });
 
-app.post("/api/users", authRequired, requirePermission("users.write"), (req, res) => {
-    const { username, name, email, role, password, status, managedTeamId } = req.body || {};
-    if (!requireFields(res, req.body || {}, ["username", "name", "email", "role", "password"])) return;
+app.post("/api/users", authRequired, requirePermission("users.write"), async (req, res) => {
+    const { username, name, email, role, password, status, managedTeamId, sendInvitation } = req.body || {};
+    
+    // Wenn sendInvitation=true, ist password optional
+    const requirePassword = sendInvitation !== true;
+    if (!requireFields(res, req.body || {}, ["username", "name", "email", "role", ...(requirePassword ? ["password"] : [])])) return;
+    
     if (!isDuplicateEmailAllowed() && findUserByEmail(email)) {
         res.status(409).json({ error: "Diese E-Mail-Adresse ist bereits vergeben." });
         return;
@@ -1557,7 +1656,18 @@ app.post("/api/users", authRequired, requirePermission("users.write"), (req, res
         }
     }
 
-    const hash = bcrypt.hashSync(password, 12);
+    // Passwort: entweder vom Admin gesetzt oder platzhalter, wenn Invitation versendet wird
+    let hash;
+    if (password) {
+        hash = bcrypt.hashSync(password, 12);
+    } else if (sendInvitation === true) {
+        // Platzhalter-Hash für noch nicht aktivierte Accounts
+        hash = bcrypt.hashSync(crypto.randomBytes(32).toString("hex"), 12);
+    } else {
+        res.status(400).json({ error: "Passwort ist erforderlich, wenn keine Einladung versendet wird." });
+        return;
+    }
+
     let result;
     const createUserWithAssignment = db.transaction(() => {
         result = db
@@ -1571,7 +1681,7 @@ app.post("/api/users", authRequired, requirePermission("users.write"), (req, res
                 email.trim().toLowerCase(),
                 resolvedRole,
                 hash,
-                status === "inactive" ? "inactive" : "active"
+                sendInvitation === true ? "inactive" : (status === "inactive" ? "inactive" : "active")
             );
         if (normalizedAssignments.assignments.teamId && isTeamManagerRole(resolvedRole)) {
             db.prepare("UPDATE teams SET manager_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
@@ -1579,6 +1689,7 @@ app.post("/api/users", authRequired, requirePermission("users.write"), (req, res
         }
         upsertUserScopeAssignments(result.lastInsertRowid, normalizedAssignments.assignments);
     });
+    
     try {
         createUserWithAssignment();
     } catch (error) {
@@ -1589,6 +1700,7 @@ app.post("/api/users", authRequired, requirePermission("users.write"), (req, res
         }
         throw error;
     }
+
     const created = db.prepare(
         `SELECT u.id, u.username, u.name, u.email, u.role, u.status, u.created_at,
                 (SELECT t.id FROM teams t WHERE t.manager_user_id = u.id AND t.status != 'inactive' ORDER BY t.id ASC LIMIT 1) AS managed_team_id,
@@ -1597,16 +1709,44 @@ app.post("/api/users", authRequired, requirePermission("users.write"), (req, res
          WHERE u.id = ?`
     ).get(result.lastInsertRowid);
     const assignment = getUserScopeAssignments(result.lastInsertRowid);
-    logAudit(req.user, "CREATE_USER", "users", created.id, `${created.username} (${created.role})`);
-    res.status(201).json({
-        ...created,
-        assignment_team_id: assignment.teamId,
-        assignment_team_name: assignment.teamName,
-        assignment_event_id: assignment.eventId,
-        assignment_event_name: assignment.eventName,
-        assignment_venue_code: assignment.venueCode,
-        assignment_other_scope: assignment.otherScope
-    });
+
+    // Wenn Einladung versendet werden soll
+    if (sendInvitation === true) {
+        const invitationToken = crypto.randomBytes(32).toString("hex");
+        const expiresAt = new Date(Date.now() + INVITATION_TOKEN_EXPIRES_HOURS * 60 * 60 * 1000).toISOString();
+        
+        db.prepare(
+            `INSERT INTO invitations (token, user_id, email, status, expires_at)
+             VALUES (?, ?, ?, ?, ?)`
+        ).run(invitationToken, result.lastInsertRowid, email.trim().toLowerCase(), "pending", expiresAt);
+
+        const emailSent = await sendInvitationEmail(email.trim().toLowerCase(), invitationToken);
+        
+        logAudit(req.user, "CREATE_USER", "users", created.id, `${created.username} (${created.role}) - Einladung versendet`);
+        
+        res.status(201).json({
+            ...created,
+            invitation_sent: emailSent,
+            invitation_token: invitationToken,
+            assignment_team_id: assignment.teamId,
+            assignment_team_name: assignment.teamName,
+            assignment_event_id: assignment.eventId,
+            assignment_event_name: assignment.eventName,
+            assignment_venue_code: assignment.venueCode,
+            assignment_other_scope: assignment.otherScope
+        });
+    } else {
+        logAudit(req.user, "CREATE_USER", "users", created.id, `${created.username} (${created.role})`);
+        res.status(201).json({
+            ...created,
+            assignment_team_id: assignment.teamId,
+            assignment_team_name: assignment.teamName,
+            assignment_event_id: assignment.eventId,
+            assignment_event_name: assignment.eventName,
+            assignment_venue_code: assignment.venueCode,
+            assignment_other_scope: assignment.otherScope
+        });
+    }
 });
 
 app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req, res) => {
@@ -2667,6 +2807,122 @@ app.get("/api/public/standings", (_req, res) => {
     res.json({ standings, updatedAt: new Date().toISOString() });
 });
 
+// Invitation endpoints (no auth required)
+app.get("/api/invitations/:token", (req, res) => {
+    const token = String(req.params.token || "").trim();
+    if (!token) {
+        res.status(400).json({ error: "Token ist erforderlich." });
+        return;
+    }
+
+    const invitation = db.prepare(
+        `SELECT i.id, i.user_id, i.email, i.status, i.expires_at, u.username, u.name, u.role
+         FROM invitations i
+         JOIN users u ON u.id = i.user_id
+         WHERE i.token = ?`
+    ).get(token);
+
+    if (!invitation) {
+        res.status(404).json({ error: "Einladung nicht gefunden." });
+        return;
+    }
+
+    // Token abgelaufen?
+    if (new Date(invitation.expires_at) < new Date()) {
+        res.status(410).json({ error: "Diese Einladung ist abgelaufen." });
+        return;
+    }
+
+    // Bereits akzeptiert?
+    if (invitation.status !== "pending") {
+        res.status(400).json({ error: "Diese Einladung wurde bereits verwendet." });
+        return;
+    }
+
+    res.json({
+        token,
+        email: invitation.email,
+        username: invitation.username,
+        name: invitation.name,
+        role: invitation.role,
+        expiresAt: invitation.expires_at
+    });
+});
+
+app.post("/api/invitations/:token/accept", async (req, res) => {
+    const token = String(req.params.token || "").trim();
+    const { password } = req.body || {};
+
+    if (!token) {
+        res.status(400).json({ error: "Token ist erforderlich." });
+        return;
+    }
+
+    if (!password || String(password).trim().length < 8) {
+        res.status(400).json({ error: "Passwort muss mindestens 8 Zeichen lang sein." });
+        return;
+    }
+
+    const invitation = db.prepare(
+        `SELECT i.id, i.user_id, i.email, i.status, i.expires_at
+         FROM invitations i
+         WHERE i.token = ?`
+    ).get(token);
+
+    if (!invitation) {
+        res.status(404).json({ error: "Einladung nicht gefunden." });
+        return;
+    }
+
+    if (new Date(invitation.expires_at) < new Date()) {
+        res.status(410).json({ error: "Diese Einladung ist abgelaufen." });
+        return;
+    }
+
+    if (invitation.status !== "pending") {
+        res.status(400).json({ error: "Diese Einladung wurde bereits verwendet." });
+        return;
+    }
+
+    const hash = bcrypt.hashSync(password.trim(), 12);
+    
+    const acceptInvitation = db.transaction(() => {
+        // Passwort und Status aktualisieren
+        db.prepare(
+            `UPDATE users SET password_hash = ?, status = 'active', updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?`
+        ).run(hash, invitation.user_id);
+
+        // Einladung als akzeptiert markieren
+        db.prepare(
+            `UPDATE invitations SET status = 'accepted', accepted_at = CURRENT_TIMESTAMP
+             WHERE id = ?`
+        ).run(invitation.id);
+    });
+
+    try {
+        acceptInvitation();
+    } catch (error) {
+        console.error("Fehler beim Akzeptieren der Einladung:", error.message);
+        res.status(500).json({ error: "Einladung konnte nicht akzeptiert werden." });
+        return;
+    }
+
+    const user = db.prepare("SELECT id, username, name, email, role FROM users WHERE id = ?").get(invitation.user_id);
+    logAudit({ username: user.username, role: user.role }, "ACCEPT_INVITATION", "invitations", invitation.id, `Account aktiviert für ${user.username}`);
+
+    res.json({
+        message: "Account erfolgreich aktiviert!",
+        user: {
+            id: user.id,
+            username: user.username,
+            name: user.name,
+            email: user.email,
+            role: user.role
+        }
+    });
+});
+
 app.use("/api", (req, res) => {
     res.status(404).json({ error: `Unknown endpoint: ${req.method} ${req.originalUrl}` });
 });
@@ -2693,7 +2949,15 @@ app.get("/{*path}", (req, res) => {
 const server = http.createServer(app);
 registerWebSocketServer(server);
 
-server.listen(PORT, HOST, () => {
-    // eslint-disable-next-line no-console
-    console.log(`MSC backend running on http://${HOST}:${PORT} (DB: ${DB_PATH})`);
+async function startServer() {
+    await initializeEmailTransporter();
+    server.listen(PORT, HOST, () => {
+        // eslint-disable-next-line no-console
+        console.log(`MSC backend running on http://${HOST}:${PORT} (DB: ${DB_PATH})`);
+    });
+}
+
+startServer().catch(err => {
+    console.error("Fehler beim Starten des Servers:", err);
+    process.exit(1);
 });
