@@ -2,15 +2,26 @@ const fs = require("fs");
 const path = require("path");
 const express = require("express");
 const cors = require("cors");
+const compression = require("compression");
+const helmet = require("helmet");
+const morgan = require("morgan");
+const { rateLimit } = require("express-rate-limit");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const Database = require("better-sqlite3");
 
 const PORT = Number(process.env.PORT || 3000);
-const JWT_SECRET = process.env.JWT_SECRET || "change-this-in-production";
-const DB_DIR = path.join(__dirname, "..", ".runtime");
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+const JWT_SECRET = process.env.JWT_SECRET || "";
+const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
+const DB_DIR = process.env.DB_DIR || path.join(__dirname, "..", ".runtime");
 const DB_PATH = path.join(DB_DIR, "msc-portal.db");
 const STATIC_ROOT = path.join(__dirname, "..");
+
+if (IS_PRODUCTION && !JWT_SECRET) {
+    throw new Error("JWT_SECRET must be set in production");
+}
+const EFFECTIVE_JWT_SECRET = JWT_SECRET || "dev-insecure-secret";
 
 if (!fs.existsSync(DB_DIR)) {
     fs.mkdirSync(DB_DIR, { recursive: true });
@@ -182,7 +193,7 @@ function signToken(user) {
             role: user.role,
             name: user.name
         },
-        JWT_SECRET,
+        EFFECTIVE_JWT_SECRET,
         { expiresIn: "12h" }
     );
 }
@@ -201,7 +212,7 @@ function authRequired(req, res, next) {
         return;
     }
     try {
-        const payload = jwt.verify(token, JWT_SECRET);
+        const payload = jwt.verify(token, EFFECTIVE_JWT_SECRET);
         req.user = payload;
         next();
     } catch (error) {
@@ -241,7 +252,18 @@ function requireFields(res, payload, fields) {
 }
 
 const app = express();
-app.use(cors());
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
+app.use(helmet());
+app.use(compression());
+app.use(morgan(IS_PRODUCTION ? "combined" : "dev"));
+app.use(cors({ origin: CORS_ORIGIN === "*" ? true : CORS_ORIGIN }));
+app.use(rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 500,
+    standardHeaders: true,
+    legacyHeaders: false
+}));
 app.use(express.json({ limit: "1mb" }));
 
 initDb();

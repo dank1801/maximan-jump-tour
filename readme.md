@@ -221,6 +221,28 @@ Das MSC Portal unter `msc/` läuft jetzt mit echtem Backend:
 
 Beim ersten Aufruf von `msc/login.html` erscheint automatisch die Erstkonfiguration für den ersten MSC-Admin.
 
+### Komplett cloud (ohne lokale Schritte)
+
+Für professionellen Betrieb ist alles vorbereitet:
+
+- `Dockerfile` für Container-Deploy
+- `render.yaml` für Render Blueprint (Webservice + persistente Disk + Auto-Deploy)
+- `.env.example` für Produktionsvariablen
+- `CI` Workflow unter `.github/workflows/ci.yml`
+
+#### Vorgehen (einmalig)
+
+1. Repository in Render verbinden.
+2. Blueprint-Deploy mit `render.yaml` starten.
+3. Die App-URL öffnen und in `msc/login.html` den ersten Admin bootstrapen.
+4. Danach läuft alles über Git-Push + Auto-Deploy, ohne lokalen Betrieb.
+
+#### Wichtige Hinweise
+
+- GitHub Pages kann kein Node.js-Backend ausführen; für das MSC Portal bitte die Render-URL verwenden.
+- `JWT_SECRET` wird im Blueprint automatisch als Secret erzeugt.
+- SQLite liegt auf persistenter Disk (`/var/data`) und bleibt über Deployments erhalten.
+
 ## 🐛 Troubleshooting
 
 ### Problem: Videos werden nicht abgespielt

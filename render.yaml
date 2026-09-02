@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: maximan-jump-tour-portal
+    env: docker
+    autoDeploy: true
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: DB_DIR
+        value: /var/data
+    disk:
+      name: msc-portal-data
+      mountPath: /var/data
+      sizeGB: 1
