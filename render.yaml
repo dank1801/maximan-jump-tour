@@ -13,6 +13,10 @@ services:
         value: "*"
       - key: DB_DIR
         value: /var/data
+      - key: REQUIRE_PERSISTENT_DB
+        value: "true"
+      - key: RENDER_DISK_MOUNT_PATH
+        value: /var/data
     disk:
       name: msc-portal-data
       mountPath: /var/data
