@@ -156,6 +156,30 @@ function clearMessage() {
     node.textContent = "";
 }
 
+// ============ TABS ============
+
+function activateTab(button) {
+    const tabId = button?.dataset?.tab;
+    if (!tabId) return;
+    const root = button.closest("form, .card-body, .card, .portal-content") || document;
+    const target = root.querySelector(`#${tabId}`) || document.getElementById(tabId);
+    if (!target) return;
+
+    root.querySelectorAll(".tab-button").forEach((node) => node.classList.remove("active"));
+    root.querySelectorAll(".tab-content").forEach((node) => node.classList.remove("active"));
+    button.classList.add("active");
+    target.classList.add("active");
+}
+
+function wireTabs() {
+    document.addEventListener("click", (event) => {
+        const button = event.target.closest(".tab-button[data-tab]");
+        if (!button) return;
+        event.preventDefault();
+        activateTab(button);
+    });
+}
+
 // ============ API CALLS ============
 
 async function api(path, options = {}) {
@@ -676,6 +700,7 @@ function editTransferModal() {
 // ============ INIT ============
 
 document.addEventListener("DOMContentLoaded", async () => {
+    wireTabs();
     if (isLoginPage()) {
         await setupLoginPage();
     } else {
