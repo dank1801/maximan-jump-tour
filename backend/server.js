@@ -319,8 +319,18 @@ app.post("/api/auth/login", (req, res) => {
     if (!requireFields(res, req.body || {}, ["username", "password"])) return;
 
     const user = db.prepare("SELECT * FROM users WHERE username = ?").get(username.trim());
-    if (!user || user.status !== "active" || !bcrypt.compareSync(password, user.password_hash)) {
-        res.status(401).json({ error: "Invalid credentials" });
+    if (!user) {
+        res.status(401).json({ error: "Benutzerkennung existiert nicht" });
+        return;
+    }
+    
+    if (user.status !== "active") {
+        res.status(401).json({ error: "Dieses Benutzerkonto ist deaktiviert" });
+        return;
+    }
+    
+    if (!bcrypt.compareSync(password, user.password_hash)) {
+        res.status(401).json({ error: "Passwort ist ungültig" });
         return;
     }
 
