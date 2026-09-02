@@ -18,28 +18,52 @@ const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const JWT_SECRET = process.env.JWT_SECRET || "";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 const RENDER_DISK_MOUNT_PATH = process.env.RENDER_DISK_MOUNT_PATH || "";
+const REQUIRE_PERSISTENT_DB = process.env.REQUIRE_PERSISTENT_DB === "true";
 
 const DEFAULT_RUNTIME_DIR = path.join(__dirname, "..", ".runtime", "data");
-const defaultPersistentDir = RENDER_DISK_MOUNT_PATH
-    ? path.join(RENDER_DISK_MOUNT_PATH, "data")
-    : "/var/data";
-let DB_DIR = String(process.env.DB_DIR || "").trim()
-    || (IS_PRODUCTION ? defaultPersistentDir : DEFAULT_RUNTIME_DIR);
+const PERSISTENT_DIR_CANDIDATES = [
+    String(process.env.DB_DIR || "").trim(),
+    RENDER_DISK_MOUNT_PATH ? path.join(RENDER_DISK_MOUNT_PATH, "data") : "",
+    "/var/data"
+].filter(Boolean);
 
-if (!fs.existsSync(DB_DIR)) {
-    try {
-        fs.mkdirSync(DB_DIR, { recursive: true });
-    } catch (error) {
-        if (IS_PRODUCTION) {
+function ensureWritableDirectory(directory) {
+    fs.mkdirSync(directory, { recursive: true });
+    fs.accessSync(directory, fs.constants.W_OK);
+}
+
+let DB_DIR = DEFAULT_RUNTIME_DIR;
+let usingPersistentStorage = false;
+let lastPersistentError = null;
+
+if (IS_PRODUCTION) {
+    for (const candidate of PERSISTENT_DIR_CANDIDATES) {
+        try {
+            ensureWritableDirectory(candidate);
+            DB_DIR = candidate;
+            usingPersistentStorage = true;
+            break;
+        } catch (error) {
+            lastPersistentError = `${candidate}: ${error.message}`;
+        }
+    }
+    if (!usingPersistentStorage) {
+        if (REQUIRE_PERSISTENT_DB) {
             throw new Error(
-                `Datenverzeichnis nicht nutzbar (${DB_DIR}): ${error.message}. `
-                + "Bitte auf Render einen Persistent Disk Mount konfigurieren und DB_DIR auf den Mount-Pfad setzen."
+                `Kein persistentes Datenverzeichnis verfügbar (${lastPersistentError || "kein Kandidat"}). `
+                + "Bitte in Render einen Persistent Disk Mount einrichten und DB_DIR auf den Mount-Pfad setzen."
             );
         }
-        console.warn(`Cannot create ${DB_DIR}: ${error.message}, falling back to local directory`);
+        console.warn(
+            `WARNUNG: Persistenter Speicher nicht verfügbar (${lastPersistentError || "kein Kandidat"}). `
+            + "Es wird ein temporäres Laufzeitverzeichnis genutzt; Daten können bei Redeploy verloren gehen."
+        );
+        ensureWritableDirectory(DEFAULT_RUNTIME_DIR);
         DB_DIR = DEFAULT_RUNTIME_DIR;
-        fs.mkdirSync(DB_DIR, { recursive: true });
     }
+} else {
+    ensureWritableDirectory(DEFAULT_RUNTIME_DIR);
+    DB_DIR = DEFAULT_RUNTIME_DIR;
 }
 
 const DB_PATH = path.join(DB_DIR, "msc-portal.db");
@@ -2140,5 +2164,5 @@ registerWebSocketServer(server);
 
 server.listen(PORT, HOST, () => {
     // eslint-disable-next-line no-console
-    console.log(`MSC backend running on http://${HOST}:${PORT}`);
+    console.log(`MSC backend running on http://${HOST}:${PORT} (DB: ${DB_PATH})`);
 });
