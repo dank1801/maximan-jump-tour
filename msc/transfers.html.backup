@@ -233,7 +233,7 @@
                             </td>
                         </tr>
                     `).join("");
-                    document.getElementById("transfers-list").innerHTML = html || "<tr><td colspan='7'>Keine Transfers vorhanden</td></tr>";
+                    document.getElementById("transfers-list").innerHTML = html || "<tr><td colspan='7' style='text-align: center; color: #999;'>Keine Transfers vorhanden</td></tr>";
                 } catch (error) {
                     console.error(error);
                 }

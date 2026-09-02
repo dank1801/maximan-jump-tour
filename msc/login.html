@@ -5,165 +5,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MSC Portal - Anmelden</title>
     <link rel="stylesheet" href="styles.css" />
-    <style>
-        .login-container {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: var(--spacing-lg);
-        }
-
-        .login-card {
-            background: white;
-            border-radius: var(--radius-lg);
-            padding: var(--spacing-2xl);
-            max-width: 400px;
-            width: 100%;
-            box-shadow: var(--shadow-lg);
-        }
-
-        .login-logo {
-            text-align: center;
-            margin-bottom: var(--spacing-2xl);
-        }
-
-        .login-logo h1 {
-            font-size: var(--font-size-2xl);
-            color: var(--primary);
-            margin: var(--spacing-md) 0;
-        }
-
-        .login-logo p {
-            color: var(--text-muted);
-            font-size: var(--font-size-sm);
-        }
-
-        .login-message {
-            margin-bottom: var(--spacing-lg);
-            padding: var(--spacing-lg);
-            border-radius: var(--radius-md);
-            text-align: center;
-            font-weight: 500;
-            display: none;
-        }
-
-        .form-divider {
-            text-align: center;
-            margin: var(--spacing-2xl) 0;
-            position: relative;
-        }
-
-        .form-divider::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 0;
-            right: 0;
-            height: 1px;
-            background: var(--border);
-        }
-
-        .form-divider span {
-            background: white;
-            padding: 0 var(--spacing-md);
-            position: relative;
-            color: var(--text-muted);
-            font-size: var(--font-size-sm);
-        }
-
-        .bootstrap-section {
-            margin-top: var(--spacing-2xl);
-        }
-
-        .input-with-icon {
-            position: relative;
-        }
-
-        .input-icon {
-            position: absolute;
-            left: var(--spacing-md);
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-muted);
-            pointer-events: none;
-        }
-
-        .input-with-icon input {
-            padding-left: 2.5rem;
-        }
-
-        .form-actions {
-            display: flex;
-            flex-direction: column;
-            gap: var(--spacing-md);
-            margin-top: var(--spacing-lg);
-        }
-
-        .form-actions .btn {
-            width: 100%;
-        }
-
-        .help-text {
-            font-size: var(--font-size-sm);
-            color: var(--text-muted);
-            margin-top: var(--spacing-sm);
-            text-align: center;
-        }
-    </style>
 </head>
 <body>
     <div class="login-container">
         <div class="login-card">
-            <div class="login-logo">
-                <h1>MSC Portal</h1>
-                <p>Maximanischer Sport Club</p>
-                <p style="font-size: 12px; color: #999; margin-top: 8px;">Administrative Platform</p>
-            </div>
+            <h1>MSC Portal</h1>
+            <p class="subtitle">Maximanischer Sport Club - Administrative Platform</p>
 
-            <div id="login-message" class="login-message"></div>
+            <div id="login-message"></div>
 
             <!-- Login Form -->
             <form id="login-form">
-                <h2 style="font-size: var(--font-size-lg); color: var(--primary); margin-bottom: var(--spacing-lg);">Anmelden</h2>
-
                 <div class="form-group">
                     <label>Benutzerkennung</label>
-                    <div class="input-with-icon">
-                        <span class="input-icon">👤</span>
-                        <input type="text" name="username" placeholder="z.B. admin" required />
-                    </div>
+                    <input type="text" name="username" placeholder="z.B. admin" required />
                 </div>
 
                 <div class="form-group">
                     <label>Passwort</label>
-                    <div class="input-with-icon">
-                        <span class="input-icon">🔒</span>
-                        <input type="password" name="password" placeholder="••••••••" required />
-                    </div>
+                    <input type="password" name="password" placeholder="••••••••" required />
                 </div>
 
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">
-                        🚀 Anmelden
-                    </button>
+                <div class="form-actions" style="margin-top: 25px;">
+                    <button type="submit" class="btn btn-primary">Anmelden</button>
                 </div>
 
-                <div class="help-text">
+                <div class="help-text" style="text-align: center; margin-top: 15px;">
                     Passwort vergessen? Kontaktiere einen Admin.
                 </div>
             </form>
 
             <!-- Bootstrap Form -->
-            <div id="bootstrap-section" class="bootstrap-section hidden">
-                <div class="form-divider">
-                    <span>Erst-Setup</span>
-                </div>
+            <div id="bootstrap-section" class="hidden">
+                <div class="form-divider">Erst-Setup</div>
 
                 <form id="bootstrap-form">
-                    <h2 style="font-size: var(--font-size-lg); color: var(--accent); margin-bottom: var(--spacing-lg);">👨‍💼 Ersten Admin erstellen</h2>
-                    <p style="color: var(--text-muted); margin-bottom: var(--spacing-lg); font-size: var(--font-size-sm);">
+                    <h2 style="font-size: 16px; color: var(--primary); margin-bottom: 15px;">Ersten Admin erstellen</h2>
+                    <p style="color: var(--gray); margin-bottom: 20px; font-size: 13px;">
                         Es gibt noch keinen Admin. Lege jetzt den ersten MSC-Admin an.
                     </p>
 
@@ -186,13 +64,11 @@
                     <div class="form-group">
                         <label>Passwort</label>
                         <input type="password" name="password" placeholder="••••••••" required />
-                        <div class="help-text">Mindestens 8 Zeichen, Groß- und Kleinbuchstaben empfohlen</div>
+                        <div class="help-text">Mindestens 8 Zeichen</div>
                     </div>
 
                     <div class="form-actions">
-                        <button type="submit" class="btn btn-success">
-                            Admin erstellen
-                        </button>
+                        <button type="submit" class="btn btn-primary">Admin erstellen</button>
                     </div>
                 </form>
             </div>

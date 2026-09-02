@@ -267,7 +267,7 @@
                             <td >${l.details ? l.details.substring(0, 50) + "..." : "—"}</td>
                         </tr>
                     `).join("");
-                    document.getElementById("audit-log-tbody").innerHTML = html || "<tr><td colspan='5'>Keine Einträge vorhanden</td></tr>";
+                    document.getElementById("audit-log-tbody").innerHTML = html || "<tr><td colspan='5' style='text-align: center; color: #999;'>Keine Einträge vorhanden</td></tr>";
                 } catch (error) {
                     console.error(error);
                 }

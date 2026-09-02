@@ -3,17 +3,16 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MSC Portal - Benutzer & Rollen</title>
+    <title>MSC Portal - Benutzer</title>
     <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
     <div class="portal-container">
-        <!-- Sidebar -->
         <div class="portal-sidebar">
             <div class="portal-logo">MSC Portal</div>
             <ul class="portal-nav">
                 <li><a href="dashboard.html">Dashboard</a></li>
-                <li><a href="users.html">Benutzer & Rollen</a></li>
+                <li><a href="users.html" class="active">Benutzer & Rollen</a></li>
                 <li><a href="teams.html">Teams & Lizenzen</a></li>
                 <li><a href="events.html">Wettkämpfe</a></li>
                 <li><a href="points.html">Punkte & Wertungen</a></li>
@@ -23,83 +22,81 @@
             </ul>
         </div>
 
-        <!-- Main Content -->
         <div class="portal-main">
-            <!-- Header -->
             <div class="portal-header">
                 <h1>Benutzer & Rollen</h1>
                 <div class="portal-user-info">
                     <div>
                         <div class="user-badge" data-session-user>Admin</div>
-                        <div style="font-size: 12px; color: #999; margin-top: 4px;" data-session-role>Admin</div>
+                        <div style="font-size: 12px; color: var(--gray); margin-top: 4px;" data-session-role>Admin</div>
                     </div>
                     <button id="logout-button" class="btn btn-secondary btn-small">Abmelden</button>
                 </div>
             </div>
 
-            <!-- Content -->
             <div class="portal-content">
-                <!-- Create User Card -->
                 <div class="card">
                     <div class="card-header">
-                        <h2>➕ Neuen Benutzer erstellen</h2>
+                        <h2>Neuen Benutzer erstellen</h2>
                     </div>
-                    <form id="create-user-form">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="card-body">
+                        <form id="create-user-form" class="grid-2">
                             <div class="form-group">
-                                <label>Benutzerkennung *</label>
-                                <input type="text" name="username" placeholder="z.B. max.mueller" required />
-                                <div class="help-text">Nur Buchstaben, Zahlen und Punkte</div>
+                                <label>Benutzerkennung</label>
+                                <input type="text" name="username" required />
                             </div>
                             <div class="form-group">
-                                <label>Name *</label>
-                                <input type="text" name="name" placeholder="z.B. Max Müller" required />
+                                <label>Name</label>
+                                <input type="text" name="name" required />
                             </div>
                             <div class="form-group">
-                                <label>E-Mail *</label>
-                                <input type="email" name="email" placeholder="max@example.com" required />
+                                <label>E-Mail</label>
+                                <input type="email" name="email" required />
                             </div>
                             <div class="form-group">
-                                <label>Passwort *</label>
-                                <input type="password" name="password" placeholder="••••••••" required />
-                                <div class="help-text">Mind. 8 Zeichen</div>
+                                <label>Rolle</label>
+                                <select name="role" required>
+                                    <option value="msc_admin">MSC Admin</option>
+                                    <option value="teammanager">Teammanager</option>
+                                    <option value="jury">Jury</option>
+                                    <option value="lizenzstelle">Lizenzstelle</option>
+                                    <option value="reporter">Reporter</option>
+                                </select>
                             </div>
-                        </div>
-                        <div class="form-group">
-                            <label>Rolle *</label>
-                            <select name="role" required>
-                                <option value="">-- Bitte auswählen --</option>
-                                <option value="MSC Admin">🔐 MSC Admin (Vollzugriff)</option>
-                                <option value="Teammanager">Teammanager</option>
-                                <option value="Jury">Jury / Wettkampfleitung</option>
-                                <option value="Lizenzstelle">Lizenzstelle</option>
-                                <option value="Reporter">Reporter / Media</option>
-                            </select>
-                        </div>
-                        <div class="form-actions">
-                            <button type="submit" class="btn btn-primary">➕ Benutzer erstellen</button>
-                        </div>
-                    </form>
+                            <div class="form-group">
+                                <label>Passwort</label>
+                                <input type="password" name="password" required />
+                            </div>
+                            <div class="form-group">
+                                <label>Status</label>
+                                <select name="status" required>
+                                    <option value="active">Aktiv</option>
+                                    <option value="inactive">Inaktiv</option>
+                                </select>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Benutzer erstellen</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
 
-                <!-- Users List -->
                 <div class="card">
                     <div class="card-header">
-                        <h2>Alle Benutzer</h2>
+                        <h2>Benutzer</h2>
                     </div>
                     <div class="card-body">
                         <table class="table">
                             <thead>
                                 <tr>
                                     <th>Name</th>
-                                    <th>Kennung</th>
+                                    <th>E-Mail</th>
                                     <th>Rolle</th>
                                     <th>Status</th>
-                                    <th>Letzte Anmeldung</th>
-                                    <th>Aktionen</th>
+                                    <th>Aktion</th>
                                 </tr>
                             </thead>
-                            <tbody id="users-list"></tbody>
+                            <tbody id="users-list-tbody"></tbody>
                         </table>
                     </div>
                 </div>
@@ -110,26 +107,19 @@
     <script src="portal.js"></script>
     <script>
         if (!isLoginPage()) {
-            document.addEventListener("DOMContentLoaded", async () => {
-                const form = document.getElementById("create-user-form");
-                if (form) {
-                    form.addEventListener("submit", async (e) => {
-                        e.preventDefault();
-                        const data = getFormData(form);
-                        try {
-                            await api("/users", {
-                                method: "POST",
-                                body: JSON.stringify(data)
-                            });
-                            showToast(`Benutzer ${data.name} erstellt! ✅`, "success");
-                            form.reset();
-                            loadUsers();
-                        } catch (error) {
-                            showToast(error.message, "error");
-                        }
-                    });
+            document.getElementById("create-user-form")?.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const data = getFormData(document.getElementById("create-user-form"));
+                try {
+                    await api("/users", { method: "POST", body: JSON.stringify(data) });
+                    showToast("Benutzer erstellt", "success");
+                    loadUsers();
+                } catch (error) {
+                    showToast(error.message, "error");
                 }
             });
+            
+            document.addEventListener("DOMContentLoaded", loadUsers);
         }
     </script>
 </body>

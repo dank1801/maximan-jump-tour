@@ -101,7 +101,7 @@
                         <div >
                             <label >Filter nach Status:</label>
                             <div >
-                                <select id="license-filter">
+                                <select id="license-filter" style="flex: 1;">
                                     <option value="">-- Alle --</option>
                                     <option value="gültig">Gültig</option>
                                     <option value="abgelaufen">❌ Abgelaufen</option>
@@ -168,7 +168,7 @@
                             </td>
                         </tr>
                     `).join("");
-                    document.getElementById("teams-list").innerHTML = html || "<tr><td colspan='6'>Keine Teams vorhanden</td></tr>";
+                    document.getElementById("teams-list").innerHTML = html || "<tr><td colspan='6' style='text-align: center; color: #999;'>Keine Teams vorhanden</td></tr>";
                 } catch (error) {
                     console.error(error);
                 }
@@ -190,7 +190,7 @@
                             </td>
                         </tr>
                     `).join("");
-                    document.getElementById("licenses-list").innerHTML = html || "<tr><td colspan='6'>Keine Lizenzen vorhanden</td></tr>";
+                    document.getElementById("licenses-list").innerHTML = html || "<tr><td colspan='6' style='text-align: center; color: #999;'>Keine Lizenzen vorhanden</td></tr>";
                 } catch (error) {
                     console.error(error);
                 }

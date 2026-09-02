@@ -197,7 +197,7 @@
                             </td>
                         </tr>
                     `).join("");
-                    document.getElementById("events-list").innerHTML = html || "<tr><td colspan='6'>Keine Events vorhanden</td></tr>";
+                    document.getElementById("events-list").innerHTML = html || "<tr><td colspan='6' style='text-align: center; color: #999;'>Keine Events vorhanden</td></tr>";
                 } catch (error) {
                     console.error(error);
                 }
