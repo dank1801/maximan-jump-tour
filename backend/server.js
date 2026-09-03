@@ -4191,7 +4191,7 @@ app.get("/api/teams", authRequired, requirePermission("teams.read"), (req, res) 
     res.json(rows);
 });
 
-app.post("/api/teams", authRequired, requirePermission("teams.write"), (req, res) => {
+app.post("/api/teams", authRequired, requireAnyPermission(["teams.write", "team_portal.write"]), (req, res) => {
     const { name, organizationId, teamType, nation, category, managerUserId, seasonId } = req.body || {};
     if (!requireFields(res, req.body || {}, ["name", "organizationId", "teamType"])) return;
     const scope = getAccessibleTeamScope(req.user);
@@ -4273,7 +4273,7 @@ app.post("/api/teams", authRequired, requirePermission("teams.write"), (req, res
     res.status(201).json(created);
 });
 
-app.patch("/api/teams/:id", authRequired, requirePermission("teams.write"), (req, res) => {
+app.patch("/api/teams/:id", authRequired, requireAnyPermission(["teams.write", "team_portal.write"]), (req, res) => {
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid team id" });
@@ -4494,7 +4494,7 @@ app.post("/api/teams/:id/submit-registration", authRequired, requirePermission("
     res.json(updated);
 });
 
-app.delete("/api/teams/:id", authRequired, requirePermission("teams.write"), (req, res) => {
+app.delete("/api/teams/:id", authRequired, requireAnyPermission(["teams.write", "team_portal.write"]), (req, res) => {
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid team id" });
@@ -4520,7 +4520,7 @@ app.delete("/api/teams/:id", authRequired, requirePermission("teams.write"), (re
     res.status(204).send();
 });
 
-app.post("/api/teams/bulk-update", authRequired, requirePermission("teams.write"), (req, res) => {
+app.post("/api/teams/bulk-update", authRequired, requireAnyPermission(["teams.write", "team_portal.write"]), (req, res) => {
     if (!assertAdminUser(res, req.user)) return;
     const idsRaw = Array.isArray(req.body?.teamIds) ? req.body.teamIds : [];
     const teamIds = [...new Set(idsRaw.map((value) => parseId(value)).filter(Boolean))];

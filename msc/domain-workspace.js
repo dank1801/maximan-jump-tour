@@ -1522,6 +1522,7 @@ function initDomainWorkspace(config) {
         const canOrganizationsWrite = hasPermission("organizations.write");
         const canTeamsWrite = hasPermission("teams.write");
         const canTeamPortalWrite = hasPermission("team_portal.write");
+        const canTeamManageWrite = canTeamsWrite || canTeamPortalWrite;
         const canBulkManage = canOrganizationsWrite && canTeamsWrite;
         const currentScope = state.scopeDomain?.name || "Team Portal";
         const resolvedDeadline = (team) => {
@@ -1636,7 +1637,7 @@ function initDomainWorkspace(config) {
             const locked = isLocked(team);
             const canReview = canOrganizationsWrite && canTeamPortalWrite;
             const canSubmit = reviewStatus === "draft" || reviewStatus === "revision_requested";
-            const canManageTeam = canTeamsWrite;
+            const canManageTeam = canTeamManageWrite;
             const isSelected = state.selectedTeamIds.has(Number(team.id));
             return `
                 <tr>
@@ -1790,7 +1791,7 @@ function initDomainWorkspace(config) {
             });
         });
         grid.querySelectorAll("[data-edit-team]").forEach((button) => {
-            if (!canTeamsWrite) {
+            if (!canTeamManageWrite) {
                 button.disabled = true;
                 button.classList.add("readonly-action");
                 return;
@@ -1799,7 +1800,7 @@ function initDomainWorkspace(config) {
             button.addEventListener("click", () => openTeamManageModal(teamId));
         });
         grid.querySelectorAll("[data-delete-team]").forEach((button) => {
-            if (!canTeamsWrite) {
+            if (!canTeamManageWrite) {
                 button.disabled = true;
                 button.classList.add("readonly-action");
                 return;
@@ -2835,7 +2836,7 @@ function initDomainWorkspace(config) {
         if (!hasPermission("organizations.write")) {
             applyReadOnlyUi("#ws-organization-form");
         }
-        if (!hasPermission("teams.write")) {
+        if (!hasPermission("teams.write") && !hasPermission("team_portal.write")) {
             applyReadOnlyUi("#ws-team-admin-form");
         }
         if (domainKey === "msc_admin" && !hasPermission("seasons.write")) {
