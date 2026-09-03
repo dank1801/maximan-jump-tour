@@ -860,7 +860,6 @@ const DEFAULT_ROLE_DEFINITIONS = [
         permissions: [
             "dashboard.read",
             "organizations.read",
-            "organizations.write",
             "teams.read",
             "teams.write",
             "team_members.read",
@@ -1930,6 +1929,14 @@ function canBypassDeadlineLock(user) {
     return ADMIN_ROLES.includes(normalizeRole(user?.role));
 }
 
+function assertAdminUser(res, user, message = "Nur Admins dürfen diese Aktion ausführen.") {
+    if (ADMIN_ROLES.includes(normalizeRole(user?.role))) {
+        return true;
+    }
+    res.status(403).json({ error: message });
+    return false;
+}
+
 function getTeamRegistrationDeadline(team) {
     if (!team) return null;
     const deadline = team.registration_deadline_at || getSeasonById(team.season_id)?.registration_deadline_at || null;
@@ -2918,6 +2925,7 @@ app.get("/api/organizations", authRequired, requirePermission("organizations.rea
 });
 
 app.post("/api/organizations", authRequired, requirePermission("organizations.write"), (req, res) => {
+    if (!assertAdminUser(res, req.user)) return;
     const { name, shortName, chairUserId, status } = req.body || {};
     if (!requireFields(res, req.body || {}, ["name"])) return;
     const chairId = chairUserId ? parseId(chairUserId) : null;
@@ -2965,6 +2973,7 @@ app.post("/api/organizations", authRequired, requirePermission("organizations.wr
 });
 
 app.patch("/api/organizations/:id", authRequired, requirePermission("organizations.write"), (req, res) => {
+    if (!assertAdminUser(res, req.user)) return;
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid organization id" });
@@ -3048,6 +3057,7 @@ app.patch("/api/organizations/:id", authRequired, requirePermission("organizatio
 });
 
 app.delete("/api/organizations/:id", authRequired, requirePermission("organizations.write"), (req, res) => {
+    if (!assertAdminUser(res, req.user)) return;
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid organization id" });

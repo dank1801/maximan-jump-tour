@@ -1674,8 +1674,10 @@ function initDomainWorkspace(config) {
         renderNotifications();
         renderTeamAdminPanel();
         bindTeamAdminPanel();
-        if (!state.canWrite) {
+        if (!hasPermission("organizations.write")) {
             applyReadOnlyUi("#ws-organization-form");
+        }
+        if (!hasPermission("teams.write")) {
             applyReadOnlyUi("#ws-team-admin-form");
         }
         rerenderFilteredViews();
