@@ -412,9 +412,10 @@
                     }
                     applyLicenseCategoryPayload(map.license_categories || {});
                     applySystemFormFallbacks();
+                    return true;
                 } catch (error) {
                     showToast("Gespeicherte Einstellungen konnten nicht geladen werden.", "warning");
-                    applySystemFormFallbacks();
+                    return false;
                 }
             }
 

@@ -2895,7 +2895,7 @@ app.delete("/api/publications/:id", authRequired, requirePermission("publication
     res.status(204).send();
 });
 
-app.get("/api/settings", authRequired, requirePermission("settings.read"), (_, res) => {
+app.get("/api/settings", authRequired, requireAnyPermission(["settings.read", "settings.write"]), (_, res) => {
     const rows = db.prepare("SELECT key, value_json, updated_at FROM settings ORDER BY key ASC").all();
     const mapped = rows.map((row) => {
         let parsedValue = null;
