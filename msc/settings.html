@@ -323,6 +323,33 @@
                 });
             }
 
+            function firstNonEmptyOptionValue(select) {
+                if (!select) return "";
+                const candidate = Array.from(select.options || []).find((option) => String(option.value || "").trim() !== "");
+                return candidate ? candidate.value : "";
+            }
+
+            function applySystemFormFallbacks() {
+                if (!systemConfigForm) return;
+                const timezoneField = systemConfigForm.elements.namedItem("timezone");
+                const languageField = systemConfigForm.elements.namedItem("language");
+                const defaultSeasonField = systemConfigForm.elements.namedItem("default_season");
+                const defaultPointsField = systemConfigForm.elements.namedItem("default_points_schema");
+
+                if (timezoneField && !String(timezoneField.value || "").trim()) {
+                    timezoneField.value = "Europe/Berlin";
+                }
+                if (languageField && !String(languageField.value || "").trim()) {
+                    languageField.value = "de";
+                }
+                if (defaultSeasonField && !String(defaultSeasonField.value || "").trim()) {
+                    defaultSeasonField.value = firstNonEmptyOptionValue(defaultSeasonField);
+                }
+                if (defaultPointsField && !String(defaultPointsField.value || "").trim()) {
+                    defaultPointsField.value = firstNonEmptyOptionValue(defaultPointsField);
+                }
+            }
+
             function readLicenseCategoryPayload() {
                 return {
                     a_min_age: document.querySelector("input[name='a_min_age']")?.value || "",
@@ -384,8 +411,10 @@
                         allowDuplicateEmailsCheckbox.checked = toBoolean(map.allow_duplicate_emails);
                     }
                     applyLicenseCategoryPayload(map.license_categories || {});
+                    applySystemFormFallbacks();
                 } catch (error) {
                     showToast("Gespeicherte Einstellungen konnten nicht geladen werden.", "warning");
+                    applySystemFormFallbacks();
                 }
             }
 
@@ -485,6 +514,7 @@
             document.addEventListener("DOMContentLoaded", async () => {
                 await loadDynamicDefaults();
                 await hydrateSettingsForms();
+                applySystemFormFallbacks();
             });
         }
     </script>
