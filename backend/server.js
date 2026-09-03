@@ -3093,6 +3093,7 @@ app.patch("/api/organizations/:id", authRequired, requirePermission("organizatio
     }
     const updates = [];
     const values = [];
+    let nextChairId = existing.chair_user_id || null;
     if (req.body?.name !== undefined) {
         updates.push("name = ?");
         values.push(String(req.body.name).trim());
@@ -3128,6 +3129,7 @@ app.patch("/api/organizations/:id", authRequired, requirePermission("organizatio
                 return;
             }
         }
+        nextChairId = chairId || null;
         updates.push("chair_user_id = ?");
         values.push(chairId);
     }
@@ -3138,9 +3140,8 @@ app.patch("/api/organizations/:id", authRequired, requirePermission("organizatio
     updates.push("updated_at = CURRENT_TIMESTAMP");
     values.push(id);
     db.prepare(`UPDATE organizations SET ${updates.join(", ")} WHERE id = ?`).run(...values);
-    if (req.body?.chairUserId !== undefined) {
-        const chairId = req.body.chairUserId ? parseId(req.body.chairUserId) : null;
-        if (existing.chair_user_id && existing.chair_user_id !== chairId) {
+    if (req.body?.chairUserId !== undefined || req.body?.chairUserLookup !== undefined) {
+        if (existing.chair_user_id && existing.chair_user_id !== nextChairId) {
             db.prepare(
                 `INSERT INTO user_scope_assignments (user_id, organization_id, updated_at)
                  VALUES (?, NULL, CURRENT_TIMESTAMP)
@@ -3149,17 +3150,17 @@ app.patch("/api/organizations/:id", authRequired, requirePermission("organizatio
                    updated_at = CURRENT_TIMESTAMP`
             ).run(existing.chair_user_id);
         }
-        if (chairId) {
+        if (nextChairId) {
             const chairRole = resolveActiveRoleName("Vorsitzender") || "Vorsitzender";
             db.prepare("UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-                .run(chairRole, chairId);
+                .run(chairRole, nextChairId);
             db.prepare(
                 `INSERT INTO user_scope_assignments (user_id, organization_id, updated_at)
                  VALUES (?, ?, CURRENT_TIMESTAMP)
                  ON CONFLICT(user_id) DO UPDATE SET
                    organization_id = excluded.organization_id,
                    updated_at = CURRENT_TIMESTAMP`
-            ).run(chairId, id);
+            ).run(nextChairId, id);
         }
     }
     const updated = db.prepare("SELECT * FROM organizations WHERE id = ?").get(id);

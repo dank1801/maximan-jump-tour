@@ -1570,6 +1570,23 @@ function initDomainWorkspace(config) {
                             return `<span class="workspace-team-org-pill badge badge-${entry.tone}">${escapeHtml(label)}</span>`;
                         }).join("") || "<span>Keine Organisationen</span>"}
                     </div>
+                    <table class="table" style="margin-top: 12px;">
+                        <thead><tr><th>Name</th><th>Kürzel</th><th>Vorsitz</th><th>Status</th><th>Aktion</th></tr></thead>
+                        <tbody>
+                            ${organizations.map((org) => `
+                                <tr>
+                                    <td><strong>${escapeHtml(org.name || "—")}</strong></td>
+                                    <td>${escapeHtml(org.short_name || "—")}</td>
+                                    <td>${escapeHtml(org.chair_username || org.chair_name || "—")}</td>
+                                    <td>${statusBadge(org.status || "active")}</td>
+                                    <td>${hasPermission("organizations.write")
+                                        ? `<button type="button" class="btn btn-small btn-secondary" data-edit-organization="${org.id}">Bearbeiten</button>`
+                                        : `<span class="badge badge-info">Leseansicht</span>`}
+                                    </td>
+                                </tr>
+                            `).join("") || "<tr><td colspan='5' class='table-empty'>Keine Organisationen vorhanden.</td></tr>"}
+                        </tbody>
+                    </table>
                 </div>
             </div>
             <div class="card">
@@ -1618,6 +1635,15 @@ function initDomainWorkspace(config) {
                 }
             });
         });
+        grid.querySelectorAll("[data-edit-organization]").forEach((button) => {
+            if (!state.canWrite || !hasPermission("organizations.write")) {
+                button.disabled = true;
+                button.classList.add("readonly-action");
+                return;
+            }
+            const organizationId = Number(button.getAttribute("data-edit-organization"));
+            button.addEventListener("click", () => openOrganizationEditModal(organizationId));
+        });
         grid.querySelectorAll("[data-history-team]").forEach((button) => {
             if (!state.canWrite && !hasPermission("teams.read")) {
                 button.disabled = true;
@@ -1656,6 +1682,94 @@ function initDomainWorkspace(config) {
         } catch (error) {
             showToast(error.message, "error");
         }
+    }
+
+    function openOrganizationEditModal(organizationId) {
+        const org = (Array.isArray(state.organizations) ? state.organizations : [])
+            .find((entry) => Number(entry.id) === Number(organizationId));
+        if (!org) return;
+        const users = (Array.isArray(state.users) ? state.users : [])
+            .filter((entry) => String(entry.status || "").toLowerCase() === "active");
+        const datalistId = `ws-org-chair-options-${organizationId}`;
+        const content = `
+            <form id="ws-organization-edit-form">
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Name *</label>
+                        <input type="text" name="name" value="${escapeHtml(org.name || "")}" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Kurzname</label>
+                        <input type="text" name="shortName" value="${escapeHtml(org.short_name || "")}" />
+                    </div>
+                    <div class="form-group">
+                        <label>Vorsitz neu zuweisen</label>
+                        <input type="search" name="chairUserLookup" list="${datalistId}" placeholder="Username, Name oder E-Mail" />
+                        <datalist id="${datalistId}">
+                            ${users.map((user) => `<option value="${escapeHtml(user.username)}"></option><option value="${escapeHtml(user.email)}"></option><option value="${escapeHtml(user.name)}"></option><option value="${escapeHtml(String(user.id))}"></option>`).join("")}
+                        </datalist>
+                        <div class="help-text">Leer lassen = Vorsitz bleibt unverändert.</div>
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select name="status">
+                            <option value="active" ${String(org.status || "").toLowerCase() !== "inactive" ? "selected" : ""}>Aktiv</option>
+                            <option value="inactive" ${String(org.status || "").toLowerCase() === "inactive" ? "selected" : ""}>Inaktiv</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="workspace-muted">Aktueller Vorsitz: ${escapeHtml(org.chair_username || org.chair_name || "nicht gesetzt")}</div>
+            </form>
+        `;
+        showModal(`Organisation bearbeiten · ${escapeHtml(org.name || "Organisation")}`, content, [
+            { id: "cancel", label: "Abbrechen", primary: false, handler: () => {} },
+            {
+                id: "clear-chair",
+                label: "Vorsitz entfernen",
+                primary: false,
+                handler: async () => {
+                    try {
+                        await api(`/organizations/${organizationId}`, {
+                            method: "PATCH",
+                            body: JSON.stringify({ chairUserId: null })
+                        });
+                        showToast("Vorsitz entfernt.", "success");
+                        await refreshDomainWorkspacePage();
+                    } catch (error) {
+                        showToast(error.message, "error");
+                        return false;
+                    }
+                }
+            },
+            {
+                id: "save",
+                label: "Speichern",
+                primary: true,
+                handler: async () => {
+                    const form = document.getElementById("ws-organization-edit-form");
+                    if (!form) return false;
+                    const data = getFormData(form);
+                    const payload = {
+                        name: data.name,
+                        shortName: String(data.shortName || "").trim() || null,
+                        status: data.status === "inactive" ? "inactive" : "active"
+                    };
+                    const lookup = String(data.chairUserLookup || "").trim();
+                    if (lookup) payload.chairUserLookup = lookup;
+                    try {
+                        await api(`/organizations/${organizationId}`, {
+                            method: "PATCH",
+                            body: JSON.stringify(payload)
+                        });
+                        showToast("Organisation aktualisiert.", "success");
+                        await refreshDomainWorkspacePage();
+                    } catch (error) {
+                        showToast(error.message, "error");
+                        return false;
+                    }
+                }
+            }
+        ]);
     }
 
     function openTeamReviewModal(teamId, mode) {
