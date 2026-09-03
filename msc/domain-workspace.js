@@ -1508,11 +1508,11 @@ function initDomainWorkspace(config) {
 
         const teamRows = teams.map((team) => {
             const org = organizations.find((entry) => Number(entry.id) === Number(team.organization_id));
-            const confirmed = String(team.registration_status || "").toLowerCase() === "confirmed";
             const reviewStatus = String(team.registration_status || "draft").toLowerCase();
             const locked = isLocked(team);
             const canReview = hasPermission("organizations.write");
             const canSubmit = reviewStatus === "draft" || reviewStatus === "revision_requested";
+            const canManageTeam = hasPermission("teams.write");
             return `
                 <tr>
                     <td><strong>${escapeHtml(team.name || "—")}</strong></td>
@@ -1528,6 +1528,8 @@ function initDomainWorkspace(config) {
                             ${canSubmit ? `<button type="button" class="btn btn-small btn-primary" data-submit-team="${team.id}">Einreichen</button>` : ""}
                             ${canReview ? `<button type="button" class="btn btn-small btn-secondary" data-confirm-team="${team.id}">Bestätigen</button>` : ""}
                             ${canReview ? `<button type="button" class="btn btn-small btn-warning" data-reject-team="${team.id}">Rückfrage</button>` : ""}
+                            ${canManageTeam ? `<button type="button" class="btn btn-small btn-secondary" data-edit-team="${team.id}">Bearbeiten</button>` : ""}
+                            ${canManageTeam ? `<button type="button" class="btn btn-small btn-danger" data-delete-team="${team.id}">Löschen</button>` : ""}
                             <button type="button" class="btn btn-small btn-secondary" data-history-team="${team.id}">Historie</button>
                         </div>
                     </td>
@@ -1635,6 +1637,36 @@ function initDomainWorkspace(config) {
                 }
             });
         });
+        grid.querySelectorAll("[data-edit-team]").forEach((button) => {
+            if (!state.canWrite || !hasPermission("teams.write")) {
+                button.disabled = true;
+                button.classList.add("readonly-action");
+                return;
+            }
+            const teamId = Number(button.getAttribute("data-edit-team"));
+            button.addEventListener("click", () => openTeamManageModal(teamId));
+        });
+        grid.querySelectorAll("[data-delete-team]").forEach((button) => {
+            if (!state.canWrite || !hasPermission("teams.write")) {
+                button.disabled = true;
+                button.classList.add("readonly-action");
+                return;
+            }
+            const teamId = Number(button.getAttribute("data-delete-team"));
+            button.addEventListener("click", () => {
+                const team = teams.find((entry) => Number(entry.id) === teamId);
+                if (!team) return;
+                confirmDelete(`Team ${team.name || teamId}`, async () => {
+                    try {
+                        await api(`/teams/${teamId}`, { method: "DELETE" });
+                        showToast("Team gelöscht.", "success");
+                        await refreshDomainWorkspacePage();
+                    } catch (error) {
+                        showToast(error.message, "error");
+                    }
+                });
+            });
+        });
         grid.querySelectorAll("[data-edit-organization]").forEach((button) => {
             if (!state.canWrite || !hasPermission("organizations.write")) {
                 button.disabled = true;
@@ -1653,6 +1685,90 @@ function initDomainWorkspace(config) {
             const teamId = Number(button.getAttribute("data-history-team"));
             button.addEventListener("click", () => openTeamHistoryModal(teamId));
         });
+    }
+
+    function openTeamManageModal(teamId) {
+        const team = (Array.isArray(state.teams) ? state.teams : [])
+            .find((entry) => Number(entry.id) === Number(teamId));
+        if (!team) return;
+        const organizations = Array.isArray(state.organizations) ? state.organizations : [];
+        const seasons = Array.isArray(state.seasons) ? state.seasons : [];
+        const users = (Array.isArray(state.users) ? state.users : [])
+            .filter((entry) => String(entry.status || "").toLowerCase() === "active")
+            .filter((entry) => {
+                const role = String(entry.role || "").trim().toLowerCase();
+                return role === "teammanager" || role === "trainer";
+            });
+        const organizationOptions = organizations.map((org) => `
+            <option value="${escapeHtml(org.id)}" ${Number(org.id) === Number(team.organization_id) ? "selected" : ""}>
+                ${escapeHtml(org.name || `Organisation ${org.id}`)}
+            </option>
+        `).join("");
+        const seasonOptions = [
+            `<option value="">-- Keine Saison --</option>`,
+            ...seasons.map((season) => `
+                <option value="${escapeHtml(season.id)}" ${Number(season.id) === Number(team.season_id) ? "selected" : ""}>
+                    ${escapeHtml(season.name || `Saison ${season.id}`)}
+                </option>
+            `)
+        ].join("");
+        const managerOptions = [
+            `<option value="">-- Kein Trainer/Manager --</option>`,
+            ...users.map((user) => `
+                <option value="${escapeHtml(user.id)}" ${Number(user.id) === Number(team.manager_user_id) ? "selected" : ""}>
+                    ${escapeHtml(user.name || user.username || `User ${user.id}`)} (${escapeHtml(user.username || String(user.id))})
+                </option>
+            `)
+        ].join("");
+        const content = `
+            <form id="ws-team-manage-form">
+                <div class="grid-2">
+                    <div class="form-group"><label>Name *</label><input type="text" name="name" value="${escapeHtml(team.name || "")}" required /></div>
+                    <div class="form-group"><label>Organisation *</label><select name="organizationId" required>${organizationOptions}</select></div>
+                    <div class="form-group"><label>Teamtyp *</label><select name="teamType" required><option value="A" ${String(team.team_type || "").toUpperCase() === "A" ? "selected" : ""}>A-Team</option><option value="B" ${String(team.team_type || "").toUpperCase() === "B" ? "selected" : ""}>B-Team</option><option value="C" ${String(team.team_type || "").toUpperCase() === "C" ? "selected" : ""}>C-Team</option></select></div>
+                    <div class="form-group"><label>Saison</label><select name="seasonId">${seasonOptions}</select></div>
+                    <div class="form-group"><label>Nation</label><input type="text" name="nation" value="${escapeHtml(team.nation || "")}" /></div>
+                    <div class="form-group"><label>Kategorie</label><input type="text" name="category" value="${escapeHtml(team.category || "")}" /></div>
+                    <div class="form-group"><label>Trainer/Manager</label><select name="managerUserId">${managerOptions}</select></div>
+                    <div class="form-group"><label>Status</label><select name="status"><option value="active" ${String(team.status || "").toLowerCase() !== "inactive" ? "selected" : ""}>Aktiv</option><option value="inactive" ${String(team.status || "").toLowerCase() === "inactive" ? "selected" : ""}>Inaktiv</option></select></div>
+                </div>
+                <div class="workspace-muted">Meldestatus bleibt im festen Ablauf und wird hier bewusst nicht direkt bearbeitet.</div>
+            </form>
+        `;
+        showModal(`Team bearbeiten · ${escapeHtml(team.name || "Team")}`, content, [
+            { id: "cancel", label: "Abbrechen", primary: false, handler: () => {} },
+            {
+                id: "save",
+                label: "Speichern",
+                primary: true,
+                handler: async () => {
+                    const form = document.getElementById("ws-team-manage-form");
+                    if (!form) return false;
+                    const data = getFormData(form);
+                    const payload = {
+                        name: data.name,
+                        organizationId: data.organizationId,
+                        teamType: data.teamType,
+                        seasonId: data.seasonId || null,
+                        managerUserId: data.managerUserId || null,
+                        nation: String(data.nation || "").trim() || null,
+                        category: String(data.category || "").trim() || null,
+                        status: data.status === "inactive" ? "inactive" : "active"
+                    };
+                    try {
+                        await api(`/teams/${teamId}`, {
+                            method: "PATCH",
+                            body: JSON.stringify(payload)
+                        });
+                        showToast("Team aktualisiert.", "success");
+                        await refreshDomainWorkspacePage();
+                    } catch (error) {
+                        showToast(error.message, "error");
+                        return false;
+                    }
+                }
+            }
+        ]);
     }
 
     async function openTeamHistoryModal(teamId) {
