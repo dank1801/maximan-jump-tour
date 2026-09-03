@@ -3811,6 +3811,7 @@ app.delete("/api/organizations/:id", authRequired, requirePermission("organizati
 
 app.get("/api/teams", authRequired, requirePermission("teams.read"), (req, res) => {
     const scope = getAccessibleTeamScope(req.user);
+    const includeInactive = String(req.query.includeInactive || "").trim() === "1" || String(req.query.includeInactive || "").trim().toLowerCase() === "true";
     let rows = db.prepare(
         `SELECT t.id, t.name, t.organization_id, o.name AS organization_name, t.team_type, t.nation, t.category, t.status, t.season_id, s.name AS season_name,
                 t.registration_status, t.submitted_at, t.confirmed_at, t.registration_review_comment, t.registration_reviewed_at, t.registration_reviewed_by, t.registration_deadline_at, t.created_at, u.username AS manager_username,
@@ -3826,6 +3827,9 @@ app.get("/api/teams", authRequired, requirePermission("teams.read"), (req, res) 
          ORDER BY t.id DESC`
     ).all();
     rows = rows.filter((row) => teamMatchesScope(row, scope));
+    if (!includeInactive) {
+        rows = rows.filter((row) => String(row.status || "").toLowerCase() !== "inactive");
+    }
     res.json(rows);
 });
 
