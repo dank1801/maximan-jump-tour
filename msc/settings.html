@@ -413,23 +413,6 @@
                         data[name] = checkbox.checked ? "true" : "false";
                     }
                 });
-
-                emailConfigForm?.addEventListener("submit", async (e) => {
-                    e.preventDefault();
-                    const data = getFormData(emailConfigForm);
-                    const secureCheckbox = emailConfigForm.querySelector("input[name='smtp_secure']");
-                    data.smtp_secure = secureCheckbox?.checked ? "true" : "false";
-                    try {
-                        await api("/settings", {
-                            method: "POST",
-                            body: JSON.stringify({ key: "email_config", value: data })
-                        });
-                        await hydrateSettingsForms();
-                        showToast("E-Mail-Einstellungen gespeichert.", "success");
-                    } catch (error) {
-                        showToast(error.message, "error");
-                    }
-                });
                 try {
                     await Promise.all([
                         api("/settings", {
@@ -443,6 +426,31 @@
                     ]);
                     await hydrateSettingsForms();
                     showToast("Sicherheitseinstellungen gespeichert.", "success");
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+
+            emailConfigForm?.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const data = getFormData(emailConfigForm);
+                const secureCheckbox = emailConfigForm.querySelector("input[name='smtp_secure']");
+                data.smtp_secure = secureCheckbox?.checked ? "true" : "false";
+                try {
+                    if (!String(data.smtp_pass || "").trim()) {
+                        const settings = await api("/settings");
+                        const map = Object.fromEntries((settings || []).map((entry) => [entry.key, entry.value]));
+                        const existing = map.email_config || {};
+                        if (existing.smtp_pass) {
+                            data.smtp_pass = existing.smtp_pass;
+                        }
+                    }
+                    await api("/settings", {
+                        method: "POST",
+                        body: JSON.stringify({ key: "email_config", value: data })
+                    });
+                    await hydrateSettingsForms();
+                    showToast("E-Mail-Einstellungen gespeichert.", "success");
                 } catch (error) {
                     showToast(error.message, "error");
                 }
