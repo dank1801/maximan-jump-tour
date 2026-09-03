@@ -287,21 +287,29 @@ function initDomainWorkspace(config) {
             commandCard.innerHTML = `
                 <div class="card-header"><h2>Command Deck</h2></div>
                 <div class="card-body">
+                    <div class="workspace-command-filter-row">
+                        <input type="search" id="ws-command-filter" placeholder="Aktionen, Playbooks, Workflows oder Links filtern..." />
+                        <button type="button" class="btn btn-secondary btn-small" id="ws-command-filter-clear">Filter leeren</button>
+                    </div>
                     <div class="workspace-actions-wrap">
                         <div class="workspace-action-box">
-                            <h3>Quick Actions</h3>
+                            <h3>Quick Actions <span class="workspace-count-pill" id="ws-count-quick">0</span></h3>
+                            <p class="workspace-action-help">Befüllt das Formular direkt mit einem sinnvollen Startwert.</p>
                             <div class="workspace-chip-list" id="ws-quick-actions"></div>
                         </div>
                         <div class="workspace-action-box">
-                            <h3>Playbooks</h3>
+                            <h3>Playbooks <span class="workspace-count-pill" id="ws-count-playbooks">0</span></h3>
+                            <p class="workspace-action-help">Erstellt einen Eintrag und startet optional den zugeordneten Workflow.</p>
                             <div class="workspace-chip-list" id="ws-playbook-actions"></div>
                         </div>
                         <div class="workspace-action-box">
-                            <h3>One-Click Workflows</h3>
+                            <h3>One-Click Workflows <span class="workspace-count-pill" id="ws-count-workflows">0</span></h3>
+                            <p class="workspace-action-help">Startet Workflows sofort mit Domain-Kontext.</p>
                             <div class="workspace-chip-list" id="ws-workflow-shortcuts"></div>
                         </div>
                         <div class="workspace-action-box">
-                            <h3>Verknüpfte Bereiche</h3>
+                            <h3>Verknüpfte Bereiche <span class="workspace-count-pill" id="ws-count-links">0</span></h3>
+                            <p class="workspace-action-help">Direkte Navigation in benachbarte Fachbereiche.</p>
                             <div class="workspace-chip-list" id="ws-related-links"></div>
                         </div>
                     </div>
@@ -511,6 +519,29 @@ function initDomainWorkspace(config) {
         const descNode = document.getElementById("ws-domain-description");
         if (titleNode) titleNode.textContent = domainName();
         if (descNode) descNode.textContent = state.scopeDomain?.description || experience().subtitle;
+    }
+
+    function commandDeckQuery() {
+        return String(document.getElementById("ws-command-filter")?.value || "").trim().toLowerCase();
+    }
+
+    function setCommandDeckCount(nodeId, visibleCount, totalCount) {
+        const node = document.getElementById(nodeId);
+        if (!node) return;
+        node.textContent = visibleCount === totalCount ? String(totalCount) : `${visibleCount}/${totalCount}`;
+    }
+
+    function matchesCommandDeckQuery(parts = []) {
+        const query = commandDeckQuery();
+        if (!query) return true;
+        return parts
+            .map((part) => String(part || "").toLowerCase())
+            .join(" ")
+            .includes(query);
+    }
+
+    function commandDeckEmptyMessage(defaultMessage) {
+        return commandDeckQuery() ? "<span class='workspace-muted'>Keine Treffer für den aktuellen Filter.</span>" : defaultMessage;
     }
 
     function updateKpis() {
@@ -1067,12 +1098,18 @@ function initDomainWorkspace(config) {
     function renderWorkflowShortcuts() {
         const box = document.getElementById("ws-workflow-shortcuts");
         if (!box) return;
-        if (state.workflows.length === 0) {
-            box.innerHTML = "<span class='workspace-muted'>Keine Workflows verfügbar.</span>";
+        const workflowsAll = Array.isArray(state.workflows) ? state.workflows : [];
+        const workflows = workflowsAll.filter((workflow) => matchesCommandDeckQuery([
+            workflow.name,
+            workflow.key
+        ]));
+        setCommandDeckCount("ws-count-workflows", workflows.length, workflowsAll.length);
+        if (workflows.length === 0) {
+            box.innerHTML = commandDeckEmptyMessage("<span class='workspace-muted'>Keine Workflows verfügbar.</span>");
             return;
         }
-        box.innerHTML = state.workflows.map((workflow) => `
-            <button type="button" class="workspace-chip-btn" data-run-workflow="${escapeHtml(workflow.key)}">${escapeHtml(workflow.name)}</button>
+        box.innerHTML = workflows.map((workflow) => `
+            <button type="button" class="workspace-chip-btn" data-run-workflow="${escapeHtml(workflow.key)}" title="${escapeHtml(workflow.key)}">${escapeHtml(workflow.name)}</button>
         `).join("");
         box.querySelectorAll("[data-run-workflow]").forEach((button) => {
             if (!state.canWrite) {
@@ -1099,13 +1136,28 @@ function initDomainWorkspace(config) {
     function renderPlaybooks() {
         const box = document.getElementById("ws-playbook-actions");
         if (!box) return;
-        const playbooks = experience().playbooks;
-        if (!Array.isArray(playbooks) || playbooks.length === 0) {
+        const playbooksAll = experience().playbooks;
+        if (!Array.isArray(playbooksAll) || playbooksAll.length === 0) {
+            setCommandDeckCount("ws-count-playbooks", 0, 0);
             box.innerHTML = "<span class='workspace-muted'>Keine Playbooks konfiguriert.</span>";
             return;
         }
-        box.innerHTML = playbooks.map((entry, idx) => `
-            <button type="button" class="workspace-chip-btn" data-run-playbook="${idx}">${escapeHtml(entry.label || "Playbook")}</button>
+        const playbooks = playbooksAll
+            .map((entry, idx) => ({ ...entry, _idx: idx }))
+            .filter((entry) => matchesCommandDeckQuery([
+                entry.label,
+                entry.title,
+                entry.capabilityKey,
+                entry.workflowKey,
+                entry.severity
+            ]));
+        setCommandDeckCount("ws-count-playbooks", playbooks.length, playbooksAll.length);
+        if (playbooks.length === 0) {
+            box.innerHTML = commandDeckEmptyMessage("<span class='workspace-muted'>Keine Playbooks konfiguriert.</span>");
+            return;
+        }
+        box.innerHTML = playbooks.map((entry) => `
+            <button type="button" class="workspace-chip-btn" data-run-playbook="${entry._idx}" title="${escapeHtml(`Funktion: ${capabilityLabel(entry.capabilityKey)} | Severity: ${WORKSPACE_SEVERITY_LABELS[normalizedSeverity(entry.severity || "medium")]}`)}">${escapeHtml(entry.label || "Playbook")} · ${escapeHtml(WORKSPACE_SEVERITY_LABELS[normalizedSeverity(entry.severity || "medium")])}</button>
         `).join("");
         box.querySelectorAll("[data-run-playbook]").forEach((button) => {
             if (!state.canWrite) {
@@ -1115,7 +1167,7 @@ function initDomainWorkspace(config) {
             }
             button.addEventListener("click", async () => {
                 const idx = Number(button.getAttribute("data-run-playbook"));
-                const playbook = playbooks[idx];
+                const playbook = playbooksAll[idx];
                 if (!playbook) return;
                 button.disabled = true;
                 try {
@@ -1172,26 +1224,50 @@ function initDomainWorkspace(config) {
     function renderRelatedLinks() {
         const node = document.getElementById("ws-related-links");
         if (!node) return;
-        const links = experience().relatedLinks;
-        if (!Array.isArray(links) || links.length === 0) {
+        const linksAll = experience().relatedLinks;
+        if (!Array.isArray(linksAll) || linksAll.length === 0) {
+            setCommandDeckCount("ws-count-links", 0, 0);
             node.innerHTML = "<span class='workspace-muted'>Keine Verknüpfungen konfiguriert.</span>";
             return;
         }
+        const links = linksAll.filter((entry) => matchesCommandDeckQuery([
+            entry.label,
+            entry.href
+        ]));
+        setCommandDeckCount("ws-count-links", links.length, linksAll.length);
+        if (links.length === 0) {
+            node.innerHTML = commandDeckEmptyMessage("<span class='workspace-muted'>Keine Verknüpfungen konfiguriert.</span>");
+            return;
+        }
         node.innerHTML = links.map((entry) => `
-            <a class="workspace-chip-link" href="${escapeHtml(entry.href || "#")}">${escapeHtml(entry.label || entry.href || "Bereich")}</a>
+            <a class="workspace-chip-link" href="${escapeHtml(entry.href || "#")}" title="${escapeHtml(entry.href || "")}">${escapeHtml(entry.label || entry.href || "Bereich")} ↗</a>
         `).join("");
     }
 
     function renderQuickActions() {
         const node = document.getElementById("ws-quick-actions");
         if (!node) return;
-        const actions = experience().quickActions;
-        if (!Array.isArray(actions) || actions.length === 0) {
+        const actionsAll = experience().quickActions;
+        if (!Array.isArray(actionsAll) || actionsAll.length === 0) {
+            setCommandDeckCount("ws-count-quick", 0, 0);
             node.innerHTML = "<span class='workspace-muted'>Keine Quick Actions konfiguriert.</span>";
             return;
         }
-        node.innerHTML = actions.map((entry, idx) => `
-            <button type="button" class="workspace-chip-btn" data-quick-action="${idx}">${escapeHtml(entry.label || "Aktion")}</button>
+        const actions = actionsAll
+            .map((entry, idx) => ({ ...entry, _idx: idx }))
+            .filter((entry) => matchesCommandDeckQuery([
+                entry.label,
+                entry.title,
+                entry.capabilityKey,
+                entry.severity
+            ]));
+        setCommandDeckCount("ws-count-quick", actions.length, actionsAll.length);
+        if (actions.length === 0) {
+            node.innerHTML = commandDeckEmptyMessage("<span class='workspace-muted'>Keine Quick Actions konfiguriert.</span>");
+            return;
+        }
+        node.innerHTML = actions.map((entry) => `
+            <button type="button" class="workspace-chip-btn" data-quick-action="${entry._idx}" title="${escapeHtml(`Funktion: ${capabilityLabel(entry.capabilityKey)} | Status: ${WORKSPACE_STATUS_LABELS[normalizedStatus(entry.status || "planned")]}`)}">${escapeHtml(entry.label || "Aktion")} · ${escapeHtml(WORKSPACE_STATUS_LABELS[normalizedStatus(entry.status || "planned")])}</button>
         `).join("");
         node.querySelectorAll("[data-quick-action]").forEach((button) => {
             if (!state.canWrite) {
@@ -1201,7 +1277,7 @@ function initDomainWorkspace(config) {
             }
             button.addEventListener("click", () => {
                 const idx = Number(button.getAttribute("data-quick-action"));
-                const action = actions[idx];
+                const action = actionsAll[idx];
                 if (!action) return;
                 const dueAt = action.dueHours ? new Date(Date.now() + Number(action.dueHours) * 60 * 60 * 1000) : null;
                 const form = document.getElementById("ws-record-form");
@@ -1224,6 +1300,13 @@ function initDomainWorkspace(config) {
                 form.elements.title.focus();
             });
         });
+    }
+
+    function rerenderCommandDeck() {
+        renderQuickActions();
+        renderPlaybooks();
+        renderWorkflowShortcuts();
+        renderRelatedLinks();
     }
 
     function renderFilterOptions() {
@@ -1308,6 +1391,21 @@ function initDomainWorkspace(config) {
         });
     }
 
+    function bindCommandDeckEvents() {
+        const search = document.getElementById("ws-command-filter");
+        const clear = document.getElementById("ws-command-filter-clear");
+        if (!search || search.dataset.bound === "1") return;
+        search.dataset.bound = "1";
+        search.addEventListener("input", () => {
+            rerenderCommandDeck();
+        });
+        clear?.addEventListener("click", () => {
+            search.value = "";
+            rerenderCommandDeck();
+            search.focus();
+        });
+    }
+
     async function refreshDomainWorkspacePage() {
         const filterState = getFilterValues();
         const recordsQuery = new URLSearchParams({
@@ -1349,10 +1447,8 @@ function initDomainWorkspace(config) {
         bindSavedViewActions();
         bindFilterEvents();
         renderCapabilities();
-        renderQuickActions();
-        renderPlaybooks();
-        renderWorkflowShortcuts();
-        renderRelatedLinks();
+        bindCommandDeckEvents();
+        rerenderCommandDeck();
         renderDomainModelCard();
         renderWorkflowOptions();
         renderWorkflowLogs();

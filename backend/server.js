@@ -371,7 +371,6 @@ function initDb() {
         CREATE INDEX IF NOT EXISTS idx_domain_records_domain ON domain_records(domain_key);
         CREATE INDEX IF NOT EXISTS idx_domain_records_capability ON domain_records(capability_key);
         CREATE INDEX IF NOT EXISTS idx_domain_records_event ON domain_records(event_id);
-        CREATE INDEX IF NOT EXISTS idx_domain_records_deleted_at ON domain_records(deleted_at);
 
         CREATE TABLE IF NOT EXISTS domain_record_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -528,6 +527,9 @@ function ensureDomainRecordEnhancements() {
     if (!columnNames.has("deleted_reason")) {
         db.prepare("ALTER TABLE domain_records ADD COLUMN deleted_reason TEXT").run();
     }
+    db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_domain_records_deleted_at ON domain_records(deleted_at);
+    `);
 
     db.exec(`
         CREATE TABLE IF NOT EXISTS domain_record_history (
