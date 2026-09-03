@@ -12,6 +12,41 @@ let liveRefreshTimer = null;
 let livePollTimer = null;
 let liveReconnectTimer = null;
 let liveSyncListenersBound = false;
+let currentPermissionSet = new Set();
+let currentPageReadOnly = false;
+
+const PAGE_PERMISSION_RULES = {
+    "dashboard.html": { readAny: ["dashboard.read"], writeAny: [] },
+    "users.html": { readAny: ["users.read", "roles.read", "users.write", "roles.write"], writeAny: ["users.write", "roles.write"] },
+    "teams.html": { readAny: ["teams.read", "teams.write"], writeAny: ["teams.write"] },
+    "events.html": { readAny: ["events.read", "events.write"], writeAny: ["events.write"] },
+    "points.html": { readAny: ["point_rules.read", "point_rules.write"], writeAny: ["point_rules.write"] },
+    "transfers.html": { readAny: ["transfers.read", "transfers.write"], writeAny: ["transfers.write"] },
+    "reporting.html": { readAny: ["audit.read", "publications.read", "public_api.read", "event_scores.read", "publications.write"], writeAny: ["publications.write"] },
+    "operations.html": { readAny: ["dashboard.read", "workflows.execute"], writeAny: ["dashboard.read", "workflows.execute"] },
+    "settings.html": { readAny: ["settings.read", "settings.write"], writeAny: ["settings.write"] }
+};
+
+const PAGE_WRITE_FORM_SELECTORS = {
+    "users.html": ["#create-user-form", "#role-form"],
+    "teams.html": ["#create-team-form"],
+    "events.html": ["#create-event-form"],
+    "points.html": ["#points-rules-form"],
+    "transfers.html": ["#transfer-window-form", "#create-transfer-form"],
+    "reporting.html": ["#create-publication-form"],
+    "operations.html": ["#module-record-form", "#workflow-execution-form"],
+    "settings.html": ["#system-config-form", "#security-config-form", "#email-config-form"]
+};
+
+const PAGE_READONLY_ACTION_SELECTORS = {
+    "users.html": ["[data-edit-user]", "[data-delete-user]", "[data-edit-role]", "[data-delete-role]"],
+    "teams.html": ["button[onclick*='editTeamModal']", "button[onclick*='deleteTeam']"],
+    "events.html": ["[data-delete-event]", "button[onclick*='editEventModal']"],
+    "points.html": ["#save-rule-button", "#reset-rule-button", "#add-points-row", "#add-bonus-profile", "#generate-scale", "#normalize-scale", "#clear-scale"],
+    "transfers.html": ["#transfers-list .btn", "#contracts-list .btn"],
+    "reporting.html": ["#audit-log-tbody + .form-actions .btn", "#publications-list .btn"],
+    "operations.html": ["#module-records-list .btn", "#workflow-logs-list .btn"]
+};
 
 // ============ HELPERS ============
 
@@ -210,6 +245,8 @@ function scheduleLiveRefresh() {
     liveRefreshTimer = setTimeout(async () => {
         liveRefreshTimer = null;
         const page = pageName();
+        const state = getPagePermissionState();
+        if (!state.canRead) return;
         try {
             if (page === "dashboard.html") {
                 await loadDashboard();
@@ -355,6 +392,117 @@ function activateNav() {
     });
 }
 
+function setPermissionContext(user) {
+    const list = Array.isArray(user?.permissions) ? user.permissions : [];
+    currentPermissionSet = new Set(list.map((entry) => String(entry || "").trim()).filter(Boolean));
+}
+
+function hasPermission(permission) {
+    return currentPermissionSet.has(String(permission || "").trim());
+}
+
+function hasAnyPermission(permissions = []) {
+    return (Array.isArray(permissions) ? permissions : []).some((permission) => hasPermission(permission));
+}
+
+function getPagePermissionState() {
+    const page = pageName();
+    const rule = PAGE_PERMISSION_RULES[page] || { readAny: [], writeAny: [] };
+    const canRead = rule.readAny.length === 0 || hasAnyPermission(rule.readAny);
+    const canWrite = rule.writeAny.length > 0 && hasAnyPermission(rule.writeAny);
+    return { page, canRead, canWrite };
+}
+
+function applyNavPermissionVisibility() {
+    const navRules = {
+        "dashboard.html": ["dashboard.read"],
+        "users.html": ["users.read", "roles.read", "users.write", "roles.write"],
+        "teams.html": ["teams.read", "teams.write"],
+        "events.html": ["events.read", "events.write"],
+        "points.html": ["point_rules.read", "point_rules.write"],
+        "transfers.html": ["transfers.read", "transfers.write"],
+        "reporting.html": ["audit.read", "publications.read", "public_api.read", "event_scores.read", "publications.write"],
+        "operations.html": ["dashboard.read", "workflows.execute"],
+        "settings.html": ["settings.read", "settings.write"]
+    };
+    document.querySelectorAll(".portal-nav a").forEach((link) => {
+        const href = (link.getAttribute("href") || "").toLowerCase();
+        const perms = navRules[href];
+        if (!perms || perms.length === 0) return;
+        const visible = hasAnyPermission(perms);
+        const listItem = link.closest("li");
+        if (listItem) {
+            listItem.classList.toggle("hidden", !visible);
+        } else {
+            link.classList.toggle("hidden", !visible);
+        }
+    });
+}
+
+function renderNoAccessPage() {
+    const content = document.querySelector(".portal-content");
+    if (!content) return;
+    content.innerHTML = `
+        <div class="card permission-empty-state">
+            <div class="card-header">
+                <h2>Zugriff nicht verfügbar</h2>
+            </div>
+            <div class="card-body">
+                <p>Für diesen Bereich fehlen die Leseberechtigungen. Bitte Rolle oder Berechtigungen im Benutzer- und Rollenmodul anpassen.</p>
+            </div>
+        </div>
+    `;
+}
+
+function applyReadOnlyUi(formSelector) {
+    const form = document.querySelector(formSelector);
+    if (!form || form.dataset.readonlyApplied === "1") return;
+    form.dataset.readonlyApplied = "1";
+    form.classList.add("readonly-surface");
+    const banner = document.createElement("div");
+    banner.className = "readonly-banner";
+    banner.textContent = "Leseansicht: Für diese Rolle sind Änderungen in diesem Bereich deaktiviert.";
+    form.prepend(banner);
+    form.querySelectorAll("input, select, textarea").forEach((field) => {
+        field.disabled = true;
+    });
+    form.querySelectorAll("button").forEach((button) => {
+        if (button.classList.contains("tab-button")) return;
+        button.disabled = true;
+    });
+}
+
+function applyReadOnlyActionButtons(root = document) {
+    if (!currentPageReadOnly) return;
+    const selectors = PAGE_READONLY_ACTION_SELECTORS[pageName()] || [];
+    selectors.forEach((selector) => {
+        root.querySelectorAll(selector).forEach((node) => {
+            if (!(node instanceof HTMLElement)) return;
+            node.classList.add("readonly-action");
+            if ("disabled" in node) {
+                node.disabled = true;
+            }
+            node.setAttribute("aria-disabled", "true");
+        });
+    });
+}
+
+function applyPageReadOnlyExperience() {
+    const { page, canWrite } = getPagePermissionState();
+    currentPageReadOnly = !canWrite;
+    if (canWrite) return;
+    const selectors = PAGE_WRITE_FORM_SELECTORS[page] || [];
+    selectors.forEach((selector) => applyReadOnlyUi(selector));
+    applyReadOnlyActionButtons(document);
+}
+
+function activateFirstVisibleTab() {
+    const firstVisible = Array.from(document.querySelectorAll(".tab-button[data-tab]"))
+        .find((buttonNode) => !buttonNode.classList.contains("hidden"));
+    if (!firstVisible) return;
+    activateTab(firstVisible);
+}
+
 function wireLogout() {
     const button = document.getElementById("logout-button");
     if (!button) return;
@@ -376,6 +524,7 @@ async function requireAuth() {
     try {
         const { user } = await api("/auth/me");
         saveAuth({ token: auth.token, user });
+        setPermissionContext(user);
         setIdentity(user);
         return user;
     } catch (error) {
@@ -486,6 +635,7 @@ function setTableRows(ids, html, colspan, emptyText) {
     const target = findByIds(ids);
     if (!target) return false;
     target.innerHTML = html || `<tr><td colspan="${colspan}" class="table-empty">${emptyText}</td></tr>`;
+    applyReadOnlyActionButtons(target.closest(".card") || target);
     return true;
 }
 
@@ -873,6 +1023,7 @@ async function loadRolesAndPermissions() {
 function renderRolesTable() {
     const tbody = document.getElementById("roles-list-tbody");
     if (!tbody) return;
+    const canManageRoles = hasPermission("roles.write");
     const html = usersPageState.roles.map((role) => {
         const preview = (role.permissions || []).slice(0, 4).map((p) => `<span class="permission-pill">${escapeHtml(permissionLabel(p))}</span>`).join("");
         const extra = (role.permissions || []).length > 4 ? `<span class="permission-pill">+${(role.permissions || []).length - 4} weitere</span>` : "";
@@ -890,15 +1041,19 @@ function renderRolesTable() {
                     <div class="permission-pill-list" style="margin-top: 8px;">${assignmentPreview || '<span class="permission-pill">Keine Pflicht-Zuweisung</span>'}</div>
                 </td>
                 <td>${role.user_count || 0}</td>
-                <td>
-                    <button class="btn btn-small btn-secondary" data-edit-role="${role.id}">Bearbeiten</button>
-                    <button class="btn btn-small btn-danger" data-delete-role="${role.id}" ${role.is_system ? "disabled" : ""}>Löschen</button>
+                <td>${canManageRoles
+                    ? `
+                        <button class="btn btn-small btn-secondary" data-edit-role="${role.id}">Bearbeiten</button>
+                        <button class="btn btn-small btn-danger" data-delete-role="${role.id}" ${role.is_system ? "disabled" : ""}>Löschen</button>
+                    `
+                    : `<span class="badge badge-info">Leseansicht</span>`}
                 </td>
             </tr>
         `;
     }).join("");
     tbody.innerHTML = html || `<tr><td colspan="6" class="table-empty">Keine Rollen vorhanden</td></tr>`;
 
+    if (!canManageRoles) return;
     document.querySelectorAll("[data-edit-role]").forEach((buttonNode) => {
         buttonNode.addEventListener("click", () => {
             const roleId = Number(buttonNode.getAttribute("data-edit-role"));
@@ -933,6 +1088,7 @@ async function loadUsers() {
     usersPageState.users = Array.isArray(users) ? users : [];
     const container = findByIds(["users-list", "users-list-tbody"]);
     if (!container) return;
+    const canManageUsers = hasPermission("users.write");
 
     const html = usersPageState.users.map((user) => `
         <tr>
@@ -943,15 +1099,19 @@ async function loadUsers() {
             <td>${escapeHtml(assignmentSummary(user))}</td>
             <td>${statusBadge(user.status)}</td>
             <td>${user.last_login_at ? new Date(user.last_login_at).toLocaleDateString("de-DE") : "—"}</td>
-            <td>
-                <button class="btn btn-small btn-secondary" data-edit-user="${user.id}">Bearbeiten</button>
-                <button class="btn btn-small btn-danger" data-delete-user="${user.id}">Löschen</button>
+            <td>${canManageUsers
+                ? `
+                    <button class="btn btn-small btn-secondary" data-edit-user="${user.id}">Bearbeiten</button>
+                    <button class="btn btn-small btn-danger" data-delete-user="${user.id}">Löschen</button>
+                `
+                : `<span class="badge badge-info">Leseansicht</span>`}
             </td>
         </tr>
     `).join("");
 
     container.innerHTML = html || `<tr><td colspan="8" class="table-empty">Keine Benutzer vorhanden</td></tr>`;
 
+    if (!canManageUsers) return;
     document.querySelectorAll("[data-edit-user]").forEach((buttonNode) => {
         buttonNode.addEventListener("click", () => {
             const userId = Number(buttonNode.getAttribute("data-edit-user"));
@@ -980,6 +1140,10 @@ async function loadUsers() {
 
 async function showEditUserModal(user) {
     if (!user) return;
+    if (!hasPermission("users.write")) {
+        showToast("Für das Bearbeiten von Benutzern fehlt die Berechtigung.", "warning");
+        return;
+    }
     if (usersPageState.roles.length === 0) {
         await loadRolesAndPermissions();
     }
@@ -1109,8 +1273,36 @@ async function showEditUserModal(user) {
 }
 
 async function setupUsersPage() {
+    const canReadUsers = hasAnyPermission(["users.read", "users.write"]);
+    const canReadRoles = hasAnyPermission(["roles.read", "roles.write"]);
+    const canWriteUsers = hasPermission("users.write");
+    const canWriteRoles = hasPermission("roles.write");
+
+    const userTabButton = document.querySelector(".tab-button[data-tab='tab-users-admin']");
+    const rolesOverviewButton = document.querySelector(".tab-button[data-tab='tab-roles-admin']");
+    const rolesEditorButton = document.querySelector(".tab-button[data-tab='tab-roles-editor']");
+    const userTabContent = document.getElementById("tab-users-admin");
+    const rolesOverviewContent = document.getElementById("tab-roles-admin");
+    const rolesEditorContent = document.getElementById("tab-roles-editor");
+
+    if (!canReadUsers) {
+        userTabButton?.classList.add("hidden");
+        userTabContent?.classList.add("hidden");
+    }
+    if (!canReadRoles) {
+        rolesOverviewButton?.classList.add("hidden");
+        rolesEditorButton?.classList.add("hidden");
+        rolesOverviewContent?.classList.add("hidden");
+        rolesEditorContent?.classList.add("hidden");
+    }
+    if (!canReadUsers && !canReadRoles) {
+        renderNoAccessPage();
+        return;
+    }
+    activateFirstVisibleTab();
+
     const createUserForm = document.getElementById("create-user-form");
-    if (createUserForm) {
+    if (createUserForm && canReadUsers) {
         const roleSelect = document.getElementById("create-user-role");
         const teamSelect = document.getElementById("create-user-team");
         const eventSelect = document.getElementById("create-user-event");
@@ -1152,6 +1344,10 @@ async function setupUsersPage() {
 
         createUserForm.addEventListener("submit", async (event) => {
             event.preventDefault();
+            if (!canWriteUsers) {
+                showToast("Für das Anlegen von Benutzern fehlt die Berechtigung.", "warning");
+                return;
+            }
             const data = getFormData(createUserForm);
             const role = findRoleByName(data.role);
             const required = new Set(normalizeRequiredAssignments(role?.required_assignments || []));
@@ -1213,12 +1409,19 @@ async function setupUsersPage() {
                 showToast(error.message, "error");
             }
         });
+        if (!canWriteUsers) {
+            applyReadOnlyUi("#create-user-form");
+        }
     }
 
     const roleForm = document.getElementById("role-form");
-    if (roleForm) {
+    if (roleForm && canReadRoles) {
         roleForm.addEventListener("submit", async (event) => {
             event.preventDefault();
+            if (!canWriteRoles) {
+                showToast("Für das Bearbeiten von Rollen fehlt die Berechtigung.", "warning");
+                return;
+            }
             const payload = readRoleFormPayload();
             if (!payload.name) {
                 showToast("Bitte einen Rollennamen eingeben.", "error");
@@ -1245,19 +1448,28 @@ async function setupUsersPage() {
                 showToast(error.message, "error");
             }
         });
+        if (!canWriteRoles) {
+            applyReadOnlyUi("#role-form");
+        }
     }
 
     document.getElementById("role-cancel-edit")?.addEventListener("click", () => {
         resetRoleForm();
     });
 
-    await Promise.all([loadUsers(), loadRolesAndPermissions()]);
+    const loaders = [];
+    if (canReadUsers) loaders.push(loadUsers());
+    if (canReadRoles) loaders.push(loadRolesAndPermissions());
+    if (loaders.length > 0) {
+        await Promise.all(loaders);
+    }
 }
 
 // ============ TEAMS PAGE ============
 
 async function loadTeams() {
     try {
+        const canManageTeams = hasPermission("teams.write");
         const teams = await api("/teams");
         const html = teams.map(t => `
             <tr>
@@ -1266,9 +1478,12 @@ async function loadTeams() {
                 <td>${t.nation || "—"}</td>
                 <td>${t.manager_username || "—"}</td>
                 <td>${statusBadge(t.status || "pending")}</td>
-                <td>
-                    <button class="btn-small btn-secondary" onclick="editTeamModal(${t.id})">Bearbeiten</button>
-                    <button class="btn-small btn-danger" onclick="confirmDelete('Team ${t.name}', () => deleteTeam(${t.id}))">Löschen</button>
+                <td>${canManageTeams
+                    ? `
+                        <button class="btn-small btn-secondary" onclick="editTeamModal(${t.id})">Bearbeiten</button>
+                        <button class="btn-small btn-danger" onclick="confirmDelete('Team ${t.name}', () => deleteTeam(${t.id}))">Löschen</button>
+                    `
+                    : `<span class="badge badge-info">Leseansicht</span>`}
                 </td>
             </tr>
         `).join("");
@@ -1334,11 +1549,21 @@ async function loadTeamLicenses() {
 }
 
 async function setupTeamsPage() {
+    const canReadTeams = hasAnyPermission(["teams.read", "teams.write"]);
+    const canWriteTeams = hasPermission("teams.write");
+    if (!canReadTeams) {
+        renderNoAccessPage();
+        return;
+    }
     const form = document.getElementById("create-team-form");
     if (form && !form.dataset.boundSubmit) {
         form.dataset.boundSubmit = "1";
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
+            if (!canWriteTeams) {
+                showToast("Für das Anlegen von Teams fehlt die Berechtigung.", "warning");
+                return;
+            }
             const data = getFormData(form);
             try {
                 await api("/teams", {
@@ -1353,6 +1578,9 @@ async function setupTeamsPage() {
             }
         });
     }
+    if (!canWriteTeams) {
+        applyReadOnlyUi("#create-team-form");
+    }
     document.getElementById("license-filter")?.addEventListener("change", () => {
         loadTeamLicenses();
     });
@@ -1360,6 +1588,10 @@ async function setupTeamsPage() {
 }
 
 async function deleteTeam(id) {
+    if (!hasPermission("teams.write")) {
+        showToast("Für das Löschen von Teams fehlt die Berechtigung.", "warning");
+        return;
+    }
     try {
         await api(`/teams/${id}`, { method: "DELETE" });
         showToast("Team gelöscht.", "success");
@@ -1488,7 +1720,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         const user = await requireAuth();
         if (user) {
             wireLogout();
+            applyNavPermissionVisibility();
             activateNav();
+            const permissionState = getPagePermissionState();
+            if (!permissionState.canRead) {
+                renderNoAccessPage();
+                return;
+            }
+            applyPageReadOnlyExperience();
             connectLiveSync();
             
             const page = pageName();
