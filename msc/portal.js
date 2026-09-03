@@ -113,13 +113,26 @@ function showModal(title, content, actions = []) {
     `;
     
     // Wire up action handlers
-    actions.forEach(action => {
-        if (typeof action.handler === "function") {
-            modal.querySelector(`[data-action="${action.id}"]`)?.addEventListener("click", () => {
-                action.handler();
+    actions.forEach((action) => {
+        const button = modal.querySelector(`[data-action="${action.id}"]`);
+        if (!button) return;
+        button.addEventListener("click", async () => {
+            if (typeof action.handler !== "function") {
                 modal.remove();
-            });
-        }
+                return;
+            }
+            button.disabled = true;
+            try {
+                const result = await action.handler();
+                if (result !== false) {
+                    modal.remove();
+                }
+            } catch (_error) {
+                // Handler already surfaces UX errors (toast/message); keep modal open.
+            } finally {
+                button.disabled = false;
+            }
+        });
     });
     
     // Close on outside click
@@ -1034,19 +1047,19 @@ async function showEditUserModal(user) {
                 const required = new Set(normalizeRequiredAssignments(role?.required_assignments || []));
                 if ((required.has("team") || isTeamManagerRole(data.role)) && !data.managedTeamId) {
                     showToast("Für diese Rolle ist ein Team verpflichtend.", "error");
-                    return;
+                    return false;
                 }
                 if (required.has("event") && !data.assignmentEventId) {
                     showToast("Für diese Rolle ist ein Wettbewerb verpflichtend.", "error");
-                    return;
+                    return false;
                 }
                 if (required.has("venue") && !String(data.assignmentVenueCode || "").trim()) {
                     showToast("Für diese Rolle ist eine Schanze verpflichtend.", "error");
-                    return;
+                    return false;
                 }
                 if (required.has("other") && !String(data.assignmentOtherScope || "").trim()) {
                     showToast("Für diese Rolle ist eine zusätzliche Zuordnung verpflichtend.", "error");
-                    return;
+                    return false;
                 }
                 data.assignments = {
                     teamId: data.managedTeamId || null,
@@ -1065,8 +1078,10 @@ async function showEditUserModal(user) {
                     });
                     showToast(`${user.name} wurde aktualisiert`, "success");
                     await loadUsers();
+                    return true;
                 } catch (error) {
                     showToast(error.message, "error");
+                    return false;
                 }
             }
         }

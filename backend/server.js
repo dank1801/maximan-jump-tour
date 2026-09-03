@@ -2071,12 +2071,16 @@ app.delete("/api/users/:id", authRequired, requirePermission("users.write"), (re
         res.status(400).json({ error: "Invalid user id" });
         return;
     }
-    const result = db.prepare("UPDATE users SET status = 'inactive', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
+    if (Number(req.user?.id) === id || Number(req.user?.sub) === id) {
+        res.status(400).json({ error: "Das eigene Benutzerkonto kann nicht gelöscht werden." });
+        return;
+    }
+    const result = db.prepare("DELETE FROM users WHERE id = ?").run(id);
     if (result.changes === 0) {
         res.status(404).json({ error: "User not found" });
         return;
     }
-    logAudit(req.user, "DEACTIVATE_USER", "users", id, "Soft-deactivated user");
+    logAudit(req.user, "DELETE_USER", "users", id, "User deleted");
     res.status(204).send();
 });
 
