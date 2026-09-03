@@ -1926,6 +1926,23 @@ function teamHasConfirmedSpringers(teamId) {
     return getTeamSpringerRows(teamId).every((member) => !Number(member.is_springer) || String(member.license_status || "").toLowerCase() === "confirmed");
 }
 
+function canBypassDeadlineLock(user) {
+    return ADMIN_ROLES.includes(normalizeRole(user?.role));
+}
+
+function getTeamRegistrationDeadline(team) {
+    if (!team) return null;
+    const deadline = team.registration_deadline_at || getSeasonById(team.season_id)?.registration_deadline_at || null;
+    if (!deadline) return null;
+    const parsed = new Date(deadline);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isTeamDeadlineLocked(team) {
+    const deadline = getTeamRegistrationDeadline(team);
+    return Boolean(deadline && Date.now() > deadline.getTime());
+}
+
 function organizationTeamSummary(organizationId) {
     const rows = db.prepare("SELECT id, team_type FROM teams WHERE organization_id = ? AND status != 'inactive'").all(organizationId);
     const summary = {
@@ -3049,7 +3066,12 @@ app.get("/api/teams", authRequired, requirePermission("teams.read"), (req, res) 
     const scope = getAccessibleTeamScope(req.user);
     let rows = db.prepare(
         `SELECT t.id, t.name, t.organization_id, o.name AS organization_name, t.team_type, t.nation, t.category, t.status, t.season_id, s.name AS season_name,
-                t.registration_status, t.submitted_at, t.confirmed_at, t.registration_deadline_at, t.created_at, u.username AS manager_username
+                t.registration_status, t.submitted_at, t.confirmed_at, t.registration_deadline_at, t.created_at, u.username AS manager_username,
+                CASE
+                    WHEN COALESCE(t.registration_deadline_at, s.registration_deadline_at) IS NOT NULL
+                         AND datetime('now') > datetime(COALESCE(t.registration_deadline_at, s.registration_deadline_at))
+                    THEN 1 ELSE 0
+                END AS registration_locked
          FROM teams t
          LEFT JOIN users u ON u.id = t.manager_user_id
          LEFT JOIN organizations o ON o.id = t.organization_id
@@ -3117,6 +3139,10 @@ app.post("/api/teams", authRequired, requirePermission("teams.write"), (req, res
         }
     }
     const seasonDeadline = parsedSeasonId ? getSeasonById(parsedSeasonId)?.registration_deadline_at || null : null;
+    if (seasonDeadline && !canBypassDeadlineLock(req.user) && Date.now() > new Date(seasonDeadline).getTime()) {
+        res.status(409).json({ error: "Die Meldungsfrist für diese Saison ist abgelaufen." });
+        return;
+    }
     const result = db
         .prepare(
             `INSERT INTO teams (name, organization_id, team_type, nation, category, manager_user_id, season_id, registration_status, registration_deadline_at, status)
@@ -3228,6 +3254,10 @@ app.patch("/api/teams/:id", authRequired, requirePermission("teams.write"), (req
         res.status(managerValidationStatus).json({ error: managerValidationError });
         return;
     }
+    if (isTeamDeadlineLocked(existing) && !canBypassDeadlineLock(req.user)) {
+        res.status(409).json({ error: "Dieses Team ist nach Meldeschluss gesperrt." });
+        return;
+    }
     if (nextOrgId !== existing.organization_id && scope.type !== "all") {
         res.status(403).json({ error: "Organisationen dürfen nur im eigenen Scope geändert werden." });
         return;
@@ -3263,6 +3293,10 @@ app.delete("/api/teams/:id", authRequired, requirePermission("teams.write"), (re
         return;
     }
     if (!assertTeamAccess(res, req.user, existing, "write")) return;
+    if (isTeamDeadlineLocked(existing) && !canBypassDeadlineLock(req.user)) {
+        res.status(409).json({ error: "Dieses Team ist nach Meldeschluss gesperrt." });
+        return;
+    }
     const result = db.prepare("UPDATE teams SET status = 'inactive', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
     if (result.changes === 0) {
         res.status(404).json({ error: "Team not found" });
@@ -3300,6 +3334,10 @@ app.post("/api/teams/:id/members", authRequired, requirePermission("team_members
         return;
     }
     if (!assertTeamAccess(res, req.user, team, "write")) return;
+    if (isTeamDeadlineLocked(team) && !canBypassDeadlineLock(req.user)) {
+        res.status(409).json({ error: "Dieses Team ist nach Meldeschluss gesperrt." });
+        return;
+    }
     const { name, memberRole, licenseType, licenseValidUntil, licenseStatus, isSpringer } = req.body || {};
     if (!requireFields(res, req.body || {}, ["name", "memberRole"])) return;
     const result = db
@@ -3339,6 +3377,10 @@ app.patch("/api/team-members/:id", authRequired, requirePermission("team_members
         return;
     }
     if (!assertTeamAccess(res, req.user, team, "write")) return;
+    if (isTeamDeadlineLocked(team) && !canBypassDeadlineLock(req.user)) {
+        res.status(409).json({ error: "Dieses Team ist nach Meldeschluss gesperrt." });
+        return;
+    }
     const allowedMap = {
         name: "name",
         memberRole: "member_role",
@@ -3396,6 +3438,10 @@ app.delete("/api/team-members/:id", authRequired, requirePermission("team_member
         return;
     }
     if (!assertTeamAccess(res, req.user, team, "write")) return;
+    if (isTeamDeadlineLocked(team) && !canBypassDeadlineLock(req.user)) {
+        res.status(409).json({ error: "Dieses Team ist nach Meldeschluss gesperrt." });
+        return;
+    }
     const result = db.prepare("DELETE FROM team_members WHERE id = ?").run(id);
     if (result.changes === 0) {
         res.status(404).json({ error: "Team member not found" });
@@ -3508,6 +3554,10 @@ app.post("/api/teams/:id/confirm-registration", authRequired, requirePermission(
         res.status(404).json({ error: "Saison wurde nicht gefunden oder ist inaktiv." });
         return;
     }
+    if (isTeamDeadlineLocked(team) && !canBypassDeadlineLock(req.user)) {
+        res.status(409).json({ error: "Dieses Team ist nach Meldeschluss gesperrt." });
+        return;
+    }
     if (season.registration_deadline_at) {
         const deadline = new Date(season.registration_deadline_at);
         if (!Number.isNaN(deadline.getTime()) && Date.now() > deadline.getTime() && !ADMIN_ROLES.includes(normalizeRole(req.user?.role))) {
@@ -3519,6 +3569,10 @@ app.post("/api/teams/:id/confirm-registration", authRequired, requirePermission(
     const missingSpringerLicenses = springerRows.filter((member) => Number(member.is_springer) === 1 && String(member.license_status || "").toLowerCase() !== "confirmed");
     if (missingSpringerLicenses.length > 0) {
         res.status(409).json({ error: "Nicht alle Springer haben eine bestätigte Lizenz." });
+        return;
+    }
+    if (!teamHasConfirmedSpringers(team.id)) {
+        res.status(409).json({ error: "Team kann erst bestätigt werden, wenn alle Springer-Lizenzen bestätigt sind." });
         return;
     }
     db.prepare(

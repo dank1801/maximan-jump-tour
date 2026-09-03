@@ -1293,6 +1293,27 @@ function initDomainWorkspace(config) {
         const organizations = Array.isArray(state.organizations) ? state.organizations : [];
         const seasons = Array.isArray(state.seasons) ? state.seasons : [];
         const teams = Array.isArray(state.teams) ? state.teams : [];
+        const resolvedDeadline = (team) => {
+            const deadline = team.registration_deadline_at || seasons.find((season) => Number(season.id) === Number(team.season_id))?.registration_deadline_at || null;
+            if (!deadline) return null;
+            const date = new Date(deadline);
+            return Number.isNaN(date.getTime()) ? null : date;
+        };
+        const isLocked = (team) => {
+            if (Number(team.registration_locked) === 1) return true;
+            const deadline = resolvedDeadline(team);
+            return Boolean(deadline && Date.now() > deadline.getTime());
+        };
+        const nextDeadline = teams
+            .map((team) => resolvedDeadline(team))
+            .filter(Boolean)
+            .sort((a, b) => a.getTime() - b.getTime())[0] || null;
+        const confirmedTeams = teams.filter((team) => String(team.registration_status || "").toLowerCase() === "confirmed");
+        const lockedTeams = teams.filter((team) => isLocked(team));
+        const deadlineLabel = nextDeadline
+            ? `${formatDateTime(nextDeadline.toISOString())}${Date.now() > nextDeadline.getTime() ? " · abgelaufen" : ""}`
+            : "Keine aktive Frist";
+        const registrationQuota = `${teams.length}/3 Teams`;
 
         orgSelect.innerHTML = `<option value="">-- Organisation wählen --</option>${
             organizations.map((org) => `<option value="${escapeHtml(org.id)}">${escapeHtml(org.name)}${org.short_name ? ` (${escapeHtml(org.short_name)})` : ""}</option>`).join("")
@@ -1304,6 +1325,7 @@ function initDomainWorkspace(config) {
         const teamRows = teams.map((team) => {
             const org = organizations.find((entry) => Number(entry.id) === Number(team.organization_id));
             const confirmed = String(team.registration_status || "").toLowerCase() === "confirmed";
+            const locked = isLocked(team);
             return `
                 <tr>
                     <td><strong>${escapeHtml(team.name || "—")}</strong></td>
@@ -1312,6 +1334,7 @@ function initDomainWorkspace(config) {
                     <td>${statusBadge(confirmed ? "live" : (team.registration_status || "planned"))}</td>
                     <td>${escapeHtml(team.season_name || "—")}</td>
                     <td>${team.confirmed_at ? escapeHtml(formatDateTime(team.confirmed_at)) : "—"}</td>
+                    <td>${locked ? statusBadge("blocked") : statusBadge("planned")}</td>
                     <td>
                         <div class="actions-inline">
                             <button type="button" class="btn btn-small btn-secondary" data-confirm-team="${team.id}">Bestätigen</button>
@@ -1322,11 +1345,31 @@ function initDomainWorkspace(config) {
         }).join("");
 
         grid.innerHTML = `
+            <div class="card workspace-team-summary">
+                <div class="card-header"><h3>Meldefluss</h3></div>
+                <div class="card-body">
+                    <div class="workspace-mini-pill-list">
+                        <span>${escapeHtml(registrationQuota)}</span>
+                        <span>${escapeHtml(`${confirmedTeams.length} bestätigt`)}</span>
+                        <span>${escapeHtml(`${lockedTeams.length} gesperrt`)}</span>
+                        <span>${escapeHtml(deadlineLabel)}</span>
+                    </div>
+                    <ol class="workspace-team-flow">
+                        <li><strong>1. Organisation</strong><span>Vorsitz und Scope festlegen, damit Teams im richtigen Kontext landen.</span></li>
+                        <li><strong>2. Teams melden</strong><span>A-Team zuerst, dann maximal zwei weitere Teams bis zur Dreierrenze.</span></li>
+                        <li><strong>3. Springer zuweisen</strong><span>Springer nur mit Lizenzen, die vor der Freigabe bestätigt werden.</span></li>
+                        <li><strong>4. Meldung bestätigen</strong><span>Nach Prüfung wird das Team für die Saison fixiert und gesperrt.</span></li>
+                    </ol>
+                </div>
+            </div>
             <div class="card">
                 <div class="card-header"><h3>Organisationen</h3></div>
                 <div class="card-body">
                     <div class="workspace-mini-pill-list">
-                        ${organizations.map((org) => `<span>${escapeHtml(org.name)}${org.chair_username ? ` · Vorsitz: ${escapeHtml(org.chair_username)}` : ""}</span>`).join("") || "<span>Keine Organisationen</span>"}
+                        ${organizations.map((org) => {
+                            const count = teams.filter((team) => Number(team.organization_id) === Number(org.id)).length;
+                            return `<span>${escapeHtml(org.name)}${org.chair_username ? ` · Vorsitz: ${escapeHtml(org.chair_username)}` : ""} · ${count}/3</span>`;
+                        }).join("") || "<span>Keine Organisationen</span>"}
                     </div>
                 </div>
             </div>
@@ -1334,8 +1377,8 @@ function initDomainWorkspace(config) {
                 <div class="card-header"><h3>Teams</h3></div>
                 <div class="card-body">
                     <table class="table">
-                        <thead><tr><th>Team</th><th>Organisation</th><th>Typ</th><th>Status</th><th>Saison</th><th>Bestätigt</th><th>Aktion</th></tr></thead>
-                        <tbody>${teamRows || "<tr><td colspan='7' class='table-empty'>Keine Teams vorhanden.</td></tr>"}</tbody>
+                        <thead><tr><th>Team</th><th>Organisation</th><th>Typ</th><th>Status</th><th>Saison</th><th>Bestätigt</th><th>Frist</th><th>Aktion</th></tr></thead>
+                        <tbody>${teamRows || "<tr><td colspan='8' class='table-empty'>Keine Teams vorhanden.</td></tr>"}</tbody>
                     </table>
                 </div>
             </div>

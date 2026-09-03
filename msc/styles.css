@@ -989,6 +989,38 @@ html, body {
     padding: 2px 8px;
 }
 
+.workspace-team-summary .card-body {
+    display: grid;
+    gap: 14px;
+}
+
+.workspace-team-flow {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    list-style: none;
+}
+
+.workspace-team-flow li {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--lighter);
+    padding: 10px;
+}
+
+.workspace-team-flow strong {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--primary-dark);
+    font-size: 13px;
+}
+
+.workspace-team-flow span {
+    display: block;
+    font-size: 12px;
+    color: var(--gray-dark);
+}
+
 .workspace-json-preview {
     margin-top: 10px;
     border: 1px solid var(--border);

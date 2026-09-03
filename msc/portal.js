@@ -16,6 +16,7 @@ let liveReconnectTimer = null;
 let liveSyncListenersBound = false;
 let currentPermissionSet = new Set();
 let currentPageReadOnly = false;
+let currentUserContext = null;
 const DOMAIN_WORKSPACE_PAGES = [
     "msc-admin.html",
     "loc-dashboard.html",
@@ -192,6 +193,7 @@ function saveAuth(payload) {
 
 function clearAuth() {
     localStorage.removeItem(AUTH_KEY);
+    currentUserContext = null;
     if (liveSocket) {
         liveSocket.close();
         liveSocket = null;
@@ -515,12 +517,21 @@ function activateNav() {
 }
 
 function setPermissionContext(user) {
+    currentUserContext = user || null;
     const list = Array.isArray(user?.permissions) ? user.permissions : [];
     currentPermissionSet = new Set(list.map((entry) => String(entry || "").trim()).filter(Boolean));
 }
 
+function normalizeRoleName(role) {
+    return String(role || "").trim().toLowerCase();
+}
+
+function isAdminRole(role) {
+    return ["msc admin", "admin", "root-admin"].includes(normalizeRoleName(role));
+}
+
 function hasPermission(permission) {
-    return currentPermissionSet.has(String(permission || "").trim());
+    return isAdminRole(currentUserContext?.role) || currentPermissionSet.has(String(permission || "").trim());
 }
 
 function hasAnyPermission(permissions = []) {
