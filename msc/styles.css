@@ -1077,6 +1077,35 @@ html, body {
     margin-bottom: 10px;
 }
 
+.workspace-inline-details {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: var(--lighter);
+}
+
+.workspace-inline-details summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--primary-dark);
+}
+
+body.ux-guided-mode .workspace-secondary-card,
+body.ux-guided-mode #ws-filter-row,
+body.ux-guided-mode #ws-saved-view-row,
+body.ux-guided-mode .workspace-advanced-block,
+body.ux-guided-mode .permission-matrix {
+    display: none !important;
+}
+
+body.ux-guided-mode .workspace-guidance-card {
+    border-left: 4px solid var(--secondary);
+}
+
+.ux-mode-toggle {
+    margin-right: 8px;
+}
+
 .workspace-json-preview {
     margin-top: 10px;
     border: 1px solid var(--border);

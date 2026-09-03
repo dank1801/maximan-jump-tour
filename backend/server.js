@@ -1528,6 +1528,30 @@ function findUserByEmail(email, exceptUserId = null) {
         .get(normalizedEmail);
 }
 
+function findUserByLookup(lookup, exceptUserId = null) {
+    const normalized = String(lookup || "").trim();
+    if (!normalized) return null;
+    if (/^\d+$/.test(normalized)) {
+        const id = parseInt(normalized, 10);
+        if (!id || (exceptUserId && Number(exceptUserId) === id)) return null;
+        return db.prepare("SELECT id FROM users WHERE id = ? LIMIT 1").get(id);
+    }
+    const lowered = normalized.toLowerCase();
+    if (exceptUserId) {
+        return db.prepare(
+            `SELECT id FROM users
+             WHERE id != ?
+               AND (LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?) OR LOWER(name) = LOWER(?))
+             LIMIT 1`
+        ).get(exceptUserId, normalized, lowered, lowered);
+    }
+    return db.prepare(
+        `SELECT id FROM users
+         WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?) OR LOWER(name) = LOWER(?)
+         LIMIT 1`
+    ).get(normalized, lowered, lowered);
+}
+
 function mapUserWriteError(error) {
     const message = String(error?.message || "");
     if (message.includes("users.username")) {
@@ -2938,11 +2962,16 @@ app.get("/api/organizations", authRequired, requirePermission("organizations.rea
 
 app.post("/api/organizations", authRequired, requirePermission("organizations.write"), (req, res) => {
     if (!assertAdminUser(res, req.user)) return;
-    const { name, shortName, chairUserId, chairUser, status } = req.body || {};
+    const { name, shortName, chairUserId, chairUserLookup, chairUser, status } = req.body || {};
     if (!requireFields(res, req.body || {}, ["name"])) return;
-    const chairId = chairUserId ? parseId(chairUserId) : null;
+    const chairLookup = chairUserLookup ? findUserByLookup(chairUserLookup) : null;
+    const chairId = chairUserId ? parseId(chairUserId) : (chairLookup?.id || null);
     if (chairUserId && !chairId) {
         res.status(400).json({ error: "Ungültige Vorsitzenden-ID." });
+        return;
+    }
+    if (chairUserLookup && !chairId) {
+        res.status(404).json({ error: "Kein passender Vorsitzender gefunden." });
         return;
     }
     if (chairId) {
@@ -3040,7 +3069,7 @@ app.post("/api/organizations", authRequired, requirePermission("organizations.wr
                    updated_at = CURRENT_TIMESTAMP`
             ).run(chairId, org.id);
         }
-        return org;
+        return db.prepare("SELECT * FROM organizations WHERE id = ?").get(org.id);
     })();
     if (!result) {
         res.status(500).json({ error: "Organisation konnte nicht erstellt werden." });
@@ -3076,10 +3105,15 @@ app.patch("/api/organizations/:id", authRequired, requirePermission("organizatio
         updates.push("status = ?");
         values.push(req.body.status === "inactive" ? "inactive" : "active");
     }
-    if (req.body?.chairUserId !== undefined) {
-        const chairId = req.body.chairUserId ? parseId(req.body.chairUserId) : null;
+    if (req.body?.chairUserId !== undefined || req.body?.chairUserLookup !== undefined) {
+        const lookup = req.body?.chairUserLookup ? findUserByLookup(req.body.chairUserLookup, existing.chair_user_id || null) : null;
+        const chairId = req.body.chairUserId ? parseId(req.body.chairUserId) : (lookup?.id || null);
         if (req.body.chairUserId && !chairId) {
             res.status(400).json({ error: "Ungültige Vorsitzenden-ID." });
+            return;
+        }
+        if (req.body.chairUserLookup && !chairId) {
+            res.status(404).json({ error: "Kein passender Vorsitzender gefunden." });
             return;
         }
         if (chairId) {

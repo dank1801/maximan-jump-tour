@@ -8,6 +8,7 @@ const LIVE_RECONNECT_DELAY_MS = 2000;
 const LIVE_REFRESH_DEBOUNCE_MS = 700;
 const LIVE_POLL_INTERVAL_MS = 15000;
 const TIMEZONE_STORAGE_KEY = "msc_portal_timezone";
+const UI_MODE_KEY = "msc_portal_ui_mode";
 const COMMAND_PALETTE_HINT = "⌘/Ctrl + K";
 let liveSocket = null;
 let liveRefreshTimer = null;
@@ -538,6 +539,39 @@ function hasAnyPermission(permissions = []) {
     return (Array.isArray(permissions) ? permissions : []).some((permission) => hasPermission(permission));
 }
 
+function getUiMode() {
+    const stored = localStorage.getItem(UI_MODE_KEY);
+    return stored === "advanced" ? "advanced" : "guided";
+}
+
+function setUiMode(mode) {
+    const next = mode === "advanced" ? "advanced" : "guided";
+    localStorage.setItem(UI_MODE_KEY, next);
+    applyUiMode();
+    return next;
+}
+
+function isGuidedMode() {
+    return getUiMode() === "guided";
+}
+
+function applyUiMode() {
+    document.body.classList.toggle("ux-guided-mode", isGuidedMode());
+    document.body.classList.toggle("ux-advanced-mode", !isGuidedMode());
+    const button = document.getElementById("ux-mode-toggle");
+    if (button) {
+        button.textContent = isGuidedMode() ? "Einfachmodus" : "Erweitert";
+        button.setAttribute("aria-pressed", String(!isGuidedMode()));
+    }
+}
+
+function toggleUiMode() {
+    setUiMode(isGuidedMode() ? "advanced" : "guided");
+    if (typeof window.refreshDomainWorkspacePage === "function" && isDomainWorkspacePage()) {
+        window.refreshDomainWorkspacePage().catch(() => {});
+    }
+}
+
 function isDomainWorkspacePage(page = pageName()) {
     return DOMAIN_WORKSPACE_PAGES.includes(String(page || "").toLowerCase());
 }
@@ -838,6 +872,24 @@ function wireLogout() {
             window.location.href = "login.html";
         }, 500);
     });
+}
+
+function wireUiModeToggle() {
+    const container = document.querySelector(".portal-user-info");
+    if (!container || document.getElementById("ux-mode-toggle")) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.id = "ux-mode-toggle";
+    button.className = "btn btn-secondary btn-small";
+    button.classList.add("ux-mode-toggle");
+    button.addEventListener("click", toggleUiMode);
+    const logout = container.querySelector("#logout-button");
+    if (logout) {
+        logout.insertAdjacentElement("beforebegin", button);
+    } else {
+        container.appendChild(button);
+    }
+    applyUiMode();
 }
 
 async function requireAuth() {
@@ -2230,6 +2282,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const user = await requireAuth();
         if (user) {
             wireLogout();
+            wireUiModeToggle();
             ensureDomainNavLinks();
             applyNavPermissionVisibility();
             activateNav();

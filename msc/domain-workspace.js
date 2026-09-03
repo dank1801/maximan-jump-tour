@@ -284,9 +284,38 @@ function initDomainWorkspace(config) {
         const content = document.querySelector(".portal-content");
         if (!content) return;
 
+        if (!document.getElementById("ws-guidance-card")) {
+            const guidanceCard = document.createElement("div");
+            guidanceCard.className = "card workspace-guidance-card";
+            guidanceCard.id = "ws-guidance-card";
+            const steps = domainKey === "team_portal"
+                ? [
+                    "1. Organisation auswählen oder neu anlegen",
+                    "2. Teamtyp und Saison setzen",
+                    "3. Springer und Lizenzen prüfen, dann bestätigen"
+                ]
+                : [
+                    "1. Primäre Aufgabe öffnen",
+                    "2. Quick Action oder Formular nutzen",
+                    "3. Details nur bei Bedarf einblenden"
+                ];
+            guidanceCard.innerHTML = `
+                <div class="card-header"><h2>Schnellstart</h2></div>
+                <div class="card-body">
+                    <p class="workspace-muted">${escapeHtml(experience().subtitle)}</p>
+                    <div class="workspace-mini-pill-list">
+                        <span>${escapeHtml(steps[0])}</span>
+                        <span>${escapeHtml(steps[1])}</span>
+                        <span>${escapeHtml(steps[2])}</span>
+                    </div>
+                </div>
+            `;
+            content.prepend(guidanceCard);
+        }
+
         if (!document.getElementById("ws-command-deck-card")) {
             const commandCard = document.createElement("div");
-            commandCard.className = "card";
+            commandCard.className = "card workspace-secondary-card";
             commandCard.id = "ws-command-deck-card";
             commandCard.innerHTML = `
                 <div class="card-header"><h2>Command Deck</h2></div>
@@ -326,7 +355,7 @@ function initDomainWorkspace(config) {
 
         if (!document.getElementById("ws-intelligence-card")) {
             const intelCard = document.createElement("div");
-            intelCard.className = "card";
+            intelCard.className = "card workspace-secondary-card";
             intelCard.id = "ws-intelligence-card";
             intelCard.innerHTML = `
                 <div class="card-header"><h2>Domain Intelligence</h2></div>
@@ -339,7 +368,7 @@ function initDomainWorkspace(config) {
 
         if (!document.getElementById("ws-model-card")) {
             const modelCard = document.createElement("div");
-            modelCard.className = "card";
+            modelCard.className = "card workspace-secondary-card";
             modelCard.id = "ws-model-card";
             modelCard.innerHTML = `
                 <div class="card-header"><h2>Domain Datenmodell</h2></div>
@@ -352,7 +381,7 @@ function initDomainWorkspace(config) {
 
         if (!document.getElementById("ws-status-board-card")) {
             const boardCard = document.createElement("div");
-            boardCard.className = "card";
+            boardCard.className = "card workspace-secondary-card";
             boardCard.id = "ws-status-board-card";
             boardCard.innerHTML = `
                 <div class="card-header"><h2>Operations Board</h2></div>
@@ -365,7 +394,7 @@ function initDomainWorkspace(config) {
 
         if (!document.getElementById("ws-sla-card")) {
             const slaCard = document.createElement("div");
-            slaCard.className = "card";
+            slaCard.className = "card workspace-secondary-card";
             slaCard.id = "ws-sla-card";
             slaCard.innerHTML = `
                 <div class="card-header"><h2>SLA & Risiko Monitor</h2></div>
@@ -389,7 +418,7 @@ function initDomainWorkspace(config) {
 
         if (!document.getElementById("ws-inbox-card")) {
             const inboxCard = document.createElement("div");
-            inboxCard.className = "card";
+            inboxCard.className = "card workspace-secondary-card";
             inboxCard.id = "ws-inbox-card";
             inboxCard.innerHTML = `
                 <div class="card-header"><h2>Benachrichtigungscenter</h2></div>
@@ -417,21 +446,22 @@ function initDomainWorkspace(config) {
                                 <div class="form-group"><label>Name *</label><input type="text" name="name" required /></div>
                                 <div class="form-group"><label>Kurzname</label><input type="text" name="shortName" /></div>
                                 <div class="form-group">
-                                    <label>Bestehenden Vorsitzenden verknüpfen</label>
-                                    <select name="chairUserId">
-                                        <option value="">-- bestehenden Account wählen --</option>
-                                    </select>
+                                    <label>Vorsitzenden suchen</label>
+                                    <input type="search" name="chairUserLookup" list="ws-chair-user-options" placeholder="Username, Name oder E-Mail" />
+                                    <datalist id="ws-chair-user-options"></datalist>
                                 </div>
-                                <div class="form-group">
-                                    <label>Oder neuen Vorsitzenden anlegen</label>
-                                    <input type="text" name="newChairUsername" placeholder="Benutzername" />
-                                </div>
-                                <div class="form-group"><label>Neuer Vorsitzender: Name</label><input type="text" name="newChairName" placeholder="Vorname Nachname" /></div>
-                                <div class="form-group"><label>Neuer Vorsitzender: E-Mail</label><input type="email" name="newChairEmail" placeholder="name@example.com" /></div>
-                                <div class="form-group"><label>Neuer Vorsitzender: Passwort optional</label><input type="password" name="newChairPassword" placeholder="leer lassen für Einladung" /></div>
-                                <div class="form-group">
-                                    <label><input type="checkbox" name="newChairSendInvitation" checked /> Einladung per E-Mail senden</label>
-                                </div>
+                                <details class="workspace-inline-details workspace-advanced-block">
+                                    <summary>Neuen Vorsitzenden anlegen</summary>
+                                    <div class="grid-2" style="margin-top: 10px;">
+                                        <div class="form-group"><label>Benutzername</label><input type="text" name="newChairUsername" placeholder="benutzername" /></div>
+                                        <div class="form-group"><label>Name</label><input type="text" name="newChairName" placeholder="Vorname Nachname" /></div>
+                                        <div class="form-group"><label>E-Mail</label><input type="email" name="newChairEmail" placeholder="name@example.com" /></div>
+                                        <div class="form-group"><label>Passwort optional</label><input type="password" name="newChairPassword" placeholder="leer lassen für Einladung" /></div>
+                                        <div class="form-group">
+                                            <label><input type="checkbox" name="newChairSendInvitation" checked /> Einladung per E-Mail senden</label>
+                                        </div>
+                                    </div>
+                                </details>
                             </div>
                             <div class="form-actions"><button type="submit" class="btn btn-primary btn-small">Organisation speichern</button></div>
                         </form>
@@ -1367,14 +1397,19 @@ function initDomainWorkspace(config) {
         seasonSelect.innerHTML = `<option value="">-- Saison optional --</option>${
             seasons.map((season) => `<option value="${escapeHtml(season.id)}">${escapeHtml(season.name)}</option>`).join("")
         }`;
-        const chairSelect = document.querySelector("#ws-organization-form select[name='chairUserId']");
-        if (chairSelect) {
-            chairSelect.innerHTML = `<option value="">-- bestehenden Account wählen --</option>${
-                users
-                    .filter((user) => String(user.status || "").toLowerCase() === "active")
-                    .map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.username)} · ${escapeHtml(user.name)} · ${escapeHtml(user.role)}</option>`)
-                    .join("")
-            }`;
+        const chairLookup = document.querySelector("#ws-organization-form input[name='chairUserLookup']");
+        const chairOptions = document.getElementById("ws-chair-user-options");
+        if (chairLookup) {
+            chairLookup.placeholder = users.length > 0 ? "Username, Name oder E-Mail" : "Kein Account gefunden";
+        }
+        if (chairOptions) {
+            chairOptions.innerHTML = users
+                .filter((user) => String(user.status || "").toLowerCase() === "active")
+                .map((user) => {
+                    const label = `${user.username} · ${user.name} · ${user.email}`;
+                    return `<option value="${escapeHtml(user.username)}"></option><option value="${escapeHtml(user.email)}"></option><option value="${escapeHtml(user.name)}"></option><option value="${escapeHtml(String(user.id))}"></option><option value="${escapeHtml(label)}"></option>`;
+                })
+                .join("");
         }
 
         const teamRows = teams.map((team) => {
@@ -1555,6 +1590,7 @@ function initDomainWorkspace(config) {
                 event.preventDefault();
                 const data = getFormData(orgForm);
                 const newChairFilled = Boolean(String(data.newChairUsername || "").trim() || String(data.newChairName || "").trim() || String(data.newChairEmail || "").trim());
+                const chairLookup = String(data.chairUserLookup || "").trim();
                 const chairUser = newChairFilled
                     ? {
                         username: data.newChairUsername || "",
@@ -1570,14 +1606,16 @@ function initDomainWorkspace(config) {
                         body: JSON.stringify({
                             name: data.name,
                             shortName: data.shortName || null,
-                            chairUserId: chairUser ? null : (data.chairUserId || null),
+                            chairUserId: null,
+                            chairUserLookup: chairUser ? null : chairLookup || null,
                             chairUser,
                             status: "active"
                         })
                     });
                     showToast("Organisation gespeichert.", "success");
                     orgForm.reset();
-                    orgForm.querySelector("[name='newChairSendInvitation']")?.setAttribute("checked", "checked");
+                    const invitation = orgForm.querySelector("[name='newChairSendInvitation']");
+                    if (invitation) invitation.checked = true;
                     await refreshDomainWorkspacePage();
                 } catch (error) {
                     showToast(error.message, "error");
@@ -1810,7 +1848,7 @@ function initDomainWorkspace(config) {
                 api("/organizations"),
                 api("/seasons"),
                 api("/teams"),
-                api("/users")
+                    hasPermission("users.read") ? api("/users") : Promise.resolve([])
                 ]
                 : [Promise.resolve([]), Promise.resolve([]), Promise.resolve([]), Promise.resolve([])];
         const [scope, records, logs, savedViews, notifications, models, organizations, seasons, teams, users] = await Promise.all([
