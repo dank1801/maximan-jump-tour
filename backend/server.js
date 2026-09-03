@@ -279,7 +279,7 @@ function initDb() {
 function migrateUsersEmailConstraint() {
     const schemaRow = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get();
     const createSql = String(schemaRow?.sql || "");
-    if (!/email\s+TEXT\s+NOT NULL\s+UNIQUE/i.test(createSql)) {
+    if (!/email[^,]*\bunique\b/i.test(createSql)) {
         return;
     }
     db.exec(`
@@ -305,6 +305,21 @@ function migrateUsersEmailConstraint() {
         COMMIT;
         PRAGMA foreign_keys = ON;
     `);
+}
+
+function dropUsersEmailUniqueIndexes() {
+    const indexes = db.prepare("PRAGMA index_list(users)").all();
+    for (const index of indexes) {
+        if (!index || Number(index.unique) !== 1 || !index.name || String(index.name).startsWith("sqlite_autoindex")) {
+            continue;
+        }
+        const columns = db.prepare(`PRAGMA index_info("${String(index.name).replace(/"/g, "\"\"")}")`).all();
+        const hasEmailColumn = columns.some((column) => String(column?.name || "").toLowerCase() === "email");
+        if (!hasEmailColumn) {
+            continue;
+        }
+        db.prepare(`DROP INDEX IF EXISTS "${String(index.name).replace(/"/g, "\"\"")}"`).run();
+    }
 }
 
 function ensureRolesRequiredAssignmentsColumn() {
@@ -903,7 +918,15 @@ function getSettingValue(key) {
 }
 
 function isDuplicateEmailAllowed() {
-    return parseBooleanSetting(getSettingValue("allow_duplicate_emails"), false);
+    const directSetting = getSettingValue("allow_duplicate_emails");
+    if (directSetting !== null && directSetting !== undefined) {
+        return parseBooleanSetting(directSetting, false);
+    }
+    const securityConfig = getSettingValue("security_config");
+    if (securityConfig && typeof securityConfig === "object") {
+        return parseBooleanSetting(securityConfig.allow_duplicate_emails, false);
+    }
+    return false;
 }
 
 function findUserByEmail(email, exceptUserId = null) {
@@ -1264,6 +1287,7 @@ app.use(express.json({ limit: "1mb" }));
 
 initDb();
 migrateUsersEmailConstraint();
+dropUsersEmailUniqueIndexes();
 ensureRolesRequiredAssignmentsColumn();
 ensureInvitationsTable();
 seedDefaultRoles();
