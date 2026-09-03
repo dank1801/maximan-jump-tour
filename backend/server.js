@@ -358,15 +358,68 @@ function initDb() {
             owner_role TEXT,
             event_id INTEGER,
             payload_json TEXT NOT NULL DEFAULT '{}',
+            deleted_at TEXT,
+            deleted_by INTEGER,
+            deleted_reason TEXT,
             created_by INTEGER,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE SET NULL,
-            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+            FOREIGN KEY (deleted_by) REFERENCES users(id) ON DELETE SET NULL
         );
         CREATE INDEX IF NOT EXISTS idx_domain_records_domain ON domain_records(domain_key);
         CREATE INDEX IF NOT EXISTS idx_domain_records_capability ON domain_records(capability_key);
         CREATE INDEX IF NOT EXISTS idx_domain_records_event ON domain_records(event_id);
+        CREATE INDEX IF NOT EXISTS idx_domain_records_deleted_at ON domain_records(deleted_at);
+
+        CREATE TABLE IF NOT EXISTS domain_record_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            record_id INTEGER NOT NULL,
+            domain_key TEXT NOT NULL,
+            capability_key TEXT NOT NULL,
+            action TEXT NOT NULL,
+            actor_user_id INTEGER,
+            actor_username TEXT,
+            before_json TEXT NOT NULL DEFAULT '{}',
+            after_json TEXT NOT NULL DEFAULT '{}',
+            note TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (record_id) REFERENCES domain_records(id) ON DELETE CASCADE,
+            FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_domain_record_history_record ON domain_record_history(record_id);
+        CREATE INDEX IF NOT EXISTS idx_domain_record_history_domain ON domain_record_history(domain_key);
+
+        CREATE TABLE IF NOT EXISTS user_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            message TEXT NOT NULL,
+            severity TEXT NOT NULL DEFAULT 'info',
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            is_read INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            read_at TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_notifications_user ON user_notifications(user_id);
+        CREATE INDEX IF NOT EXISTS idx_user_notifications_read ON user_notifications(user_id, is_read);
+
+        CREATE TABLE IF NOT EXISTS domain_saved_views (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            domain_key TEXT NOT NULL,
+            name TEXT NOT NULL,
+            visibility TEXT NOT NULL DEFAULT 'private',
+            owner_user_id INTEGER NOT NULL,
+            owner_role TEXT NOT NULL,
+            filters_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_domain_saved_views_domain ON domain_saved_views(domain_key);
+        CREATE INDEX IF NOT EXISTS idx_domain_saved_views_owner ON domain_saved_views(owner_user_id);
 
         CREATE TABLE IF NOT EXISTS workflow_runs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -460,6 +513,70 @@ function ensureInvitationsTable() {
         );
         CREATE INDEX IF NOT EXISTS idx_invitations_token ON invitations(token);
         CREATE INDEX IF NOT EXISTS idx_invitations_user_id ON invitations(user_id);
+    `);
+}
+
+function ensureDomainRecordEnhancements() {
+    const columns = db.prepare("PRAGMA table_info(domain_records)").all();
+    const columnNames = new Set(columns.map((column) => String(column.name || "")));
+    if (!columnNames.has("deleted_at")) {
+        db.prepare("ALTER TABLE domain_records ADD COLUMN deleted_at TEXT").run();
+    }
+    if (!columnNames.has("deleted_by")) {
+        db.prepare("ALTER TABLE domain_records ADD COLUMN deleted_by INTEGER").run();
+    }
+    if (!columnNames.has("deleted_reason")) {
+        db.prepare("ALTER TABLE domain_records ADD COLUMN deleted_reason TEXT").run();
+    }
+
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS domain_record_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            record_id INTEGER NOT NULL,
+            domain_key TEXT NOT NULL,
+            capability_key TEXT NOT NULL,
+            action TEXT NOT NULL,
+            actor_user_id INTEGER,
+            actor_username TEXT,
+            before_json TEXT NOT NULL DEFAULT '{}',
+            after_json TEXT NOT NULL DEFAULT '{}',
+            note TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (record_id) REFERENCES domain_records(id) ON DELETE CASCADE,
+            FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_domain_record_history_record ON domain_record_history(record_id);
+        CREATE INDEX IF NOT EXISTS idx_domain_record_history_domain ON domain_record_history(domain_key);
+
+        CREATE TABLE IF NOT EXISTS user_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            message TEXT NOT NULL,
+            severity TEXT NOT NULL DEFAULT 'info',
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            is_read INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            read_at TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_notifications_user ON user_notifications(user_id);
+        CREATE INDEX IF NOT EXISTS idx_user_notifications_read ON user_notifications(user_id, is_read);
+
+        CREATE TABLE IF NOT EXISTS domain_saved_views (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            domain_key TEXT NOT NULL,
+            name TEXT NOT NULL,
+            visibility TEXT NOT NULL DEFAULT 'private',
+            owner_user_id INTEGER NOT NULL,
+            owner_role TEXT NOT NULL,
+            filters_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_domain_saved_views_domain ON domain_saved_views(domain_key);
+        CREATE INDEX IF NOT EXISTS idx_domain_saved_views_owner ON domain_saved_views(owner_user_id);
     `);
 }
 
@@ -848,6 +965,42 @@ const PORTAL_DOMAIN_BLUEPRINTS = [
         ]
     }
 ];
+
+const DOMAIN_CAPABILITY_SCHEMAS = {
+    msc_admin: {
+        rule_versioning: { required: ["severity"], allowedEscalations: ["none", "msc", "legal"] },
+        season_planning: { required: ["dueAt"], allowedEscalations: ["none", "msc"] },
+        jury_management: { required: ["severity", "escalation"], allowedEscalations: ["none", "msc", "loc"] },
+        discipline_cases: { required: ["severity"], allowedEscalations: ["none", "legal", "msc"] },
+        finance_operations: { required: [], allowedEscalations: ["none", "msc"] }
+    },
+    loc: {
+        hill_clearance: { required: ["dueAt"], allowedEscalations: ["none", "loc", "msc"] },
+        wind_monitoring: { required: ["severity"], allowedEscalations: ["none", "loc"] },
+        gate_panel: { required: [], allowedEscalations: ["none", "loc", "msc"] },
+        emergency_protocols: { required: ["severity"], allowedEscalations: ["none", "loc", "medical"] }
+    },
+    team_portal: {
+        registration: { required: [], allowedEscalations: ["none", "msc"] },
+        athlete_registry: { required: [], allowedEscalations: ["none", "msc"] },
+        material_checks: { required: [], allowedEscalations: ["none", "loc"] },
+        transfer_control: { required: [], allowedEscalations: ["none", "legal", "msc"] },
+        medical_uploads: { required: ["severity"], allowedEscalations: ["none", "medical"] }
+    },
+    athlete_app: {
+        profiles: { required: [], allowedEscalations: ["none", "msc"] },
+        medical_clearance: { required: ["severity"], allowedEscalations: ["none", "medical"] },
+        startlists: { required: [], allowedEscalations: ["none", "loc"] },
+        results: { required: [], allowedEscalations: ["none", "msc"] },
+        notifications: { required: [], allowedEscalations: ["none", "msc"] }
+    },
+    public_site: {
+        live_ticker: { required: [], allowedEscalations: ["none", "msc"] },
+        startlists: { required: [], allowedEscalations: ["none", "msc"] },
+        standings: { required: [], allowedEscalations: ["none", "msc"] },
+        embargo_clips: { required: ["dueAt"], allowedEscalations: ["none", "legal", "msc"] }
+    }
+};
 
 const DOMAIN_READ_PERMISSIONS = PORTAL_DOMAIN_BLUEPRINTS.map((entry) => entry.readPermission);
 const DOMAIN_WRITE_PERMISSIONS = PORTAL_DOMAIN_BLUEPRINTS.map((entry) => entry.writePermission);
@@ -1362,11 +1515,110 @@ function assertDomainPermission(res, user, domainKey, permissionType) {
         return null;
     }
     const requiredPermission = permissionType === "write" ? domain.writePermission : domain.readPermission;
+    if (permissionType !== "write" && hasPermissionValue(user, "dashboard.read")) {
+        return domain;
+    }
     if (!hasPermissionValue(user, requiredPermission)) {
         res.status(403).json({ error: `Missing permission: ${requiredPermission}` });
         return null;
     }
     return domain;
+}
+
+function domainSeverity(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    return ["low", "medium", "high", "critical"].includes(normalized) ? normalized : "medium";
+}
+
+function validateDomainPayload(domainKey, capabilityKey, payload) {
+    const source = payload && typeof payload === "object" ? payload : {};
+    const schema = DOMAIN_CAPABILITY_SCHEMAS[domainKey]?.[capabilityKey] || { required: [], allowedEscalations: ["none"] };
+    const normalizedPayload = {
+        notes: source.notes ? String(source.notes).trim() : "",
+        severity: domainSeverity(source.severity),
+        dueAt: source.dueAt ? String(source.dueAt).trim() : null,
+        escalation: source.escalation ? String(source.escalation).trim().toLowerCase() : "none",
+        tags: Array.isArray(source.tags)
+            ? source.tags.map((entry) => String(entry || "").trim()).filter(Boolean)
+            : String(source.tags || "").split(",").map((entry) => entry.trim()).filter(Boolean),
+        externalRef: source.externalRef ? String(source.externalRef).trim() : ""
+    };
+    if (normalizedPayload.dueAt) {
+        const dueDate = new Date(normalizedPayload.dueAt);
+        if (Number.isNaN(dueDate.getTime())) {
+            return { ok: false, error: "payload.dueAt ist kein gültiges Datum" };
+        }
+        normalizedPayload.dueAt = dueDate.toISOString();
+    }
+    if (!schema.allowedEscalations.includes(normalizedPayload.escalation)) {
+        return { ok: false, error: `payload.escalation für ${domainKey}/${capabilityKey} ungültig` };
+    }
+    for (const requiredField of schema.required || []) {
+        if (!normalizedPayload[requiredField]) {
+            return { ok: false, error: `payload.${requiredField} ist für ${domainKey}/${capabilityKey} erforderlich` };
+        }
+    }
+    return { ok: true, payload: normalizedPayload };
+}
+
+function mapDomainRecordRow(row) {
+    if (!row) return null;
+    return {
+        ...row,
+        payload: parseConfigJsonSafely(row.payload_json)
+    };
+}
+
+function logDomainRecordHistory(actor, action, beforeRow, afterRow, note) {
+    const record = afterRow || beforeRow;
+    if (!record) return;
+    db.prepare(
+        `INSERT INTO domain_record_history
+         (record_id, domain_key, capability_key, action, actor_user_id, actor_username, before_json, after_json, note)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+        record.id,
+        record.domain_key,
+        record.capability_key,
+        action,
+        actor?.sub || null,
+        actor?.username || "system",
+        JSON.stringify(mapDomainRecordRow(beforeRow) || {}),
+        JSON.stringify(mapDomainRecordRow(afterRow) || {}),
+        note || null
+    );
+}
+
+function notificationRecipientsForDomain(domainKey) {
+    const domain = findDomainBlueprint(domainKey);
+    if (!domain) return [];
+    const users = db.prepare("SELECT id, username, role FROM users WHERE status = 'active'").all();
+    return users
+        .filter((user) => {
+            const perms = resolvePermissionsForRole(user.role);
+            return perms.includes("dashboard.read") || perms.includes(domain.readPermission) || perms.includes(domain.writePermission);
+        })
+        .map((user) => user.id);
+}
+
+function createNotifications(userIds, title, message, severity = "info", payload = {}) {
+    if (!Array.isArray(userIds) || userIds.length === 0) return;
+    const stmt = db.prepare(
+        `INSERT INTO user_notifications (user_id, title, message, severity, payload_json)
+         VALUES (?, ?, ?, ?, ?)`
+    );
+    const normalizedSeverity = domainSeverity(severity);
+    const payloadJson = JSON.stringify(payload || {});
+    userIds.forEach((userId) => {
+        stmt.run(userId, title, message, normalizedSeverity, payloadJson);
+        broadcastLiveUpdate({
+            type: "notification",
+            userId,
+            title,
+            message,
+            severity: normalizedSeverity
+        });
+    });
 }
 
 function logAudit(actor, action, entityType, entityId, details) {
@@ -2706,6 +2958,7 @@ app.get(
         .prepare(
             `SELECT domain_key, capability_key, title, status, owner_role, payload_json, created_at, updated_at
              FROM domain_records
+             WHERE deleted_at IS NULL
              ORDER BY id DESC`
         )
         .all();
@@ -2750,12 +3003,46 @@ app.get(
 });
 
 app.get(
+    "/api/domain-models",
+    authRequired,
+    requireAnyPermission(["dashboard.read", ...DOMAIN_READ_PERMISSIONS, ...DOMAIN_WRITE_PERMISSIONS]),
+    (req, res) => {
+        const models = PORTAL_DOMAIN_BLUEPRINTS
+            .filter((domain) =>
+                hasPermissionValue(req.user, "dashboard.read")
+                || hasPermissionValue(req.user, domain.readPermission)
+                || hasPermissionValue(req.user, domain.writePermission)
+            )
+            .map((domain) => ({
+                domainKey: domain.key,
+                domainName: domain.name,
+                capabilities: domain.capabilities.map((capability) => ({
+                    key: capability.key,
+                    name: capability.name,
+                    schema: DOMAIN_CAPABILITY_SCHEMAS[domain.key]?.[capability.key] || { required: [], allowedEscalations: ["none"] }
+                }))
+            }));
+        res.json(models);
+    }
+);
+
+app.get(
     "/api/domain-records",
     authRequired,
     requireAnyPermission([...DOMAIN_READ_PERMISSIONS, ...DOMAIN_WRITE_PERMISSIONS, "dashboard.read"]),
     (req, res) => {
         const requestedDomain = String(req.query.domainKey || "").trim();
         const requestedCapability = String(req.query.capabilityKey || "").trim();
+        const requestedStatus = String(req.query.status || "").trim();
+        const requestedOwnerRole = String(req.query.ownerRole || "").trim();
+        const requestedSearch = String(req.query.search || "").trim().toLowerCase();
+        const requestedSeverity = String(req.query.severity || "").trim().toLowerCase();
+        const dueState = String(req.query.dueState || "").trim().toLowerCase();
+        const includeDeleted = parseBooleanSetting(req.query.includeDeleted, false);
+        const onlyDeleted = parseBooleanSetting(req.query.onlyDeleted, false);
+        const limit = Math.min(Math.max(parseId(req.query.limit) || 100, 1), 500);
+        const offsetRaw = Number(req.query.offset);
+        const offset = Number.isInteger(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
         if (requestedDomain) {
             const domain = assertDomainPermission(res, req.user, requestedDomain, "read");
             if (!domain) return;
@@ -2773,26 +3060,69 @@ app.get(
             return;
         }
 
-        let rows = db.prepare("SELECT * FROM domain_records ORDER BY id DESC LIMIT 500").all();
+        const where = [];
+        const params = [];
+
         if (requestedDomain) {
-            rows = rows.filter((row) => row.domain_key === requestedDomain);
+            where.push("domain_key = ?");
+            params.push(requestedDomain);
         } else if (!hasPermissionValue(req.user, "dashboard.read")) {
-            rows = rows.filter((row) => readableDomains.includes(row.domain_key));
+            where.push(`domain_key IN (${readableDomains.map(() => "?").join(", ")})`);
+            params.push(...readableDomains);
         }
         if (requestedCapability) {
-            rows = rows.filter((row) => row.capability_key === requestedCapability);
+            where.push("capability_key = ?");
+            params.push(requestedCapability);
         }
-        res.json(rows.map((row) => ({
-            ...row,
-            payload: parseConfigJsonSafely(row.payload_json)
-        })));
+        if (requestedStatus) {
+            where.push("LOWER(status) = LOWER(?)");
+            params.push(requestedStatus);
+        }
+        if (requestedOwnerRole) {
+            where.push("LOWER(owner_role) = LOWER(?)");
+            params.push(requestedOwnerRole);
+        }
+        if (requestedSearch) {
+            where.push("(LOWER(title) LIKE ? OR LOWER(payload_json) LIKE ?)");
+            params.push(`%${requestedSearch}%`, `%${requestedSearch}%`);
+        }
+        if (onlyDeleted) {
+            where.push("deleted_at IS NOT NULL");
+        } else if (!includeDeleted) {
+            where.push("deleted_at IS NULL");
+        }
+
+        const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+        let rows = db
+            .prepare(`SELECT * FROM domain_records ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`)
+            .all(...params, limit, offset);
+
+        if (requestedSeverity || dueState) {
+            rows = rows.filter((row) => {
+                const payload = parseConfigJsonSafely(row.payload_json);
+                const severity = domainSeverity(payload.severity);
+                if (requestedSeverity && severity !== requestedSeverity) return false;
+                if (dueState) {
+                    const dueAt = payload?.dueAt ? String(payload.dueAt) : "";
+                    const dueDate = dueAt ? new Date(dueAt) : null;
+                    if (!dueDate || Number.isNaN(dueDate.getTime())) return false;
+                    const diff = dueDate.getTime() - Date.now();
+                    if (dueState === "overdue" && diff >= 0) return false;
+                    if (dueState === "soon" && !(diff > 0 && diff <= 6 * 60 * 60 * 1000)) return false;
+                }
+                return true;
+            });
+        }
+        const totalRow = db.prepare(`SELECT COUNT(*) AS total FROM domain_records ${whereSql}`).get(...params);
+        res.set("X-Total-Count", String(totalRow?.total || 0));
+        res.json(rows.map((row) => mapDomainRecordRow(row)));
     }
 );
 
 app.post(
     "/api/domain-records",
     authRequired,
-    requireAnyPermission([...DOMAIN_WRITE_PERMISSIONS, "dashboard.read"]),
+    requireAnyPermission(DOMAIN_WRITE_PERMISSIONS),
     (req, res) => {
         const domainKey = String(req.body?.domainKey || "").trim();
         const capabilityKey = String(req.body?.capabilityKey || "").trim();
@@ -2814,14 +3144,26 @@ app.post(
             res.status(400).json({ error: "Ungültige Event-ID" });
             return;
         }
-        const payloadJson = JSON.stringify(req.body?.payload || {});
+        const validated = validateDomainPayload(domain.key, capabilityKey, req.body?.payload || {});
+        if (!validated.ok) {
+            res.status(400).json({ error: validated.error });
+            return;
+        }
+        const payloadJson = JSON.stringify(validated.payload);
         const result = db.prepare(
             `INSERT INTO domain_records
              (domain_key, capability_key, title, status, owner_role, event_id, payload_json, created_by, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
         ).run(domain.key, capabilityKey, title, status, ownerRole, eventId, payloadJson, req.user.sub);
         const created = db.prepare("SELECT * FROM domain_records WHERE id = ?").get(result.lastInsertRowid);
+        logDomainRecordHistory(req.user, "CREATE", null, created, `${domain.key}/${capabilityKey}`);
         logAudit(req.user, "CREATE_DOMAIN_RECORD", "domain_records", created.id, `${domain.key}/${capabilityKey}: ${title}`);
+        const recipients = notificationRecipientsForDomain(domain.key);
+        createNotifications(recipients, "Neuer Domain-Eintrag", `${domain.name}: ${title}`, validated.payload.severity, {
+            domainKey: domain.key,
+            recordId: created.id,
+            action: "create"
+        });
         res.status(201).json({
             ...created,
             payload: parseConfigJsonSafely(created.payload_json)
@@ -2832,14 +3174,14 @@ app.post(
 app.patch(
     "/api/domain-records/:id",
     authRequired,
-    requireAnyPermission([...DOMAIN_WRITE_PERMISSIONS, "dashboard.read"]),
+    requireAnyPermission(DOMAIN_WRITE_PERMISSIONS),
     (req, res) => {
         const id = parseId(req.params.id);
         if (!id) {
             res.status(400).json({ error: "Ungültige Datensatz-ID" });
             return;
         }
-        const existing = db.prepare("SELECT * FROM domain_records WHERE id = ?").get(id);
+        const existing = db.prepare("SELECT * FROM domain_records WHERE id = ? AND deleted_at IS NULL").get(id);
         if (!existing) {
             res.status(404).json({ error: "Datensatz nicht gefunden" });
             return;
@@ -2872,13 +3214,26 @@ app.patch(
             }
         }
         const payloadSource = req.body?.payload !== undefined ? req.body.payload : parseConfigJsonSafely(existing.payload_json);
+        const validated = validateDomainPayload(existing.domain_key, nextCapability, payloadSource || {});
+        if (!validated.ok) {
+            res.status(400).json({ error: validated.error });
+            return;
+        }
+        const before = { ...existing };
         db.prepare(
             `UPDATE domain_records
              SET capability_key = ?, title = ?, status = ?, owner_role = ?, event_id = ?, payload_json = ?, updated_at = CURRENT_TIMESTAMP
              WHERE id = ?`
-        ).run(nextCapability, nextTitle, nextStatus, nextOwnerRole, nextEventId, JSON.stringify(payloadSource || {}), id);
+        ).run(nextCapability, nextTitle, nextStatus, nextOwnerRole, nextEventId, JSON.stringify(validated.payload || {}), id);
         const updated = db.prepare("SELECT * FROM domain_records WHERE id = ?").get(id);
+        logDomainRecordHistory(req.user, "UPDATE", before, updated, `${updated.domain_key}/${updated.capability_key}`);
         logAudit(req.user, "UPDATE_DOMAIN_RECORD", "domain_records", id, `${updated.domain_key}/${updated.capability_key}: ${updated.title}`);
+        const recipients = notificationRecipientsForDomain(updated.domain_key);
+        createNotifications(recipients, "Domain-Eintrag aktualisiert", `${domain.name}: ${updated.title}`, validated.payload.severity, {
+            domainKey: updated.domain_key,
+            recordId: updated.id,
+            action: "update"
+        });
         res.json({
             ...updated,
             payload: parseConfigJsonSafely(updated.payload_json)
@@ -2889,22 +3244,211 @@ app.patch(
 app.delete(
     "/api/domain-records/:id",
     authRequired,
-    requireAnyPermission([...DOMAIN_WRITE_PERMISSIONS, "dashboard.read"]),
+    requireAnyPermission(DOMAIN_WRITE_PERMISSIONS),
     (req, res) => {
         const id = parseId(req.params.id);
         if (!id) {
             res.status(400).json({ error: "Ungültige Datensatz-ID" });
             return;
         }
-        const existing = db.prepare("SELECT id, domain_key, capability_key, title FROM domain_records WHERE id = ?").get(id);
+        const existing = db.prepare("SELECT * FROM domain_records WHERE id = ?").get(id);
         if (!existing) {
             res.status(404).json({ error: "Datensatz nicht gefunden" });
             return;
         }
+        if (existing.deleted_at) {
+            res.status(409).json({ error: "Datensatz ist bereits gelöscht" });
+            return;
+        }
         const domain = assertDomainPermission(res, req.user, existing.domain_key, "write");
         if (!domain) return;
-        db.prepare("DELETE FROM domain_records WHERE id = ?").run(id);
+        const reason = req.body?.reason ? String(req.body.reason).trim() : null;
+        db.prepare(
+            `UPDATE domain_records
+             SET deleted_at = CURRENT_TIMESTAMP, deleted_by = ?, deleted_reason = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?`
+        ).run(req.user.sub || null, reason, id);
+        const deleted = db.prepare("SELECT * FROM domain_records WHERE id = ?").get(id);
+        logDomainRecordHistory(req.user, "DELETE", existing, deleted, reason || `${domain.key}/${existing.capability_key}`);
         logAudit(req.user, "DELETE_DOMAIN_RECORD", "domain_records", id, `${domain.key}/${existing.capability_key}: ${existing.title}`);
+        const recipients = notificationRecipientsForDomain(domain.key);
+        createNotifications(recipients, "Domain-Eintrag gelöscht", `${domain.name}: ${existing.title}`, "high", {
+            domainKey: domain.key,
+            recordId: id,
+            action: "delete",
+            reason: reason || null
+        });
+        res.status(204).send();
+    }
+);
+
+app.patch(
+    "/api/domain-records/:id/restore",
+    authRequired,
+    requireAnyPermission(DOMAIN_WRITE_PERMISSIONS),
+    (req, res) => {
+        const id = parseId(req.params.id);
+        if (!id) {
+            res.status(400).json({ error: "Ungültige Datensatz-ID" });
+            return;
+        }
+        const existing = db.prepare("SELECT * FROM domain_records WHERE id = ?").get(id);
+        if (!existing) {
+            res.status(404).json({ error: "Datensatz nicht gefunden" });
+            return;
+        }
+        if (!existing.deleted_at) {
+            res.status(409).json({ error: "Datensatz ist nicht gelöscht" });
+            return;
+        }
+        const domain = assertDomainPermission(res, req.user, existing.domain_key, "write");
+        if (!domain) return;
+        db.prepare(
+            `UPDATE domain_records
+             SET deleted_at = NULL, deleted_by = NULL, deleted_reason = NULL, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?`
+        ).run(id);
+        const restored = db.prepare("SELECT * FROM domain_records WHERE id = ?").get(id);
+        logDomainRecordHistory(req.user, "RESTORE", existing, restored, `${domain.key}/${existing.capability_key}`);
+        logAudit(req.user, "RESTORE_DOMAIN_RECORD", "domain_records", id, `${domain.key}/${existing.capability_key}: ${existing.title}`);
+        const recipients = notificationRecipientsForDomain(domain.key);
+        createNotifications(recipients, "Domain-Eintrag wiederhergestellt", `${domain.name}: ${existing.title}`, "info", {
+            domainKey: domain.key,
+            recordId: id,
+            action: "restore"
+        });
+        res.json(mapDomainRecordRow(restored));
+    }
+);
+
+app.get(
+    "/api/domain-records/:id/history",
+    authRequired,
+    requireAnyPermission([...DOMAIN_READ_PERMISSIONS, ...DOMAIN_WRITE_PERMISSIONS, "dashboard.read"]),
+    (req, res) => {
+        const id = parseId(req.params.id);
+        if (!id) {
+            res.status(400).json({ error: "Ungültige Datensatz-ID" });
+            return;
+        }
+        const record = db.prepare("SELECT id, domain_key FROM domain_records WHERE id = ?").get(id);
+        if (!record) {
+            res.status(404).json({ error: "Datensatz nicht gefunden" });
+            return;
+        }
+        const domain = assertDomainPermission(res, req.user, record.domain_key, "read");
+        if (!domain) return;
+        const rows = db
+            .prepare("SELECT * FROM domain_record_history WHERE record_id = ? ORDER BY id DESC LIMIT 200")
+            .all(id);
+        res.json(rows.map((row) => ({
+            ...row,
+            before: parseConfigJsonSafely(row.before_json),
+            after: parseConfigJsonSafely(row.after_json)
+        })));
+    }
+);
+
+app.get(
+    "/api/domain-views",
+    authRequired,
+    requireAnyPermission([...DOMAIN_READ_PERMISSIONS, ...DOMAIN_WRITE_PERMISSIONS, "dashboard.read"]),
+    (req, res) => {
+        const domainKey = String(req.query.domainKey || "").trim();
+        if (!domainKey) {
+            res.status(400).json({ error: "domainKey ist erforderlich" });
+            return;
+        }
+        const domain = assertDomainPermission(res, req.user, domainKey, "read");
+        if (!domain) return;
+        const rows = db.prepare(
+            `SELECT * FROM domain_saved_views
+             WHERE domain_key = ?
+               AND (owner_user_id = ? OR (visibility = 'role' AND LOWER(owner_role) = LOWER(?)))
+             ORDER BY updated_at DESC`
+        ).all(domain.key, req.user.sub, req.user.role);
+        res.json(rows.map((row) => ({
+            ...row,
+            filters: parseConfigJsonSafely(row.filters_json)
+        })));
+    }
+);
+
+app.post(
+    "/api/domain-views",
+    authRequired,
+    requireAnyPermission([...DOMAIN_READ_PERMISSIONS, ...DOMAIN_WRITE_PERMISSIONS, "dashboard.read"]),
+    (req, res) => {
+        const domainKey = String(req.body?.domainKey || "").trim();
+        const name = String(req.body?.name || "").trim();
+        const visibility = String(req.body?.visibility || "private").trim().toLowerCase();
+        const filters = req.body?.filters && typeof req.body.filters === "object" ? req.body.filters : {};
+        const viewId = req.body?.id ? parseId(req.body.id) : null;
+        if (!domainKey || !name) {
+            res.status(400).json({ error: "domainKey und name sind erforderlich" });
+            return;
+        }
+        if (!["private", "role"].includes(visibility)) {
+            res.status(400).json({ error: "visibility muss private oder role sein" });
+            return;
+        }
+        const domain = assertDomainPermission(res, req.user, domainKey, "read");
+        if (!domain) return;
+
+        if (viewId) {
+            const existing = db.prepare("SELECT * FROM domain_saved_views WHERE id = ?").get(viewId);
+            if (!existing) {
+                res.status(404).json({ error: "View nicht gefunden" });
+                return;
+            }
+            if (existing.owner_user_id !== req.user.sub && !hasPermissionValue(req.user, "dashboard.read")) {
+                res.status(403).json({ error: "Nur Eigentümer oder Admin darf diese View ändern" });
+                return;
+            }
+            db.prepare(
+                `UPDATE domain_saved_views
+                 SET name = ?, visibility = ?, owner_role = ?, filters_json = ?, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?`
+            ).run(name, visibility, req.user.role, JSON.stringify(filters), viewId);
+            const updated = db.prepare("SELECT * FROM domain_saved_views WHERE id = ?").get(viewId);
+            logAudit(req.user, "UPDATE_DOMAIN_VIEW", "domain_saved_views", viewId, `${domain.key}: ${name}`);
+            res.json({ ...updated, filters: parseConfigJsonSafely(updated.filters_json) });
+            return;
+        }
+
+        const result = db.prepare(
+            `INSERT INTO domain_saved_views (domain_key, name, visibility, owner_user_id, owner_role, filters_json, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+        ).run(domain.key, name, visibility, req.user.sub, req.user.role, JSON.stringify(filters));
+        const created = db.prepare("SELECT * FROM domain_saved_views WHERE id = ?").get(result.lastInsertRowid);
+        logAudit(req.user, "CREATE_DOMAIN_VIEW", "domain_saved_views", created.id, `${domain.key}: ${name}`);
+        res.status(201).json({ ...created, filters: parseConfigJsonSafely(created.filters_json) });
+    }
+);
+
+app.delete(
+    "/api/domain-views/:id",
+    authRequired,
+    requireAnyPermission([...DOMAIN_READ_PERMISSIONS, ...DOMAIN_WRITE_PERMISSIONS, "dashboard.read"]),
+    (req, res) => {
+        const id = parseId(req.params.id);
+        if (!id) {
+            res.status(400).json({ error: "Ungültige View-ID" });
+            return;
+        }
+        const existing = db.prepare("SELECT * FROM domain_saved_views WHERE id = ?").get(id);
+        if (!existing) {
+            res.status(404).json({ error: "View nicht gefunden" });
+            return;
+        }
+        const domain = assertDomainPermission(res, req.user, existing.domain_key, "read");
+        if (!domain) return;
+        if (existing.owner_user_id !== req.user.sub && !hasPermissionValue(req.user, "dashboard.read")) {
+            res.status(403).json({ error: "Nur Eigentümer oder Admin darf diese View löschen" });
+            return;
+        }
+        db.prepare("DELETE FROM domain_saved_views WHERE id = ?").run(id);
+        logAudit(req.user, "DELETE_DOMAIN_VIEW", "domain_saved_views", id, `${existing.domain_key}: ${existing.name}`);
         res.status(204).send();
     }
 );
@@ -3000,7 +3544,7 @@ app.delete("/api/module-records/:id", authRequired, requirePermission("dashboard
 app.post(
     "/api/workflows/execute",
     authRequired,
-    requireAnyPermission(["dashboard.read", "workflows.execute", ...DOMAIN_WRITE_PERMISSIONS]),
+    requireAnyPermission(["workflows.execute", ...DOMAIN_WRITE_PERMISSIONS]),
     (req, res) => {
     const workflowKey = String(req.body?.workflowKey || "").trim();
     const workflow = WORKFLOW_BLUEPRINTS.find((entry) => entry.key === workflowKey);
@@ -3054,7 +3598,23 @@ app.get(
     authRequired,
     requireAnyPermission(["dashboard.read", "workflows.execute", ...DOMAIN_READ_PERMISSIONS, ...DOMAIN_WRITE_PERMISSIONS]),
     (req, res) => {
-    const rows = db.prepare("SELECT * FROM workflow_runs ORDER BY id DESC LIMIT 200").all();
+    const workflowKey = String(req.query.workflowKey || "").trim();
+    const status = String(req.query.status || "").trim();
+    const limit = Math.min(Math.max(parseId(req.query.limit) || 200, 1), 500);
+    const offsetRaw = Number(req.query.offset);
+    const offset = Number.isInteger(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
+    const where = [];
+    const params = [];
+    if (workflowKey) {
+        where.push("workflow_key = ?");
+        params.push(workflowKey);
+    }
+    if (status) {
+        where.push("LOWER(status) = LOWER(?)");
+        params.push(status);
+    }
+    const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+    const rows = db.prepare(`SELECT * FROM workflow_runs ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
     const filteredRows = rows.filter((row) => {
         if (hasPermissionValue(req.user, "dashboard.read") || hasPermissionValue(req.user, "workflows.execute")) return true;
         if (row.workflow_key.startsWith("loc_")) return hasPermissionValue(req.user, "loc.read") || hasPermissionValue(req.user, "loc.write");
@@ -3069,7 +3629,49 @@ app.get(
         ...row,
         payload: parseConfigJsonSafely(row.payload_json)
     }));
+    const totalRow = db.prepare(`SELECT COUNT(*) AS total FROM workflow_runs ${whereSql}`).get(...params);
+    res.set("X-Total-Count", String(totalRow?.total || 0));
     res.json(mapped);
+});
+
+app.get("/api/notifications", authRequired, (req, res) => {
+    const includeRead = parseBooleanSetting(req.query.includeRead, false);
+    const limit = Math.min(Math.max(parseId(req.query.limit) || 100, 1), 300);
+    const offsetRaw = Number(req.query.offset);
+    const offset = Number.isInteger(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
+    const where = includeRead ? "user_id = ?" : "user_id = ? AND is_read = 0";
+    const rows = db
+        .prepare(`SELECT * FROM user_notifications WHERE ${where} ORDER BY id DESC LIMIT ? OFFSET ?`)
+        .all(req.user.sub, limit, offset);
+    const totalRow = db.prepare(`SELECT COUNT(*) AS total FROM user_notifications WHERE ${where}`).get(req.user.sub);
+    res.set("X-Total-Count", String(totalRow?.total || 0));
+    res.json(rows.map((row) => ({
+        ...row,
+        payload: parseConfigJsonSafely(row.payload_json)
+    })));
+});
+
+app.patch("/api/notifications/:id/read", authRequired, (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Ungültige Notification-ID" });
+        return;
+    }
+    const existing = db.prepare("SELECT * FROM user_notifications WHERE id = ? AND user_id = ?").get(id, req.user.sub);
+    if (!existing) {
+        res.status(404).json({ error: "Notification nicht gefunden" });
+        return;
+    }
+    db.prepare("UPDATE user_notifications SET is_read = 1, read_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
+    const updated = db.prepare("SELECT * FROM user_notifications WHERE id = ?").get(id);
+    res.json({ ...updated, payload: parseConfigJsonSafely(updated.payload_json) });
+});
+
+app.post("/api/notifications/read-all", authRequired, (req, res) => {
+    db.prepare(
+        "UPDATE user_notifications SET is_read = 1, read_at = CURRENT_TIMESTAMP WHERE user_id = ? AND is_read = 0"
+    ).run(req.user.sub);
+    res.status(204).send();
 });
 
 app.get("/api/point-rule-templates", authRequired, requirePermission("point_rules.read"), (_req, res) => {
@@ -3703,6 +4305,7 @@ async function startServer() {
     dropUsersEmailUniqueIndexes();
     ensureRolesRequiredAssignmentsColumn();
     ensureInvitationsTable();
+    ensureDomainRecordEnhancements();
     seedDefaultRoles();
     await initializeEmailTransporter();
     if (snapshotReady) {

@@ -142,6 +142,9 @@ function initDomainWorkspace(config) {
         workflows: [],
         records: [],
         workflowLogs: [],
+        savedViews: [],
+        notifications: [],
+        models: [],
         canWrite: false
     };
     const draftKey = `msc_portal_domain_draft:${domainKey}`;
@@ -322,6 +325,19 @@ function initDomainWorkspace(config) {
             document.getElementById("ws-command-deck-card")?.insertAdjacentElement("afterend", intelCard);
         }
 
+        if (!document.getElementById("ws-model-card")) {
+            const modelCard = document.createElement("div");
+            modelCard.className = "card";
+            modelCard.id = "ws-model-card";
+            modelCard.innerHTML = `
+                <div class="card-header"><h2>Domain Datenmodell</h2></div>
+                <div class="card-body">
+                    <div id="ws-model-list" class="workspace-model-list"></div>
+                </div>
+            `;
+            document.getElementById("ws-intelligence-card")?.insertAdjacentElement("afterend", modelCard);
+        }
+
         if (!document.getElementById("ws-status-board-card")) {
             const boardCard = document.createElement("div");
             boardCard.className = "card";
@@ -332,7 +348,7 @@ function initDomainWorkspace(config) {
                     <div class="workspace-lane-grid" id="ws-status-board"></div>
                 </div>
             `;
-            document.getElementById("ws-intelligence-card")?.insertAdjacentElement("afterend", boardCard);
+            document.getElementById("ws-model-card")?.insertAdjacentElement("afterend", boardCard);
         }
 
         if (!document.getElementById("ws-sla-card")) {
@@ -359,9 +375,37 @@ function initDomainWorkspace(config) {
             document.getElementById("ws-status-board-card")?.insertAdjacentElement("afterend", slaCard);
         }
 
+        if (!document.getElementById("ws-inbox-card")) {
+            const inboxCard = document.createElement("div");
+            inboxCard.className = "card";
+            inboxCard.id = "ws-inbox-card";
+            inboxCard.innerHTML = `
+                <div class="card-header"><h2>Benachrichtigungscenter</h2></div>
+                <div class="card-body">
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary btn-small" id="ws-notification-read-all">Alle als gelesen markieren</button>
+                    </div>
+                    <div id="ws-notifications-list" class="workspace-notification-list"></div>
+                </div>
+            `;
+            document.getElementById("ws-sla-card")?.insertAdjacentElement("afterend", inboxCard);
+        }
+
         const recordsBody = document.getElementById("ws-records-body");
         const recordsCardBody = recordsBody?.closest(".card")?.querySelector(".card-body");
         if (recordsCardBody && !document.getElementById("ws-filter-row")) {
+            const savedViewsBar = document.createElement("div");
+            savedViewsBar.id = "ws-saved-view-row";
+            savedViewsBar.className = "workspace-saved-view-bar";
+            savedViewsBar.innerHTML = `
+                <select id="ws-saved-view-select"><option value="">Gespeicherte Ansicht wählen</option></select>
+                <input type="text" id="ws-saved-view-name" placeholder="Name für aktuelle Ansicht" />
+                <select id="ws-saved-view-visibility"><option value="private">Privat</option><option value="role">Für Rolle teilen</option></select>
+                <button type="button" class="btn btn-secondary btn-small" id="ws-save-view">Ansicht speichern</button>
+                <button type="button" class="btn btn-danger btn-small" id="ws-delete-view">Ansicht löschen</button>
+            `;
+            recordsCardBody.prepend(savedViewsBar);
+
             const filterBar = document.createElement("div");
             filterBar.id = "ws-filter-row";
             filterBar.className = "workspace-filter-bar";
@@ -372,6 +416,7 @@ function initDomainWorkspace(config) {
                 <select id="ws-filter-owner"><option value="">Alle Owner</option></select>
                 <select id="ws-filter-severity"><option value="">Alle Severity</option></select>
                 <select id="ws-filter-due"><option value="">Alle SLA</option><option value="overdue">Überfällig</option><option value="soon">Bald fällig</option></select>
+                <select id="ws-filter-deleted"><option value="no">Nur aktive</option><option value="all">Aktive + Gelöschte</option><option value="only">Nur gelöschte</option></select>
                 <button type="button" class="btn btn-secondary btn-small" id="ws-clear-filters">Filter zurücksetzen</button>
             `;
             recordsCardBody.prepend(filterBar);
@@ -427,7 +472,8 @@ function initDomainWorkspace(config) {
             capability: String(document.getElementById("ws-filter-capability")?.value || "").trim(),
             owner: String(document.getElementById("ws-filter-owner")?.value || "").trim().toLowerCase(),
             severity: String(document.getElementById("ws-filter-severity")?.value || "").trim().toLowerCase(),
-            due: String(document.getElementById("ws-filter-due")?.value || "").trim().toLowerCase()
+            due: String(document.getElementById("ws-filter-due")?.value || "").trim().toLowerCase(),
+            deleted: String(document.getElementById("ws-filter-deleted")?.value || "no").trim().toLowerCase()
         };
     }
 
@@ -436,6 +482,9 @@ function initDomainWorkspace(config) {
         return state.records.filter((entry) => {
             const meta = extractMeta(entry);
             const due = dueState(meta.dueAt);
+            const isDeleted = Boolean(entry.deleted_at);
+            if (filters.deleted === "no" && isDeleted) return false;
+            if (filters.deleted === "only" && !isDeleted) return false;
             if (filters.status && normalizedStatus(entry.status) !== filters.status) return false;
             if (filters.capability && String(entry.capability_key || "") !== filters.capability) return false;
             if (filters.owner && String(entry.owner_role || "").toLowerCase() !== filters.owner) return false;
@@ -593,10 +642,12 @@ function initDomainWorkspace(config) {
         const html = rows.map((entry) => {
             const meta = extractMeta(entry);
             const due = dueState(meta.dueAt);
+            const isDeleted = Boolean(entry.deleted_at);
             const tags = meta.tags.length ? `<span class="workspace-mini-pill-list">${meta.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</span>` : "";
             const noteBlock = `
                 <div>${escapeHtml(meta.notes || "—")}</div>
                 <div class="workspace-note-meta">${severityBadge(meta.severity)} <span class="badge badge-${due.tone}">${escapeHtml(due.label)}</span></div>
+                ${isDeleted ? `<div class="workspace-note-meta"><span class="badge badge-danger">Gelöscht</span></div>` : ""}
                 ${tags}
             `;
             return `
@@ -610,9 +661,11 @@ function initDomainWorkspace(config) {
                     <td>
                         <div class="actions-inline">
                             <button class="btn btn-small btn-secondary" type="button" data-view-record="${entry.id}">Details</button>
-                            ${state.canWrite ? `<button class="btn btn-small btn-secondary" type="button" data-edit-record="${entry.id}">Bearbeiten</button>` : ""}
-                            ${state.canWrite ? `<button class="btn btn-small btn-secondary" type="button" data-mark-blocked="${entry.id}">Blockiert</button>` : ""}
-                            ${state.canWrite ? `<button class="btn btn-small btn-danger" type="button" data-delete-record="${entry.id}">Löschen</button>` : ""}
+                            <button class="btn btn-small btn-secondary" type="button" data-history-record="${entry.id}">Timeline</button>
+                            ${state.canWrite && !isDeleted ? `<button class="btn btn-small btn-secondary" type="button" data-edit-record="${entry.id}">Bearbeiten</button>` : ""}
+                            ${state.canWrite && !isDeleted ? `<button class="btn btn-small btn-secondary" type="button" data-mark-blocked="${entry.id}">Blockiert</button>` : ""}
+                            ${state.canWrite && !isDeleted ? `<button class="btn btn-small btn-danger" type="button" data-delete-record="${entry.id}">Löschen</button>` : ""}
+                            ${state.canWrite && isDeleted ? `<button class="btn btn-small btn-warning" type="button" data-restore-record="${entry.id}">Restore</button>` : ""}
                         </div>
                     </td>
                 </tr>
@@ -667,6 +720,25 @@ function initDomainWorkspace(config) {
             });
         });
 
+        tbody.querySelectorAll("[data-history-record]").forEach((button) => {
+            button.addEventListener("click", async () => {
+                const id = Number(button.getAttribute("data-history-record"));
+                try {
+                    const history = await api(`/domain-records/${id}/history`);
+                    const content = history.map((entry) => `
+                        <div class="workspace-history-entry">
+                            <strong>${escapeHtml(entry.action || "UPDATE")}</strong>
+                            <div>${escapeHtml(entry.actor_username || "system")} · ${escapeHtml(formatDateTime(entry.created_at))}</div>
+                            <div>${escapeHtml(entry.note || "—")}</div>
+                        </div>
+                    `).join("") || "<div class='table-empty'>Keine Timeline verfügbar.</div>";
+                    showModal(`Timeline #${id}`, content, [{ id: "close", label: "Schließen", primary: true }]);
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+        });
+
         tbody.querySelectorAll("[data-delete-record]").forEach((button) => {
             button.addEventListener("click", () => {
                 const id = Number(button.getAttribute("data-delete-record"));
@@ -676,6 +748,19 @@ function initDomainWorkspace(config) {
                     showToast("Eintrag gelöscht.", "success");
                     await refreshDomainWorkspacePage();
                 });
+            });
+        });
+
+        tbody.querySelectorAll("[data-restore-record]").forEach((button) => {
+            button.addEventListener("click", async () => {
+                const id = Number(button.getAttribute("data-restore-record"));
+                try {
+                    await api(`/domain-records/${id}/restore`, { method: "PATCH" });
+                    showToast("Eintrag wiederhergestellt.", "success");
+                    await refreshDomainWorkspacePage();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
             });
         });
         applyReadOnlyActionButtons(tbody);
@@ -721,6 +806,28 @@ function initDomainWorkspace(config) {
                 <div class="workspace-intelligence-card tone-${escapeHtml(tone)}">
                     <div class="workspace-intelligence-title">${escapeHtml(entry.title || "Metrik")}</div>
                     <div class="workspace-intelligence-value">${value}</div>
+                </div>
+            `;
+        }).join("");
+    }
+
+    function renderDomainModelCard() {
+        const node = document.getElementById("ws-model-list");
+        if (!node) return;
+        const domainModel = state.models.find((entry) => entry.domainKey === domainKey);
+        if (!domainModel || !Array.isArray(domainModel.capabilities)) {
+            node.innerHTML = "<div class='table-empty'>Kein Modell verfügbar.</div>";
+            return;
+        }
+        node.innerHTML = domainModel.capabilities.map((capability) => {
+            const schema = capability.schema || { required: [], allowedEscalations: [] };
+            const required = Array.isArray(schema.required) ? schema.required : [];
+            const escalations = Array.isArray(schema.allowedEscalations) ? schema.allowedEscalations : [];
+            return `
+                <div class="workspace-model-item">
+                    <strong>${escapeHtml(capability.name || capability.key)}</strong>
+                    <div class="workspace-model-meta">Required: ${escapeHtml(required.join(", ") || "—")}</div>
+                    <div class="workspace-model-meta">Escalation: ${escapeHtml(escalations.join(", ") || "none")}</div>
                 </div>
             `;
         }).join("");
@@ -800,6 +907,148 @@ function initDomainWorkspace(config) {
                 </tr>
             `;
         }).join("") || "<tr><td colspan='5' class='table-empty'>Keine SLA-Einträge vorhanden.</td></tr>";
+    }
+
+    function serializeCurrentFilters() {
+        return getFilterValues();
+    }
+
+    function applyFilters(filters = {}) {
+        const previousDeleted = String(document.getElementById("ws-filter-deleted")?.value || "no").trim().toLowerCase();
+        const setValue = (id, value, fallback = "") => {
+            const node = document.getElementById(id);
+            if (node) node.value = value !== undefined && value !== null && String(value).length > 0 ? String(value) : fallback;
+        };
+        setValue("ws-filter-search", filters.search || "", "");
+        setValue("ws-filter-status", filters.status || "", "");
+        setValue("ws-filter-capability", filters.capability || "", "");
+        setValue("ws-filter-owner", filters.owner || "", "");
+        setValue("ws-filter-severity", filters.severity || "", "");
+        setValue("ws-filter-due", filters.due || "", "");
+        setValue("ws-filter-deleted", filters.deleted || "no", "no");
+        const nextDeleted = String(document.getElementById("ws-filter-deleted")?.value || "no").trim().toLowerCase();
+        if (nextDeleted !== previousDeleted) {
+            refreshDomainWorkspacePage().catch(() => {});
+            return;
+        }
+        rerenderFilteredViews();
+    }
+
+    function renderSavedViews() {
+        const select = document.getElementById("ws-saved-view-select");
+        const nameInput = document.getElementById("ws-saved-view-name");
+        if (!select) return;
+        const current = select.value;
+        select.innerHTML = "<option value=''>Gespeicherte Ansicht wählen</option>" + state.savedViews.map((view) => (
+            `<option value="${view.id}">${escapeHtml(view.name)} (${view.visibility === "role" ? "Rolle" : "Privat"})</option>`
+        )).join("");
+        if (current && state.savedViews.some((view) => String(view.id) === String(current))) {
+            select.value = current;
+        }
+        if (nameInput && !nameInput.value) {
+            nameInput.placeholder = "Name für aktuelle Ansicht";
+        }
+    }
+
+    function bindSavedViewActions() {
+        const select = document.getElementById("ws-saved-view-select");
+        const nameInput = document.getElementById("ws-saved-view-name");
+        const visibility = document.getElementById("ws-saved-view-visibility");
+        const saveButton = document.getElementById("ws-save-view");
+        const deleteButton = document.getElementById("ws-delete-view");
+        if (!select || select.dataset.bound === "1") return;
+        select.dataset.bound = "1";
+
+        select.addEventListener("change", () => {
+            const id = Number(select.value || 0);
+            const view = state.savedViews.find((entry) => Number(entry.id) === id);
+            if (!view) return;
+            if (nameInput) nameInput.value = view.name || "";
+            if (visibility) visibility.value = view.visibility || "private";
+            applyFilters(view.filters || {});
+        });
+
+        saveButton?.addEventListener("click", async () => {
+            try {
+                const payload = {
+                    id: select.value ? Number(select.value) : undefined,
+                    domainKey,
+                    name: String(nameInput?.value || "").trim(),
+                    visibility: String(visibility?.value || "private"),
+                    filters: serializeCurrentFilters()
+                };
+                if (!payload.name) {
+                    showToast("Bitte einen Namen für die Ansicht eingeben.", "warning");
+                    return;
+                }
+                await api("/domain-views", {
+                    method: "POST",
+                    body: JSON.stringify(payload)
+                });
+                showToast("Ansicht gespeichert.", "success");
+                await refreshDomainWorkspacePage();
+            } catch (error) {
+                showToast(error.message, "error");
+            }
+        });
+
+        deleteButton?.addEventListener("click", async () => {
+            const id = Number(select.value || 0);
+            if (!id) {
+                showToast("Bitte zuerst eine gespeicherte Ansicht wählen.", "warning");
+                return;
+            }
+            confirmDelete("gespeicherte Ansicht", async () => {
+                await api(`/domain-views/${id}`, { method: "DELETE" });
+                showToast("Ansicht gelöscht.", "success");
+                if (nameInput) nameInput.value = "";
+                await refreshDomainWorkspacePage();
+            });
+        });
+    }
+
+    function renderNotifications() {
+        const list = document.getElementById("ws-notifications-list");
+        if (!list) return;
+        const rows = state.notifications.slice(0, 20);
+        list.innerHTML = rows.map((entry) => `
+            <div class="workspace-notification-item">
+                <div class="workspace-notification-head">
+                    <strong>${escapeHtml(entry.title || "Hinweis")}</strong>
+                    <span class="badge badge-${entry.severity === "critical" ? "danger" : (entry.severity === "high" ? "warning" : "info")}">${escapeHtml(entry.severity || "info")}</span>
+                </div>
+                <div>${escapeHtml(entry.message || "")}</div>
+                <small>${escapeHtml(formatDateTime(entry.created_at))}</small>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary btn-small" data-mark-read="${entry.id}">Als gelesen</button>
+                </div>
+            </div>
+        `).join("") || "<div class='table-empty'>Keine offenen Benachrichtigungen.</div>";
+
+        list.querySelectorAll("[data-mark-read]").forEach((button) => {
+            button.addEventListener("click", async () => {
+                const id = Number(button.getAttribute("data-mark-read"));
+                try {
+                    await api(`/notifications/${id}/read`, { method: "PATCH" });
+                    await refreshDomainWorkspacePage();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+        });
+
+        const readAll = document.getElementById("ws-notification-read-all");
+        if (readAll && readAll.dataset.bound !== "1") {
+            readAll.dataset.bound = "1";
+            readAll.addEventListener("click", async () => {
+                try {
+                    await api("/notifications/read-all", { method: "POST" });
+                    await refreshDomainWorkspacePage();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+        }
     }
 
     function relevantWorkflows(scopeWorkflows = []) {
@@ -1034,6 +1283,7 @@ function initDomainWorkspace(config) {
         const owner = document.getElementById("ws-filter-owner");
         const severity = document.getElementById("ws-filter-severity");
         const due = document.getElementById("ws-filter-due");
+        const deleted = document.getElementById("ws-filter-deleted");
         const clear = document.getElementById("ws-clear-filters");
         if (!search || search.dataset.bound === "1") return;
 
@@ -1043,6 +1293,9 @@ function initDomainWorkspace(config) {
             node.addEventListener("input", rerenderFilteredViews);
             node.addEventListener("change", rerenderFilteredViews);
         });
+        deleted?.addEventListener("change", async () => {
+            await refreshDomainWorkspacePage();
+        });
         clear?.addEventListener("click", () => {
             search.value = "";
             if (status) status.value = "";
@@ -1050,15 +1303,33 @@ function initDomainWorkspace(config) {
             if (owner) owner.value = "";
             if (severity) severity.value = "";
             if (due) due.value = "";
+            if (deleted) deleted.value = "no";
             rerenderFilteredViews();
         });
     }
 
     async function refreshDomainWorkspacePage() {
-        const [scope, records, logs] = await Promise.all([
+        const filterState = getFilterValues();
+        const recordsQuery = new URLSearchParams({
+            domainKey,
+            status: filterState.status || "",
+            capabilityKey: filterState.capability || "",
+            ownerRole: filterState.owner || "",
+            search: filterState.search || "",
+            severity: filterState.severity || "",
+            dueState: filterState.due || "",
+            includeDeleted: filterState.deleted === "all" ? "true" : "false",
+            onlyDeleted: filterState.deleted === "only" ? "true" : "false",
+            limit: "300",
+            offset: "0"
+        });
+        const [scope, records, logs, savedViews, notifications, models] = await Promise.all([
             api("/system-scope"),
-            api(`/domain-records?domainKey=${encodeURIComponent(domainKey)}`),
-            api("/workflows/logs")
+            api(`/domain-records?${recordsQuery.toString()}`),
+            api("/workflows/logs?limit=200&offset=0"),
+            api(`/domain-views?domainKey=${encodeURIComponent(domainKey)}`),
+            api("/notifications?limit=50&offset=0"),
+            api("/domain-models")
         ]);
         const domains = Array.isArray(scope?.domains) ? scope.domains : [];
         const workflows = Array.isArray(scope?.workflows) ? scope.workflows : [];
@@ -1066,19 +1337,26 @@ function initDomainWorkspace(config) {
         state.records = Array.isArray(records) ? records : [];
         state.workflows = relevantWorkflows(workflows);
         state.workflowLogs = (Array.isArray(logs) ? logs : []).filter((entry) => state.workflows.some((wf) => wf.key === entry.workflow_key));
+        state.savedViews = Array.isArray(savedViews) ? savedViews : [];
+        state.notifications = Array.isArray(notifications) ? notifications : [];
+        state.models = Array.isArray(models) ? models : [];
 
         ensureEnhancedSections();
         updateHeader();
         renderRecordForm();
         renderFilterOptions();
+        renderSavedViews();
+        bindSavedViewActions();
         bindFilterEvents();
         renderCapabilities();
         renderQuickActions();
         renderPlaybooks();
         renderWorkflowShortcuts();
         renderRelatedLinks();
+        renderDomainModelCard();
         renderWorkflowOptions();
         renderWorkflowLogs();
+        renderNotifications();
         rerenderFilteredViews();
     }
 

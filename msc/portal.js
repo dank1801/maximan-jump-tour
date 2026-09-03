@@ -78,11 +78,11 @@ const PAGE_READONLY_ACTION_SELECTORS = {
     "transfers.html": ["#transfers-list .btn", "#contracts-list .btn"],
     "reporting.html": ["#audit-log-tbody + .form-actions .btn", "#publications-list .btn"],
     "operations.html": ["#module-records-body .btn", "#workflow-logs-body .btn", "#domain-records-body .btn"],
-    "msc-admin.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-mark-blocked]", "[data-run-workflow]", "[data-run-playbook]", "[data-quick-action]"],
-    "loc-dashboard.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-mark-blocked]", "[data-run-workflow]", "[data-run-playbook]", "[data-quick-action]"],
-    "team-portal.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-mark-blocked]", "[data-run-workflow]", "[data-run-playbook]", "[data-quick-action]"],
-    "athlete-app.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-mark-blocked]", "[data-run-workflow]", "[data-run-playbook]", "[data-quick-action]"],
-    "public-site.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-mark-blocked]", "[data-run-workflow]", "[data-run-playbook]", "[data-quick-action]"],
+    "msc-admin.html": ["[data-edit-record]", "[data-delete-record]", "[data-restore-record]", "[data-mark-live]", "[data-mark-blocked]", "[data-run-workflow]", "[data-run-playbook]", "[data-quick-action]"],
+    "loc-dashboard.html": ["[data-edit-record]", "[data-delete-record]", "[data-restore-record]", "[data-mark-live]", "[data-mark-blocked]", "[data-run-workflow]", "[data-run-playbook]", "[data-quick-action]"],
+    "team-portal.html": ["[data-edit-record]", "[data-delete-record]", "[data-restore-record]", "[data-mark-live]", "[data-mark-blocked]", "[data-run-workflow]", "[data-run-playbook]", "[data-quick-action]"],
+    "athlete-app.html": ["[data-edit-record]", "[data-delete-record]", "[data-restore-record]", "[data-mark-live]", "[data-mark-blocked]", "[data-run-workflow]", "[data-run-playbook]", "[data-quick-action]"],
+    "public-site.html": ["[data-edit-record]", "[data-delete-record]", "[data-restore-record]", "[data-mark-live]", "[data-mark-blocked]", "[data-run-workflow]", "[data-run-playbook]", "[data-quick-action]"],
 };
 
 // ============ HELPERS ============
