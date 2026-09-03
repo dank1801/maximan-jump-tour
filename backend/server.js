@@ -1875,7 +1875,11 @@ function isTeamManagerRole(roleName) {
 }
 
 function isOrganizationChairRole(roleName) {
-    return ["vorsitzender", "organisationchair", "orgchair"].includes(normalizeRole(roleName));
+    const normalized = normalizeRole(roleName);
+    if (["vorsitzender", "vorsitzende", "organisationsvorsitzender", "organisationsvorsitzende", "organizationchair", "organisationchair", "orgchair", "chairperson"].includes(normalized)) {
+        return true;
+    }
+    return normalized.includes("vorsitz") || (normalized.includes("org") && normalized.includes("chair"));
 }
 
 function isTrainerRole(roleName) {
@@ -3255,10 +3259,6 @@ app.post("/api/users", authRequired, requirePermission("users.write"), async (re
             res.status(404).json({ error: "Ausgewählte Organisation wurde nicht gefunden." });
             return;
         }
-        if (isOrganizationChairRole(resolvedRole) && targetOrganization.chair_user_id) {
-            res.status(409).json({ error: "Diese Organisation hat bereits einen Vorsitzenden." });
-            return;
-        }
     }
 
     // Passwort: entweder vom Admin gesetzt oder platzhalter, wenn Invitation versendet wird
@@ -3293,8 +3293,18 @@ app.post("/api/users", authRequired, requirePermission("users.write"), async (re
                 .run(result.lastInsertRowid, normalizedAssignments.assignments.teamId);
         }
         if (normalizedAssignments.assignments.organizationId && isOrganizationChairRole(resolvedRole)) {
+            const previousChair = db.prepare("SELECT chair_user_id FROM organizations WHERE id = ?").get(normalizedAssignments.assignments.organizationId);
             db.prepare("UPDATE organizations SET chair_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
                 .run(result.lastInsertRowid, normalizedAssignments.assignments.organizationId);
+            if (previousChair?.chair_user_id && Number(previousChair.chair_user_id) !== Number(result.lastInsertRowid)) {
+                db.prepare(
+                    `INSERT INTO user_scope_assignments (user_id, organization_id, updated_at)
+                     VALUES (?, NULL, CURRENT_TIMESTAMP)
+                     ON CONFLICT(user_id) DO UPDATE SET
+                       organization_id = NULL,
+                       updated_at = CURRENT_TIMESTAMP`
+                ).run(previousChair.chair_user_id);
+            }
         }
         upsertUserScopeAssignments(result.lastInsertRowid, normalizedAssignments.assignments);
     });
@@ -3463,10 +3473,6 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
             res.status(404).json({ error: "Ausgewählte Organisation wurde nicht gefunden." });
             return;
         }
-        if (targetOrganization.chair_user_id && targetOrganization.chair_user_id !== id) {
-            res.status(409).json({ error: "Diese Organisation hat bereits einen anderen Vorsitzenden." });
-            return;
-        }
     }
 
     if (req.body.password) {
@@ -3498,8 +3504,18 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
                 .run(currentManagedOrganization.id);
         }
         if (isOrganizationChairRole(nextRole)) {
+            const previousChair = db.prepare("SELECT chair_user_id FROM organizations WHERE id = ?").get(finalAssignments.organizationId);
             db.prepare("UPDATE organizations SET chair_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
                 .run(id, finalAssignments.organizationId);
+            if (previousChair?.chair_user_id && Number(previousChair.chair_user_id) !== Number(id)) {
+                db.prepare(
+                    `INSERT INTO user_scope_assignments (user_id, organization_id, updated_at)
+                     VALUES (?, NULL, CURRENT_TIMESTAMP)
+                     ON CONFLICT(user_id) DO UPDATE SET
+                       organization_id = NULL,
+                       updated_at = CURRENT_TIMESTAMP`
+                ).run(previousChair.chair_user_id);
+            }
         } else if (currentManagedOrganization) {
             db.prepare("UPDATE organizations SET chair_user_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE chair_user_id = ?")
                 .run(id);
@@ -3574,6 +3590,7 @@ app.get("/api/organizations", authRequired, requirePermission("organizations.rea
     let rows = db.prepare(
         `SELECT o.id, o.name, o.short_name, o.status, o.chair_user_id,
                 chair.username AS chair_username,
+                chair.name AS chair_name,
                 o.created_at, o.updated_at
          FROM organizations o
          LEFT JOIN users chair ON chair.id = o.chair_user_id
