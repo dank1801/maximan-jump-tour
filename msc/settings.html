@@ -44,16 +44,6 @@
                     <form id="system-config-form">
                         <div class="grid-2">
                             <div class="form-group">
-                                <label>Zeitzone *</label>
-                                <select name="timezone" required>
-                                    <option value="">-- Bitte auswählen --</option>
-                                    <option value="Europe/Berlin">Europa/Berlin (UTC+1)</option>
-                                    <option value="Europe/London">Europa/London (UTC+0)</option>
-                                    <option value="Europe/Paris">Europa/Paris (UTC+1)</option>
-                                    <option value="America/New_York">Amerika/New York (UTC-5)</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
                                 <label>Sprache *</label>
                                 <select name="language" required>
                                     <option value="de">Deutsch</option>
@@ -340,28 +330,12 @@
                 }
             }
 
-            function ensureTimezoneOption(select, value) {
-                if (!select || !value) return;
-                const exists = Array.from(select.options || []).some((option) => option.value === value);
-                if (exists) return;
-                const option = document.createElement("option");
-                option.value = value;
-                option.textContent = `${value} (lokal erkannt)`;
-                select.appendChild(option);
-            }
-
             function applySystemFormFallbacks() {
                 if (!systemConfigForm) return;
-                const timezoneField = systemConfigForm.elements.namedItem("timezone");
                 const languageField = systemConfigForm.elements.namedItem("language");
                 const defaultSeasonField = systemConfigForm.elements.namedItem("default_season");
                 const defaultPointsField = systemConfigForm.elements.namedItem("default_points_schema");
 
-                if (timezoneField && !String(timezoneField.value || "").trim()) {
-                    const detectedTimezone = resolvePreferredTimeZone();
-                    ensureTimezoneOption(timezoneField, detectedTimezone);
-                    timezoneField.value = detectedTimezone;
-                }
                 if (languageField && !String(languageField.value || "").trim()) {
                     languageField.value = "de";
                 }
@@ -435,9 +409,9 @@
                     }
                     applyLicenseCategoryPayload(map.license_categories || {});
                     applySystemFormFallbacks();
-                    const timezoneField = systemConfigForm?.elements?.namedItem("timezone");
-                    if (timezoneField && typeof setPreferredTimeZone === "function") {
-                        setPreferredTimeZone(timezoneField.value, { persist: true, broadcast: false });
+                    if (typeof setPreferredTimeZone === "function") {
+                        const detectedTimezone = resolvePreferredTimeZone();
+                        setPreferredTimeZone(detectedTimezone, { persist: true, broadcast: false });
                     }
                     return true;
                 } catch (error) {
@@ -449,8 +423,10 @@
             systemConfigForm?.addEventListener("submit", async (e) => {
                 e.preventDefault();
                 const data = getFormData(systemConfigForm);
+                const detectedTimezone = resolvePreferredTimeZone();
+                data.timezone = detectedTimezone;
                 if (typeof setPreferredTimeZone === "function") {
-                    setPreferredTimeZone(data.timezone, { persist: true, broadcast: true });
+                    setPreferredTimeZone(detectedTimezone, { persist: true, broadcast: true });
                 }
                 try {
                     await api("/settings", {
@@ -461,13 +437,6 @@
                     showToast("Systemkonfiguration gespeichert.", "success");
                 } catch (error) {
                     showToast(error.message, "error");
-                }
-            });
-
-            systemConfigForm?.elements?.namedItem("timezone")?.addEventListener("change", (event) => {
-                const nextZone = event?.target?.value;
-                if (typeof setPreferredTimeZone === "function") {
-                    setPreferredTimeZone(nextZone, { persist: true, broadcast: true });
                 }
             });
 
