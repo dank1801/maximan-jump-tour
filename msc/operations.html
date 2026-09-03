@@ -19,6 +19,7 @@
                 <li><a href="transfers.html">Transfers & Verträge</a></li>
                 <li><a href="reporting.html">Reporting & Audit</a></li>
                 <li><a href="operations.html">Operations Hub</a></li>
+                <li><a href="domain.html">Domänenstudio</a></li>
                 <li><a href="settings.html">Einstellungen</a></li>
             </ul>
         </div>
@@ -45,22 +46,37 @@
                             <div class="kpi-card">
                                 <div class="kpi-label">MSC Admin Dashboard</div>
                                 <div class="kpi-subtext">Regelversionierung, Saisonplanung, Jury, Disziplinar, Finanzen</div>
+                                <div class="form-actions">
+                                    <a class="btn btn-secondary btn-small" href="domain.html?domain=msc_admin">Öffnen</a>
+                                </div>
                             </div>
                             <div class="kpi-card">
                                 <div class="kpi-label">LOC Dashboard</div>
                                 <div class="kpi-subtext">Schanzenfreigabe, Windmonitoring, Gate Panel, Notfallprotokolle</div>
+                                <div class="form-actions">
+                                    <a class="btn btn-secondary btn-small" href="domain.html?domain=loc">Öffnen</a>
+                                </div>
                             </div>
                             <div class="kpi-card">
                                 <div class="kpi-label">Team Portal</div>
                                 <div class="kpi-subtext">Registrierung, Athleten, Materialchecks, Transfers, Medical Uploads</div>
+                                <div class="form-actions">
+                                    <a class="btn btn-secondary btn-small" href="domain.html?domain=team_portal">Öffnen</a>
+                                </div>
                             </div>
                             <div class="kpi-card">
                                 <div class="kpi-label">Athlete App</div>
                                 <div class="kpi-subtext">Profile, Medical Clearance, Startlisten, Ergebnisse, Notifications</div>
+                                <div class="form-actions">
+                                    <a class="btn btn-secondary btn-small" href="domain.html?domain=athlete_app">Öffnen</a>
+                                </div>
                             </div>
                             <div class="kpi-card">
                                 <div class="kpi-label">Public Site</div>
                                 <div class="kpi-subtext">Live Ticker, Startlisten, Standings, Clips mit Embargo-Regeln</div>
+                                <div class="form-actions">
+                                    <a class="btn btn-secondary btn-small" href="domain.html?domain=public_site">Öffnen</a>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -93,6 +109,7 @@
                         <h2>Domänensteuerung (MSC / LOC / Team / Athlete / Public)</h2>
                     </div>
                     <form id="domain-record-form">
+                        <input type="hidden" name="recordId" />
                         <div class="grid-3">
                             <div class="form-group">
                                 <label>Domäne *</label>
@@ -131,6 +148,7 @@
                         </div>
                         <div class="form-actions">
                             <button type="submit" class="btn btn-primary">Domäneneintrag speichern</button>
+                            <button type="button" class="btn btn-secondary hidden" id="domain-record-cancel-edit">Bearbeitung abbrechen</button>
                         </div>
                     </form>
                     <div class="card-body">
@@ -451,11 +469,33 @@
                         <td>${statusBadge(entry.status || "planned")}</td>
                         <td>${escapeHtml(entry.payload?.notes || "—")}</td>
                         <td>
+                            <button type="button" class="btn btn-small btn-secondary" data-edit-domain-record="${entry.id}">Bearbeiten</button>
                             <button type="button" class="btn btn-small btn-danger" data-delete-domain-record="${entry.id}">Löschen</button>
                         </td>
                     </tr>
                 `).join("");
                 body.innerHTML = html || "<tr><td colspan='7' class='table-empty'>Noch keine Domäneneinträge vorhanden.</td></tr>";
+                body.querySelectorAll("[data-edit-domain-record]").forEach((buttonNode) => {
+                    buttonNode.addEventListener("click", () => {
+                        const id = Number(buttonNode.getAttribute("data-edit-domain-record"));
+                        const record = state.domainRecords.find((entry) => Number(entry.id) === id);
+                        if (!record) return;
+                        const form = document.getElementById("domain-record-form");
+                        form.elements.recordId.value = String(record.id);
+                        form.elements.domainKey.value = record.domain_key || "";
+                        renderDomainCapabilityOptions();
+                        form.elements.capabilityKey.value = record.capability_key || "";
+                        form.elements.status.value = record.status || "planned";
+                        form.elements.title.value = record.title || "";
+                        form.elements.ownerRole.value = record.owner_role || "";
+                        form.elements.eventId.value = record.event_id ? String(record.event_id) : "";
+                        form.elements.notes.value = record.payload?.notes || "";
+                        document.getElementById("domain-record-cancel-edit")?.classList.remove("hidden");
+                        const submit = form.querySelector("button[type='submit']");
+                        if (submit) submit.textContent = "Domäneneintrag aktualisieren";
+                        form.scrollIntoView({ behavior: "smooth", block: "start" });
+                    });
+                });
                 body.querySelectorAll("[data-delete-domain-record]").forEach((buttonNode) => {
                     buttonNode.addEventListener("click", () => {
                         const id = Number(buttonNode.getAttribute("data-delete-domain-record"));
@@ -580,13 +620,18 @@
                     }
                 };
                 try {
-                    await api("/domain-records", {
-                        method: "POST",
+                    const recordId = Number(data.recordId || 0);
+                    const path = recordId > 0 ? `/domain-records/${recordId}` : "/domain-records";
+                    await api(path, {
+                        method: recordId > 0 ? "PATCH" : "POST",
                         body: JSON.stringify(payload)
                     });
-                    showToast("Domäneneintrag gespeichert.", "success");
+                    showToast(recordId > 0 ? "Domäneneintrag aktualisiert." : "Domäneneintrag gespeichert.", "success");
                     event.target.reset();
                     renderDomainOptions();
+                    const submit = event.target.querySelector("button[type='submit']");
+                    if (submit) submit.textContent = "Domäneneintrag speichern";
+                    document.getElementById("domain-record-cancel-edit")?.classList.add("hidden");
                     await refreshOperationsPage();
                 } catch (error) {
                     showToast(error.message, "error");
@@ -624,6 +669,15 @@
             document.getElementById("load-public-standings").addEventListener("click", loadPublicStandings);
             document.getElementById("domain-record-domain")?.addEventListener("change", renderDomainCapabilityOptions);
             document.getElementById("domain-record-filter")?.addEventListener("change", renderDomainRecords);
+            document.getElementById("domain-record-cancel-edit")?.addEventListener("click", () => {
+                const form = document.getElementById("domain-record-form");
+                if (!form) return;
+                form.reset();
+                renderDomainOptions();
+                const submit = form.querySelector("button[type='submit']");
+                if (submit) submit.textContent = "Domäneneintrag speichern";
+                document.getElementById("domain-record-cancel-edit")?.classList.add("hidden");
+            });
 
             document.addEventListener("DOMContentLoaded", async () => {
                 try {

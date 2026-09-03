@@ -38,6 +38,17 @@ const PAGE_PERMISSION_RULES = {
             "msc_admin.write", "loc.write", "team_portal.write", "athlete_app.write", "public_site.write"
         ]
     },
+    "domain.html": {
+        readAny: [
+            "dashboard.read",
+            "msc_admin.read", "msc_admin.write",
+            "loc.read", "loc.write",
+            "team_portal.read", "team_portal.write",
+            "athlete_app.read", "athlete_app.write",
+            "public_site.read", "public_site.write"
+        ],
+        writeAny: ["dashboard.read", "msc_admin.write", "loc.write", "team_portal.write", "athlete_app.write", "public_site.write"]
+    },
     "settings.html": { readAny: ["settings.read", "settings.write"], writeAny: ["settings.write"] }
 };
 
@@ -49,6 +60,7 @@ const PAGE_WRITE_FORM_SELECTORS = {
     "transfers.html": ["#transfer-window-form", "#create-transfer-form"],
     "reporting.html": ["#create-publication-form"],
     "operations.html": ["#module-record-form", "#workflow-execution-form", "#domain-record-form"],
+    "domain.html": ["#domain-studio-form"],
     "settings.html": ["#system-config-form", "#security-config-form", "#email-config-form"]
 };
 
@@ -59,7 +71,8 @@ const PAGE_READONLY_ACTION_SELECTORS = {
     "points.html": ["#save-rule-button", "#reset-rule-button", "#add-points-row", "#add-bonus-profile", "#generate-scale", "#normalize-scale", "#clear-scale"],
     "transfers.html": ["#transfers-list .btn", "#contracts-list .btn"],
     "reporting.html": ["#audit-log-tbody + .form-actions .btn", "#publications-list .btn"],
-    "operations.html": ["#module-records-body .btn", "#workflow-logs-body .btn", "#domain-records-body .btn"]
+    "operations.html": ["#module-records-body .btn", "#workflow-logs-body .btn", "#domain-records-body .btn"],
+    "domain.html": ["#domain-studio-records .btn", "#domain-studio-switch .btn"],
 };
 
 // ============ HELPERS ============
@@ -518,6 +531,14 @@ function applyNavPermissionVisibility() {
         "transfers.html": ["transfers.read", "transfers.write"],
         "reporting.html": ["audit.read", "publications.read", "public_api.read", "event_scores.read", "publications.write"],
         "operations.html": ["dashboard.read", "workflows.execute"],
+        "domain.html": [
+            "dashboard.read",
+            "msc_admin.read", "msc_admin.write",
+            "loc.read", "loc.write",
+            "team_portal.read", "team_portal.write",
+            "athlete_app.read", "athlete_app.write",
+            "public_site.read", "public_site.write"
+        ],
         "settings.html": ["settings.read", "settings.write"]
     };
     document.querySelectorAll(".portal-nav a").forEach((link) => {
@@ -1846,6 +1867,10 @@ async function rerenderCurrentPageForTimezone() {
         if (typeof window.refreshOperationsPage === "function") {
             await window.refreshOperationsPage();
         }
+    } else if (page === "domain.html") {
+        if (typeof window.refreshDomainStudioPage === "function") {
+            await window.refreshDomainStudioPage();
+        }
     }
 }
 
@@ -1895,6 +1920,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             } else if (page === "operations.html") {
                 if (typeof window.refreshOperationsPage === "function") {
                     await window.refreshOperationsPage();
+                }
+            } else if (page === "domain.html") {
+                if (typeof window.refreshDomainStudioPage === "function") {
+                    await window.refreshDomainStudioPage();
                 }
             }
         }

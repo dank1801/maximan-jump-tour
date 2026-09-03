@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MSC Portal - Domänenstudio</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <div class="portal-container">
+        <div class="portal-sidebar">
+            <div class="portal-logo">MSC Portal</div>
+            <ul class="portal-nav">
+                <li><a href="dashboard.html">Dashboard</a></li>
+                <li><a href="users.html">Benutzer & Rollen</a></li>
+                <li><a href="teams.html">Teams & Lizenzen</a></li>
+                <li><a href="events.html">Wettkämpfe</a></li>
+                <li><a href="points.html">Punkte & Wertungen</a></li>
+                <li><a href="transfers.html">Transfers & Verträge</a></li>
+                <li><a href="reporting.html">Reporting & Audit</a></li>
+                <li><a href="operations.html">Operations Hub</a></li>
+                <li><a href="domain.html">Domänenstudio</a></li>
+                <li><a href="settings.html">Einstellungen</a></li>
+            </ul>
+        </div>
+
+        <div class="portal-main">
+            <div class="portal-header">
+                <h1>Domänenstudio</h1>
+                <div class="portal-user-info">
+                    <div>
+                        <div class="user-badge" data-session-user>Admin</div>
+                        <div data-session-role>Admin</div>
+                    </div>
+                    <button id="logout-button" class="btn btn-secondary btn-small">Abmelden</button>
+                </div>
+            </div>
+
+            <div class="portal-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 id="domain-studio-title">Domäne auswählen</h2>
+                    </div>
+                    <div class="card-body">
+                        <p id="domain-studio-description" class="help-text">Direkt aufrufbar, sichtbar und bearbeitbar pro Bereich.</p>
+                        <div id="domain-studio-switch" class="form-actions"></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Domäneneintrag bearbeiten</h2>
+                    </div>
+                    <form id="domain-studio-form">
+                        <input type="hidden" name="recordId" />
+                        <div class="grid-3">
+                            <div class="form-group">
+                                <label>Domäne *</label>
+                                <select name="domainKey" id="domain-studio-domain" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Funktion *</label>
+                                <select name="capabilityKey" id="domain-studio-capability" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Status *</label>
+                                <select name="status" required>
+                                    <option value="planned">Geplant</option>
+                                    <option value="in_progress">In Bearbeitung</option>
+                                    <option value="live">Live</option>
+                                    <option value="blocked">Blockiert</option>
+                                    <option value="completed">Abgeschlossen</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Titel *</label>
+                                <input type="text" name="title" required />
+                            </div>
+                            <div class="form-group">
+                                <label>Owner Rolle</label>
+                                <input type="text" name="ownerRole" />
+                            </div>
+                            <div class="form-group">
+                                <label>Event-ID</label>
+                                <input type="number" name="eventId" min="1" />
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Notiz</label>
+                            <textarea name="notes"></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary" id="domain-studio-submit">Speichern</button>
+                            <button type="button" class="btn btn-secondary hidden" id="domain-studio-cancel">Bearbeitung abbrechen</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Domänen-Feed</h2>
+                    </div>
+                    <div class="card-body">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Zeit</th>
+                                    <th>Domäne</th>
+                                    <th>Funktion</th>
+                                    <th>Titel</th>
+                                    <th>Status</th>
+                                    <th>Notiz</th>
+                                    <th>Aktion</th>
+                                </tr>
+                            </thead>
+                            <tbody id="domain-studio-records"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="portal.js"></script>
+    <script>
+        if (!isLoginPage()) {
+            const state = {
+                domains: [],
+                records: [],
+                selectedDomain: ""
+            };
+
+            function queryDomainFromUrl() {
+                const params = new URLSearchParams(window.location.search || "");
+                return String(params.get("domain") || "").trim();
+            }
+
+            function capabilitiesForSelected() {
+                const domain = state.domains.find((entry) => entry.key === state.selectedDomain);
+                return Array.isArray(domain?.capabilities) ? domain.capabilities : [];
+            }
+
+            function capabilityLabel(domainKey, capabilityKey) {
+                const domain = state.domains.find((entry) => entry.key === domainKey);
+                const capability = (domain?.capabilities || []).find((entry) => entry.key === capabilityKey);
+                return capability?.name || capabilityKey || "—";
+            }
+
+            function syncDomainHeader() {
+                const domain = state.domains.find((entry) => entry.key === state.selectedDomain);
+                const title = document.getElementById("domain-studio-title");
+                const description = document.getElementById("domain-studio-description");
+                if (domain) {
+                    title.textContent = domain.name;
+                    description.textContent = domain.description || "—";
+                } else {
+                    title.textContent = "Keine Domäne verfügbar";
+                    description.textContent = "Für diese Rolle sind aktuell keine Domänen freigeschaltet.";
+                }
+            }
+
+            function renderDomainSwitch() {
+                const container = document.getElementById("domain-studio-switch");
+                const html = state.domains.map((entry) => `
+                    <a class="btn btn-small ${entry.key === state.selectedDomain ? "btn-primary" : "btn-secondary"}"
+                       href="domain.html?domain=${encodeURIComponent(entry.key)}">${escapeHtml(entry.name)}</a>
+                `).join("");
+                container.innerHTML = html || "<span class='table-empty'>Keine Domänen verfügbar.</span>";
+            }
+
+            function renderDomainSelect() {
+                const select = document.getElementById("domain-studio-domain");
+                const options = state.domains.map((entry) => `<option value="${escapeHtml(entry.key)}">${escapeHtml(entry.name)}</option>`).join("");
+                select.innerHTML = `<option value="">-- Bitte auswählen --</option>${options}`;
+                if (!state.selectedDomain && state.domains.length > 0) {
+                    state.selectedDomain = state.domains[0].key;
+                }
+                if (state.selectedDomain) {
+                    select.value = state.selectedDomain;
+                }
+                renderCapabilitySelect();
+                syncDomainHeader();
+            }
+
+            function renderCapabilitySelect() {
+                const select = document.getElementById("domain-studio-capability");
+                const options = capabilitiesForSelected().map((entry) => `<option value="${escapeHtml(entry.key)}">${escapeHtml(entry.name)}</option>`).join("");
+                select.innerHTML = `<option value="">-- Bitte auswählen --</option>${options}`;
+                if (!select.value && capabilitiesForSelected().length > 0) {
+                    select.value = capabilitiesForSelected()[0].key;
+                }
+            }
+
+            function clearEditState() {
+                const form = document.getElementById("domain-studio-form");
+                form.reset();
+                form.elements.recordId.value = "";
+                form.elements.domainKey.value = state.selectedDomain || "";
+                renderCapabilitySelect();
+                document.getElementById("domain-studio-submit").textContent = "Speichern";
+                document.getElementById("domain-studio-cancel").classList.add("hidden");
+            }
+
+            function renderRecords() {
+                const body = document.getElementById("domain-studio-records");
+                const rows = state.records.filter((entry) => entry.domain_key === state.selectedDomain);
+                const html = rows.map((entry) => `
+                    <tr>
+                        <td>${formatDateTime(entry.updated_at || entry.created_at)}</td>
+                        <td><strong>${escapeHtml(state.domains.find((d) => d.key === entry.domain_key)?.name || entry.domain_key)}</strong></td>
+                        <td>${escapeHtml(capabilityLabel(entry.domain_key, entry.capability_key))}</td>
+                        <td>${escapeHtml(entry.title || "—")}</td>
+                        <td>${statusBadge(entry.status || "planned")}</td>
+                        <td>${escapeHtml(entry.payload?.notes || "—")}</td>
+                        <td>
+                            <button type="button" class="btn btn-small btn-secondary" data-edit-id="${entry.id}">Bearbeiten</button>
+                            <button type="button" class="btn btn-small btn-danger" data-delete-id="${entry.id}">Löschen</button>
+                        </td>
+                    </tr>
+                `).join("");
+                body.innerHTML = html || "<tr><td colspan='7' class='table-empty'>Keine Einträge für diese Domäne.</td></tr>";
+
+                body.querySelectorAll("[data-edit-id]").forEach((button) => {
+                    button.addEventListener("click", () => {
+                        const id = Number(button.getAttribute("data-edit-id"));
+                        const record = state.records.find((entry) => Number(entry.id) === id);
+                        if (!record) return;
+                        const form = document.getElementById("domain-studio-form");
+                        state.selectedDomain = record.domain_key;
+                        renderDomainSelect();
+                        form.elements.recordId.value = String(record.id);
+                        form.elements.domainKey.value = record.domain_key || "";
+                        renderCapabilitySelect();
+                        form.elements.capabilityKey.value = record.capability_key || "";
+                        form.elements.status.value = record.status || "planned";
+                        form.elements.title.value = record.title || "";
+                        form.elements.ownerRole.value = record.owner_role || "";
+                        form.elements.eventId.value = record.event_id ? String(record.event_id) : "";
+                        form.elements.notes.value = record.payload?.notes || "";
+                        document.getElementById("domain-studio-submit").textContent = "Aktualisieren";
+                        document.getElementById("domain-studio-cancel").classList.remove("hidden");
+                        form.scrollIntoView({ behavior: "smooth", block: "start" });
+                    });
+                });
+
+                body.querySelectorAll("[data-delete-id]").forEach((button) => {
+                    button.addEventListener("click", () => {
+                        const id = Number(button.getAttribute("data-delete-id"));
+                        confirmDelete("Diesen Domäneneintrag", async () => {
+                            try {
+                                await api(`/domain-records/${id}`, { method: "DELETE" });
+                                showToast("Eintrag gelöscht.", "success");
+                                await refreshDomainStudioPage();
+                            } catch (error) {
+                                showToast(error.message, "error");
+                            }
+                        });
+                    });
+                });
+            }
+
+            async function refreshDomainStudioPage() {
+                const scope = await api("/system-scope");
+                state.domains = Array.isArray(scope?.domains) ? scope.domains : [];
+                const preferred = queryDomainFromUrl();
+                if (preferred && state.domains.some((entry) => entry.key === preferred)) {
+                    state.selectedDomain = preferred;
+                } else if (!state.selectedDomain || !state.domains.some((entry) => entry.key === state.selectedDomain)) {
+                    state.selectedDomain = state.domains[0]?.key || "";
+                }
+
+                if (!state.selectedDomain) {
+                    renderDomainSwitch();
+                    renderDomainSelect();
+                    document.getElementById("domain-studio-records").innerHTML =
+                        "<tr><td colspan='7' class='table-empty'>Keine freigeschaltete Domäne vorhanden.</td></tr>";
+                    return;
+                }
+
+                const records = await api(`/domain-records?domainKey=${encodeURIComponent(state.selectedDomain)}`);
+                state.records = Array.isArray(records) ? records : [];
+                renderDomainSwitch();
+                renderDomainSelect();
+                renderRecords();
+            }
+
+            window.refreshDomainStudioPage = refreshDomainStudioPage;
+
+            document.getElementById("domain-studio-domain").addEventListener("change", async (event) => {
+                const next = String(event.target.value || "").trim();
+                if (!next) return;
+                window.location.href = `domain.html?domain=${encodeURIComponent(next)}`;
+            });
+
+            document.getElementById("domain-studio-form").addEventListener("submit", async (event) => {
+                event.preventDefault();
+                const data = getFormData(event.target);
+                const recordId = Number(data.recordId || 0);
+                const payload = {
+                    domainKey: data.domainKey,
+                    capabilityKey: data.capabilityKey,
+                    title: data.title,
+                    status: data.status,
+                    ownerRole: data.ownerRole || "",
+                    eventId: data.eventId ? Number(data.eventId) : null,
+                    payload: {
+                        notes: data.notes || ""
+                    }
+                };
+                try {
+                    await api(recordId > 0 ? `/domain-records/${recordId}` : "/domain-records", {
+                        method: recordId > 0 ? "PATCH" : "POST",
+                        body: JSON.stringify(payload)
+                    });
+                    showToast(recordId > 0 ? "Eintrag aktualisiert." : "Eintrag gespeichert.", "success");
+                    clearEditState();
+                    await refreshDomainStudioPage();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+
+            document.getElementById("domain-studio-cancel").addEventListener("click", clearEditState);
+
+            document.addEventListener("DOMContentLoaded", async () => {
+                try {
+                    await refreshDomainStudioPage();
+                    clearEditState();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+        }
+    </script>
+</body>
+</html>
