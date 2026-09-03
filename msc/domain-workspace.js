@@ -2149,7 +2149,13 @@ function initDomainWorkspace(config) {
                     })
                     : null;
                 const managerUserId = managerMatch ? Number(managerMatch.id) : null;
-                const selectedOrgId = Number(data.organizationId || 0);
+                const orgSelectField = teamForm.querySelector("select[name='organizationId']");
+                const rawOrgValue = String(
+                    data.organizationId
+                    || orgSelectField?.value
+                    || (orgSelectField?.disabled && organizations.length === 1 ? organizations[0].id : "")
+                ).trim();
+                const selectedOrgId = Number(rawOrgValue || 0);
                 const selectedType = String(data.teamType || "").trim().toUpperCase();
                 if (!selectedOrgId) {
                     showToast("Bitte eine Organisation auswählen.", "error");
@@ -2190,7 +2196,7 @@ function initDomainWorkspace(config) {
                         method: "POST",
                         body: JSON.stringify({
                             name: data.name,
-                            organizationId: data.organizationId,
+                            organizationId: selectedOrgId,
                             teamType: data.teamType,
                             seasonId: data.seasonId || null,
                             managerUserId
