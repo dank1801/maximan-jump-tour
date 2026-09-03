@@ -130,6 +130,7 @@ const WORKSPACE_SEVERITY_LABELS = {
     high: "High",
     critical: "Critical"
 };
+const ONBOARDING_VERSION = "v3";
 
 function initDomainWorkspace(config) {
     if (!config || !config.domainKey) return;
@@ -150,7 +151,9 @@ function initDomainWorkspace(config) {
         seasons: [],
         teams: [],
         errorReport: null,
-        canWrite: false
+        canWrite: false,
+        teamListPreset: "all",
+        selectedTeamIds: new Set()
     };
     const draftKey = `msc_portal_domain_draft:${domainKey}`;
 
@@ -514,6 +517,7 @@ function initDomainWorkspace(config) {
                 <div class="card-body">
                     <form id="ws-season-form" class="workspace-inline-form">
                         <input type="hidden" name="seasonId" />
+                        <input type="hidden" name="updatedAt" />
                         <div class="grid-3">
                             <div class="form-group"><label>Name *</label><input type="text" name="name" required /></div>
                             <div class="form-group"><label>Startdatum</label><input type="date" name="startDate" /></div>
@@ -566,6 +570,17 @@ function initDomainWorkspace(config) {
                 <button type="button" class="btn btn-secondary btn-small" id="ws-clear-filters">Filter zurücksetzen</button>
             `;
             recordsCardBody.prepend(filterBar);
+
+            const presetBar = document.createElement("div");
+            presetBar.id = "ws-filter-presets";
+            presetBar.className = "workspace-mini-pill-list workspace-filter-presets";
+            presetBar.innerHTML = `
+                <button type="button" class="btn btn-secondary btn-small" data-filter-preset="all">Alle Einträge</button>
+                <button type="button" class="btn btn-secondary btn-small" data-filter-preset="blocked">Nur Blocker</button>
+                <button type="button" class="btn btn-secondary btn-small" data-filter-preset="critical">Nur kritisch</button>
+                <button type="button" class="btn btn-secondary btn-small" data-filter-preset="soon">Bald fällig</button>
+            `;
+            recordsCardBody.prepend(presetBar);
         }
 
         const form = document.getElementById("ws-record-form");
@@ -1507,6 +1522,7 @@ function initDomainWorkspace(config) {
         const canOrganizationsWrite = hasPermission("organizations.write");
         const canTeamsWrite = hasPermission("teams.write");
         const canTeamPortalWrite = hasPermission("team_portal.write");
+        const canBulkManage = canOrganizationsWrite && canTeamsWrite;
         const currentScope = state.scopeDomain?.name || "Team Portal";
         const resolvedDeadline = (team) => {
             const deadline = team.registration_deadline_at || seasons.find((season) => Number(season.id) === Number(team.season_id))?.registration_deadline_at || null;
@@ -1598,15 +1614,33 @@ function initDomainWorkspace(config) {
                 .join("");
         }
 
-        const teamRows = teams.map((team) => {
+        const preset = String(state.teamListPreset || "all");
+        const currentUser = typeof window.getCurrentUserContext === "function" ? window.getCurrentUserContext() : null;
+        const myScopeOrgId = organizations.length === 1
+            ? Number(organizations[0]?.id || 0)
+            : Number(currentUser?.assignments?.organizationId || 0);
+        const visibleTeams = teams.filter((team) => {
+            if (preset === "revision") return String(team.registration_status || "").toLowerCase() === "revision_requested";
+            if (preset === "deadline_soon") {
+                const deadline = resolvedDeadline(team);
+                if (!deadline) return false;
+                const delta = deadline.getTime() - Date.now();
+                return delta > 0 && delta <= 72 * 60 * 60 * 1000;
+            }
+            if (preset === "my_org" && myScopeOrgId > 0) return Number(team.organization_id) === myScopeOrgId;
+            return true;
+        });
+        const teamRows = visibleTeams.map((team) => {
             const org = organizations.find((entry) => Number(entry.id) === Number(team.organization_id));
             const reviewStatus = String(team.registration_status || "draft").toLowerCase();
             const locked = isLocked(team);
             const canReview = canOrganizationsWrite && canTeamPortalWrite;
             const canSubmit = reviewStatus === "draft" || reviewStatus === "revision_requested";
             const canManageTeam = canTeamsWrite;
+            const isSelected = state.selectedTeamIds.has(Number(team.id));
             return `
                 <tr>
+                    <td>${canBulkManage ? `<input type="checkbox" data-select-team="${team.id}" ${isSelected ? "checked" : ""} />` : ""}</td>
                     <td><strong>${escapeHtml(team.name || "—")}</strong></td>
                     <td>${escapeHtml(org?.name || "—")}</td>
                     <td>${escapeHtml(String(team.team_type || "—"))}</td>
@@ -1620,6 +1654,7 @@ function initDomainWorkspace(config) {
                             ${canSubmit ? `<button type="button" class="btn btn-small btn-primary" data-submit-team="${team.id}">Einreichen</button>` : ""}
                             ${canReview ? `<button type="button" class="btn btn-small btn-secondary" data-confirm-team="${team.id}">Bestätigen</button>` : ""}
                             ${canReview ? `<button type="button" class="btn btn-small btn-warning" data-reject-team="${team.id}">Rückfrage</button>` : ""}
+                            ${canReview ? `<button type="button" class="btn btn-small btn-warning" data-rollback-team="${team.id}">Rollback</button>` : ""}
                             ${canManageTeam ? `<button type="button" class="btn btn-small btn-secondary" data-edit-team="${team.id}">Bearbeiten</button>` : ""}
                             ${canManageTeam ? `<button type="button" class="btn btn-small btn-danger" data-delete-team="${team.id}">Löschen</button>` : ""}
                             <button type="button" class="btn btn-small btn-secondary" data-history-team="${team.id}">Historie</button>
@@ -1674,8 +1709,9 @@ function initDomainWorkspace(config) {
                                     <td>${escapeHtml(org.chair_username || org.chair_name || "—")}</td>
                                     <td>${statusBadge(org.status || "active")}</td>
                                     <td>${canOrganizationsWrite
-                                        ? `<button type="button" class="btn btn-small btn-secondary" data-edit-organization="${org.id}">Bearbeiten</button>`
+                                        ? `<button type="button" class="btn btn-small btn-secondary" data-edit-organization="${org.id}">Bearbeiten</button> <button type="button" class="btn btn-small btn-warning" data-rollback-organization="${org.id}">Rollback Vorsitz</button>`
                                         : `<span class="badge badge-info">Leseansicht</span>`}
+                                        <button type="button" class="btn btn-small btn-secondary" data-history-organization="${org.id}">Historie</button>
                                     </td>
                                 </tr>
                             `).join("") || "<tr><td colspan='5' class='table-empty'>Keine Organisationen vorhanden.</td></tr>"}
@@ -1686,9 +1722,33 @@ function initDomainWorkspace(config) {
             <div class="card">
                 <div class="card-header"><h3>Teams</h3></div>
                 <div class="card-body">
+                    <div class="workspace-template-row">
+                        <button type="button" class="btn btn-secondary btn-small ${preset === "all" ? "active" : ""}" data-team-preset="all">Alle Teams</button>
+                        <button type="button" class="btn btn-secondary btn-small ${preset === "revision" ? "active" : ""}" data-team-preset="revision">Nur Rückfragen</button>
+                        <button type="button" class="btn btn-secondary btn-small ${preset === "deadline_soon" ? "active" : ""}" data-team-preset="deadline_soon">Frist &lt; 72h</button>
+                        <button type="button" class="btn btn-secondary btn-small ${preset === "my_org" ? "active" : ""}" data-team-preset="my_org">Meine Organisation</button>
+                    </div>
+                    ${canBulkManage ? `
+                        <div class="workspace-bulk-actions">
+                            <label><input type="checkbox" id="ws-team-select-all" /> Alle sichtbar auswählen</label>
+                            <span class="workspace-muted" id="ws-team-selected-count">${state.selectedTeamIds.size} ausgewählt</span>
+                            <select id="ws-team-bulk-action">
+                                <option value="">Bulk-Aktion wählen</option>
+                                <option value="assignSeason">Saison zuweisen</option>
+                                <option value="setOperationalStatusActive">Status aktiv</option>
+                                <option value="setOperationalStatusInactive">Status inaktiv</option>
+                                <option value="deactivate">Deaktivieren</option>
+                            </select>
+                            <select id="ws-team-bulk-season">
+                                <option value="">-- Saison wählen --</option>
+                                ${seasons.map((season) => `<option value="${escapeHtml(season.id)}">${escapeHtml(season.name)}</option>`).join("")}
+                            </select>
+                            <button type="button" class="btn btn-primary btn-small" id="ws-team-bulk-apply">Auf Auswahl anwenden</button>
+                        </div>
+                    ` : ""}
                     <table class="table">
-                        <thead><tr><th>Team</th><th>Organisation</th><th>Typ</th><th>Review</th><th>Saison</th><th>Bestätigt</th><th>Kommentar</th><th>Frist</th><th>Aktion</th></tr></thead>
-                        <tbody>${teamRows || "<tr><td colspan='9' class='table-empty'>Keine Teams vorhanden.</td></tr>"}</tbody>
+                        <thead><tr><th>${canBulkManage ? "✓" : ""}</th><th>Team</th><th>Organisation</th><th>Typ</th><th>Review</th><th>Saison</th><th>Bestätigt</th><th>Kommentar</th><th>Frist</th><th>Aktion</th></tr></thead>
+                        <tbody>${teamRows || "<tr><td colspan='10' class='table-empty'>Keine Teams vorhanden.</td></tr>"}</tbody>
                     </table>
                 </div>
             </div>
@@ -1750,13 +1810,28 @@ function initDomainWorkspace(config) {
                 if (!team) return;
                 confirmDelete(`Team ${team.name || teamId}`, async () => {
                     try {
-                        await api(`/teams/${teamId}`, { method: "DELETE" });
+                        await api(`/teams/${teamId}`, {
+                            method: "DELETE",
+                            headers: { "X-Entity-Updated-At": String(team.updated_at || "") }
+                        });
                         showToast("Team gelöscht.", "success");
                         await refreshDomainWorkspacePage();
                     } catch (error) {
                         showToast(error.message, "error");
                     }
                 });
+            });
+        });
+        grid.querySelectorAll("[data-rollback-team]").forEach((button) => {
+            const teamId = Number(button.getAttribute("data-rollback-team"));
+            button.addEventListener("click", async () => {
+                try {
+                    await api(`/teams/${teamId}/rollback-registration`, { method: "POST" });
+                    showToast("Team-Meldestatus zurückgesetzt.", "success");
+                    await refreshDomainWorkspacePage();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
             });
         });
         grid.querySelectorAll("[data-edit-organization]").forEach((button) => {
@@ -1768,6 +1843,22 @@ function initDomainWorkspace(config) {
             const organizationId = Number(button.getAttribute("data-edit-organization"));
             button.addEventListener("click", () => openOrganizationEditModal(organizationId));
         });
+        grid.querySelectorAll("[data-rollback-organization]").forEach((button) => {
+            const organizationId = Number(button.getAttribute("data-rollback-organization"));
+            button.addEventListener("click", async () => {
+                try {
+                    await api(`/organizations/${organizationId}/rollback-chair`, { method: "POST" });
+                    showToast("Vorsitz-Zuweisung zurückgesetzt.", "success");
+                    await refreshDomainWorkspacePage();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+        });
+        grid.querySelectorAll("[data-history-organization]").forEach((button) => {
+            const organizationId = Number(button.getAttribute("data-history-organization"));
+            button.addEventListener("click", () => openOrganizationHistoryModal(organizationId));
+        });
         grid.querySelectorAll("[data-history-team]").forEach((button) => {
             if (!state.canWrite && !hasPermission("teams.read")) {
                 button.disabled = true;
@@ -1777,6 +1868,82 @@ function initDomainWorkspace(config) {
             const teamId = Number(button.getAttribute("data-history-team"));
             button.addEventListener("click", () => openTeamHistoryModal(teamId));
         });
+        grid.querySelectorAll("[data-team-preset]").forEach((button) => {
+            const next = String(button.getAttribute("data-team-preset") || "all");
+            button.addEventListener("click", () => {
+                state.teamListPreset = next;
+                renderTeamAdminPanel();
+            });
+        });
+        grid.querySelectorAll("[data-select-team]").forEach((checkbox) => {
+            checkbox.addEventListener("change", () => {
+                const teamId = Number(checkbox.getAttribute("data-select-team"));
+                if (!teamId) return;
+                if (checkbox.checked) {
+                    state.selectedTeamIds.add(teamId);
+                } else {
+                    state.selectedTeamIds.delete(teamId);
+                }
+                const selectedNode = document.getElementById("ws-team-selected-count");
+                if (selectedNode) selectedNode.textContent = `${state.selectedTeamIds.size} ausgewählt`;
+            });
+        });
+        const selectAll = document.getElementById("ws-team-select-all");
+        if (selectAll && selectAll.dataset.bound !== "1") {
+            selectAll.dataset.bound = "1";
+            selectAll.addEventListener("change", () => {
+                const checkboxes = Array.from(grid.querySelectorAll("[data-select-team]"));
+                checkboxes.forEach((node) => {
+                    node.checked = selectAll.checked;
+                    const teamId = Number(node.getAttribute("data-select-team"));
+                    if (!teamId) return;
+                    if (selectAll.checked) state.selectedTeamIds.add(teamId);
+                    else state.selectedTeamIds.delete(teamId);
+                });
+                const selectedNode = document.getElementById("ws-team-selected-count");
+                if (selectedNode) selectedNode.textContent = `${state.selectedTeamIds.size} ausgewählt`;
+            });
+        }
+        const bulkApply = document.getElementById("ws-team-bulk-apply");
+        if (bulkApply && bulkApply.dataset.bound !== "1") {
+            bulkApply.dataset.bound = "1";
+            bulkApply.addEventListener("click", async () => {
+                const actionField = document.getElementById("ws-team-bulk-action");
+                const seasonField = document.getElementById("ws-team-bulk-season");
+                const teamIds = Array.from(state.selectedTeamIds);
+                const action = String(actionField?.value || "");
+                if (teamIds.length === 0) {
+                    showToast("Bitte mindestens ein Team auswählen.", "warning");
+                    return;
+                }
+                if (!action) {
+                    showToast("Bitte eine Bulk-Aktion wählen.", "warning");
+                    return;
+                }
+                const payload = { teamIds, action: "deactivate" };
+                if (action === "assignSeason") {
+                    payload.action = "assignSeason";
+                    payload.seasonId = seasonField?.value || null;
+                } else if (action === "setOperationalStatusActive") {
+                    payload.action = "setOperationalStatus";
+                    payload.status = "active";
+                } else if (action === "setOperationalStatusInactive") {
+                    payload.action = "setOperationalStatus";
+                    payload.status = "inactive";
+                }
+                try {
+                    await api("/teams/bulk-update", {
+                        method: "POST",
+                        body: JSON.stringify(payload)
+                    });
+                    showToast("Bulk-Aktion durchgeführt.", "success");
+                    state.selectedTeamIds.clear();
+                    await refreshDomainWorkspacePage();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+        }
 
     }
 
@@ -1799,7 +1966,9 @@ function initDomainWorkspace(config) {
                     <td>
                         <div class="actions-inline">
                             ${canSeasonsWrite ? `<button type="button" class="btn btn-small btn-secondary" data-edit-season="${season.id}">Bearbeiten</button>` : ""}
+                            ${canSeasonsWrite ? `<button type="button" class="btn btn-small btn-warning" data-rollback-season="${season.id}">Rollback Fristen</button>` : ""}
                             ${canSeasonsWrite ? `<button type="button" class="btn btn-small btn-danger" data-delete-season="${season.id}">Löschen</button>` : ""}
+                            <button type="button" class="btn btn-small btn-secondary" data-history-season="${season.id}">Historie</button>
                         </div>
                     </td>
                 </tr>
@@ -1820,6 +1989,7 @@ function initDomainWorkspace(config) {
                 form.elements.transferWindowOpenAt.value = toLocalDateTimeInput(season.transfer_window_open_at);
                 form.elements.transferWindowCloseAt.value = toLocalDateTimeInput(season.transfer_window_close_at);
                 form.elements.status.value = season.status || "planned";
+                form.elements.updatedAt.value = String(season.updated_at || "");
                 const submit = document.getElementById("ws-season-submit");
                 if (submit) submit.textContent = "Saison aktualisieren";
                 document.getElementById("ws-season-cancel")?.classList.remove("hidden");
@@ -1835,7 +2005,10 @@ function initDomainWorkspace(config) {
                 if (!season) return;
                 confirmDelete(`Saison ${season.name || seasonId}`, async () => {
                     try {
-                        await api(`/seasons/${seasonId}`, { method: "DELETE" });
+                        await api(`/seasons/${seasonId}`, {
+                            method: "DELETE",
+                            headers: { "X-Entity-Updated-At": String(season.updated_at || "") }
+                        });
                         showToast("Saison gelöscht.", "success");
                         await refreshDomainWorkspacePage();
                     } catch (error) {
@@ -1843,6 +2016,22 @@ function initDomainWorkspace(config) {
                     }
                 });
             });
+        });
+        tbody.querySelectorAll("[data-rollback-season]").forEach((button) => {
+            const seasonId = Number(button.getAttribute("data-rollback-season"));
+            button.addEventListener("click", async () => {
+                try {
+                    await api(`/seasons/${seasonId}/rollback-deadlines`, { method: "POST" });
+                    showToast("Saisonfristen zurückgesetzt.", "success");
+                    await refreshDomainWorkspacePage();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+        });
+        tbody.querySelectorAll("[data-history-season]").forEach((button) => {
+            const seasonId = Number(button.getAttribute("data-history-season"));
+            button.addEventListener("click", () => openSeasonHistoryModal(seasonId));
         });
     }
 
@@ -1917,6 +2106,7 @@ function initDomainWorkspace(config) {
                     try {
                         await api(`/teams/${teamId}`, {
                             method: "PATCH",
+                            headers: { "X-Entity-Updated-At": String(team.updated_at || "") },
                             body: JSON.stringify(payload)
                         });
                         showToast("Team aktualisiert.", "success");
@@ -1954,6 +2144,64 @@ function initDomainWorkspace(config) {
                 </div>
             `;
             showModal(`Historie · ${escapeHtml(team.name || "Team")}`, content, [{ id: "close", label: "Schließen", primary: true }]);
+        } catch (error) {
+            showToast(error.message, "error");
+        }
+    }
+
+    async function openOrganizationHistoryModal(organizationId) {
+        const org = (Array.isArray(state.organizations) ? state.organizations : []).find((entry) => Number(entry.id) === Number(organizationId));
+        if (!org) return;
+        try {
+            const history = await api(`/organizations/${organizationId}/history`);
+            const entries = Array.isArray(history) ? history : [];
+            const content = `
+                <div class="workspace-history-modal">
+                    <p><strong>${escapeHtml(org.name || "Organisation")}</strong></p>
+                    <div class="workspace-history-list">
+                        ${entries.length > 0 ? entries.map((entry) => `
+                            <div class="workspace-history-entry">
+                                <div class="workspace-history-head">
+                                    <strong>${escapeHtml(entry.action || "Aktion")}</strong>
+                                    <span>${escapeHtml(formatDateTime(entry.created_at))}</span>
+                                </div>
+                                <div>${escapeHtml(entry.actor_username || "system")}</div>
+                                <div class="workspace-muted">${escapeHtml(String(entry.details || "—"))}</div>
+                            </div>
+                        `).join("") : "<div class='workspace-muted'>Keine Historie vorhanden.</div>"}
+                    </div>
+                </div>
+            `;
+            showModal(`Historie · ${escapeHtml(org.name || "Organisation")}`, content, [{ id: "close", label: "Schließen", primary: true }]);
+        } catch (error) {
+            showToast(error.message, "error");
+        }
+    }
+
+    async function openSeasonHistoryModal(seasonId) {
+        const season = (Array.isArray(state.seasons) ? state.seasons : []).find((entry) => Number(entry.id) === Number(seasonId));
+        if (!season) return;
+        try {
+            const history = await api(`/seasons/${seasonId}/history`);
+            const entries = Array.isArray(history) ? history : [];
+            const content = `
+                <div class="workspace-history-modal">
+                    <p><strong>${escapeHtml(season.name || `Saison ${season.id}`)}</strong></p>
+                    <div class="workspace-history-list">
+                        ${entries.length > 0 ? entries.map((entry) => `
+                            <div class="workspace-history-entry">
+                                <div class="workspace-history-head">
+                                    <strong>${escapeHtml(entry.action || "Aktion")}</strong>
+                                    <span>${escapeHtml(formatDateTime(entry.created_at))}</span>
+                                </div>
+                                <div>${escapeHtml(entry.actor_username || "system")}</div>
+                                <div class="workspace-muted">${escapeHtml(String(entry.details || "—"))}</div>
+                            </div>
+                        `).join("") : "<div class='workspace-muted'>Keine Historie vorhanden.</div>"}
+                    </div>
+                </div>
+            `;
+            showModal(`Historie · ${escapeHtml(season.name || `Saison ${season.id}`)}`, content, [{ id: "close", label: "Schließen", primary: true }]);
         } catch (error) {
             showToast(error.message, "error");
         }
@@ -2006,6 +2254,7 @@ function initDomainWorkspace(config) {
                     try {
                         await api(`/organizations/${organizationId}`, {
                             method: "PATCH",
+                            headers: { "X-Entity-Updated-At": String(org.updated_at || "") },
                             body: JSON.stringify({ chairUserId: null })
                         });
                         showToast("Vorsitz entfernt.", "success");
@@ -2034,6 +2283,7 @@ function initDomainWorkspace(config) {
                     try {
                         await api(`/organizations/${organizationId}`, {
                             method: "PATCH",
+                            headers: { "X-Entity-Updated-At": String(org.updated_at || "") },
                             body: JSON.stringify(payload)
                         });
                         showToast("Organisation aktualisiert.", "success");
@@ -2233,11 +2483,13 @@ function initDomainWorkspace(config) {
                     const seasonId = Number(data.seasonId || 0);
                     await api(seasonId > 0 ? `/seasons/${seasonId}` : "/seasons", {
                         method: seasonId > 0 ? "PATCH" : "POST",
+                        headers: seasonId > 0 ? { "X-Entity-Updated-At": String(data.updatedAt || "") } : {},
                         body: JSON.stringify(payload)
                     });
                     showToast(seasonId > 0 ? "Saison aktualisiert." : "Saison erstellt.", "success");
                     seasonForm.reset();
                     seasonForm.elements.seasonId.value = "";
+                    seasonForm.elements.updatedAt.value = "";
                     const submit = document.getElementById("ws-season-submit");
                     if (submit) submit.textContent = "Saison speichern";
                     document.getElementById("ws-season-cancel")?.classList.add("hidden");
@@ -2254,6 +2506,7 @@ function initDomainWorkspace(config) {
                 if (!seasonForm) return;
                 seasonForm.reset();
                 seasonForm.elements.seasonId.value = "";
+                seasonForm.elements.updatedAt.value = "";
                 const submit = document.getElementById("ws-season-submit");
                 if (submit) submit.textContent = "Saison speichern";
                 seasonCancel.classList.add("hidden");
@@ -2401,6 +2654,7 @@ function initDomainWorkspace(config) {
         const due = document.getElementById("ws-filter-due");
         const deleted = document.getElementById("ws-filter-deleted");
         const clear = document.getElementById("ws-clear-filters");
+        const presetButtons = document.querySelectorAll("[data-filter-preset]");
         if (!search || search.dataset.bound === "1") return;
 
         search.dataset.bound = "1";
@@ -2422,6 +2676,24 @@ function initDomainWorkspace(config) {
             if (deleted) deleted.value = "no";
             rerenderFilteredViews();
         });
+        presetButtons.forEach((button) => {
+            if (button.dataset.bound === "1") return;
+            button.dataset.bound = "1";
+            button.addEventListener("click", () => {
+                const preset = String(button.getAttribute("data-filter-preset") || "all");
+                if (search) search.value = "";
+                if (status) status.value = "";
+                if (capability) capability.value = "";
+                if (owner) owner.value = "";
+                if (severity) severity.value = "";
+                if (due) due.value = "";
+                if (deleted) deleted.value = "no";
+                if (preset === "blocked" && status) status.value = "blocked";
+                if (preset === "critical" && severity) severity.value = "critical";
+                if (preset === "soon" && due) due.value = "soon";
+                rerenderFilteredViews();
+            });
+        });
     }
 
     function bindCommandDeckEvents() {
@@ -2439,8 +2711,55 @@ function initDomainWorkspace(config) {
         });
     }
 
+    function maybeShowRoleOnboarding() {
+        const user = typeof window.getCurrentUserContext === "function" ? window.getCurrentUserContext() : null;
+        const role = String(user?.role || "user").trim().toLowerCase();
+        const storageKey = `msc_onboarding_seen:${ONBOARDING_VERSION}:${domainKey}:${role}`;
+        if (localStorage.getItem(storageKey) === "1") return;
+        const presets = {
+            admin: [
+                "Nutze Bulk-Aktionen für saisonweite Teamanpassungen.",
+                "Öffne Historie/Rollback direkt an Team, Organisation oder Saison.",
+                "Problem-Scanner + Notification-Center täglich prüfen."
+            ],
+            "msc admin": [
+                "Nutze Bulk-Aktionen für saisonweite Teamanpassungen.",
+                "Öffne Historie/Rollback direkt an Team, Organisation oder Saison.",
+                "Problem-Scanner + Notification-Center täglich prüfen."
+            ],
+            vorsitzender: [
+                "Du meldest Teams nur im Scope deiner Organisation.",
+                "Nutze Team-Vorlagen A/B/C und reiche erst mit vollständigen Springerlizenzen ein.",
+                "Bei Rückfrage: Team öffnen, korrigieren, erneut einreichen."
+            ],
+            teammanager: [
+                "Arbeite nur im Team-Scope und halte Fristen im Blick.",
+                "Pflege Mitglieder/Lizenzen vor der Einreichung vollständig.",
+                "Nutze Historie für Nachvollziehbarkeit von Änderungen."
+            ]
+        };
+        const steps = presets[role] || [
+            "Beginne im Command Deck mit einer Quick Action.",
+            "Nutze Filter/Saved Views für deinen Tagesfokus.",
+            "Prüfe Benachrichtigungen und offene Blocker regelmäßig."
+        ];
+        showModal(
+            "Kurze Einführung",
+            `<div class="workspace-onboarding"><p>Willkommen im ${escapeHtml(domainName())}.</p><ol>${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol></div>`,
+            [{
+                id: "onboarding-ok",
+                label: "Verstanden",
+                primary: true,
+                handler: () => localStorage.setItem(storageKey, "1")
+            }]
+        );
+    }
+
     async function refreshDomainWorkspacePage() {
         const filterState = getFilterValues();
+        if (domainKey === "team_portal") {
+            await api("/team-portal/rule-notifications/run", { method: "POST" }).catch(() => null);
+        }
         const recordsQuery = new URLSearchParams({
             domainKey,
             status: filterState.status || "",
@@ -2622,5 +2941,6 @@ function initDomainWorkspace(config) {
         if (recordForm && state.canWrite) {
             applyDraftToForm(recordForm, loadDraft());
         }
+        maybeShowRoleOnboarding();
     });
 }

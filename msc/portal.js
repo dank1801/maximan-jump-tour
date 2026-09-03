@@ -555,6 +555,10 @@ function hasAnyPermission(permissions = []) {
     return (Array.isArray(permissions) ? permissions : []).some((permission) => hasPermission(permission));
 }
 
+window.getCurrentUserContext = function getCurrentUserContext() {
+    return currentUserContext;
+};
+
 function getUiMode() {
     const stored = localStorage.getItem(UI_MODE_KEY);
     return ["guided", "minimal", "advanced"].includes(stored) ? stored : "guided";

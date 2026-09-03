@@ -134,8 +134,19 @@ let DB_DIR = DEFAULT_RUNTIME_DIR;
 let usingPersistentStorage = false;
 let lastPersistentError = null;
 const USE_DISK_PERSISTENCE = !ONLINE_SNAPSHOT_CONFIGURED;
+const REQUESTED_DB_DIR = String(process.env.DB_DIR || "").trim();
 
-if (IS_PRODUCTION && USE_DISK_PERSISTENCE) {
+if (REQUESTED_DB_DIR) {
+    try {
+        ensureWritableDirectory(REQUESTED_DB_DIR);
+        DB_DIR = REQUESTED_DB_DIR;
+        usingPersistentStorage = true;
+    } catch (error) {
+        lastPersistentError = `${REQUESTED_DB_DIR}: ${error.message}`;
+        ensureWritableDirectory(DEFAULT_RUNTIME_DIR);
+        DB_DIR = DEFAULT_RUNTIME_DIR;
+    }
+} else if (IS_PRODUCTION && USE_DISK_PERSISTENCE) {
     for (const candidate of PERSISTENT_DIR_CANDIDATES) {
         try {
             ensureWritableDirectory(candidate);
@@ -279,7 +290,8 @@ function initDb() {
             transfer_window_close_at TEXT,
             points_rules TEXT,
             status TEXT NOT NULL DEFAULT 'planned',
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS events (
@@ -425,6 +437,7 @@ function initDb() {
             message TEXT NOT NULL,
             severity TEXT NOT NULL DEFAULT 'info',
             payload_json TEXT NOT NULL DEFAULT '{}',
+            dedupe_key TEXT,
             is_read INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             read_at TEXT,
@@ -585,6 +598,7 @@ function ensureDomainRecordEnhancements() {
             message TEXT NOT NULL,
             severity TEXT NOT NULL DEFAULT 'info',
             payload_json TEXT NOT NULL DEFAULT '{}',
+            dedupe_key TEXT,
             is_read INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             read_at TEXT,
@@ -607,7 +621,28 @@ function ensureDomainRecordEnhancements() {
         );
         CREATE INDEX IF NOT EXISTS idx_domain_saved_views_domain ON domain_saved_views(domain_key);
         CREATE INDEX IF NOT EXISTS idx_domain_saved_views_owner ON domain_saved_views(owner_user_id);
+
+        CREATE TABLE IF NOT EXISTS critical_change_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_type TEXT NOT NULL,
+            entity_id TEXT NOT NULL,
+            change_type TEXT NOT NULL,
+            actor_user_id INTEGER,
+            actor_username TEXT,
+            before_json TEXT NOT NULL DEFAULT '{}',
+            after_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_critical_change_history_entity ON critical_change_history(entity_type, entity_id, id DESC);
     `);
+
+    const notificationColumns = db.prepare("PRAGMA table_info(user_notifications)").all();
+    const notificationColumnNames = new Set(notificationColumns.map((column) => String(column.name || "")));
+    if (!notificationColumnNames.has("dedupe_key")) {
+        db.prepare("ALTER TABLE user_notifications ADD COLUMN dedupe_key TEXT").run();
+    }
+    db.exec("CREATE INDEX IF NOT EXISTS idx_user_notifications_dedupe ON user_notifications(user_id, dedupe_key, is_read)");
 }
 
 function ensureOrganizationEnhancements() {
@@ -677,6 +712,10 @@ function ensureOrganizationEnhancements() {
     if (!seasonColumnNames.has("transfer_window_close_at")) {
         db.prepare("ALTER TABLE seasons ADD COLUMN transfer_window_close_at TEXT").run();
     }
+    if (!seasonColumnNames.has("updated_at")) {
+        db.prepare("ALTER TABLE seasons ADD COLUMN updated_at TEXT").run();
+        db.prepare("UPDATE seasons SET updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP)").run();
+    }
 
     const scopeColumns = db.prepare("PRAGMA table_info(user_scope_assignments)").all();
     const scopeColumnNames = new Set(scopeColumns.map((column) => String(column.name || "")));
@@ -694,6 +733,10 @@ function ensureOrganizationEnhancements() {
 }
 
 async function initializeEmailTransporter() {
+    if (process.env.NODE_ENV === "test") {
+        emailTransporter = null;
+        return;
+    }
     const emailConfig = getEmailConfig();
     const hasSmtpConfig = Boolean(emailConfig.host && emailConfig.user && emailConfig.pass);
     if (hasSmtpConfig) {
@@ -1794,6 +1837,68 @@ function createNotifications(userIds, title, message, severity = "info", payload
     });
 }
 
+function createDedupedNotifications(userIds, title, message, severity = "info", payload = {}, dedupeKeyPrefix = "") {
+    if (!Array.isArray(userIds) || userIds.length === 0) return 0;
+    const stmt = db.prepare(
+        `INSERT INTO user_notifications (user_id, title, message, severity, payload_json, dedupe_key)
+         VALUES (?, ?, ?, ?, ?, ?)`
+    );
+    const normalizedSeverity = domainSeverity(severity);
+    const payloadJson = JSON.stringify(payload || {});
+    let created = 0;
+    [...new Set(userIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))].forEach((userId) => {
+        const dedupeKey = dedupeKeyPrefix ? `${dedupeKeyPrefix}:u${userId}` : null;
+        if (dedupeKey) {
+            const existingUnread = db.prepare(
+                `SELECT id
+                 FROM user_notifications
+                 WHERE user_id = ? AND dedupe_key = ? AND is_read = 0
+                 LIMIT 1`
+            ).get(userId, dedupeKey);
+            if (existingUnread) return;
+        }
+        stmt.run(userId, title, message, normalizedSeverity, payloadJson, dedupeKey);
+        created += 1;
+        broadcastLiveUpdate({
+            type: "notification",
+            userId,
+            title,
+            message,
+            severity: normalizedSeverity
+        });
+    });
+    return created;
+}
+
+function logCriticalChange(actor, entityType, entityId, changeType, before, after) {
+    db.prepare(
+        `INSERT INTO critical_change_history
+         (entity_type, entity_id, change_type, actor_user_id, actor_username, before_json, after_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+        String(entityType || "").trim(),
+        String(entityId || "").trim(),
+        String(changeType || "").trim(),
+        actor?.sub || null,
+        actor?.username || "system",
+        JSON.stringify(before || {}),
+        JSON.stringify(after || {})
+    );
+}
+
+function assertEntityVersion(res, req, existing, { label = "Datensatz", field = "updated_at" } = {}) {
+    const expected = String(req.headers["x-entity-updated-at"] || req.headers["if-unmodified-since"] || "").trim();
+    if (!expected) return true;
+    const current = String(existing?.[field] || "").trim();
+    if (current && expected === current) return true;
+    res.status(409).json({
+        error: `${label} wurde zwischenzeitlich geändert. Bitte neu laden und erneut speichern.`,
+        code: "VERSION_CONFLICT",
+        currentUpdatedAt: current || null
+    });
+    return false;
+}
+
 function logAudit(actor, action, entityType, entityId, details) {
     db.prepare(
         `INSERT INTO audit_logs (actor_user_id, actor_username, action, entity_type, entity_id, details)
@@ -2028,6 +2133,98 @@ function validateOrganizationTeamComposition({ organizationId, teamId = null, te
         return { ok: false, error: "Eine Organisation kann maximal drei Teams melden." };
     }
     return { ok: true };
+}
+
+function createTeamPortalRuleNotifications(actorUser) {
+    const scope = getAccessibleTeamScope(actorUser);
+    const allOrganizations = db.prepare("SELECT id, name, chair_user_id FROM organizations WHERE status != 'inactive' ORDER BY id ASC").all();
+    const allTeams = db.prepare(
+        `SELECT t.id, t.name, t.organization_id, t.season_id, t.registration_status, t.registration_deadline_at, t.manager_user_id,
+                s.name AS season_name, s.registration_deadline_at AS season_deadline
+         FROM teams t
+         LEFT JOIN seasons s ON s.id = t.season_id
+         WHERE t.status != 'inactive'
+         ORDER BY t.id ASC`
+    ).all();
+    const organizations = scope.type === "organization"
+        ? allOrganizations.filter((org) => Number(org.id) === Number(scope.organizationId))
+        : allOrganizations;
+    const teams = allTeams.filter((team) => teamMatchesScope(team, scope));
+    const admins = db
+        .prepare("SELECT id FROM users WHERE status = 'active'")
+        .all()
+        .map((user) => user.id)
+        .filter((userId) => {
+            const user = getUserById(userId);
+            const perms = resolvePermissionsForRole(user?.role || "");
+            return perms.includes("dashboard.read") || ADMIN_ROLES.includes(normalizeRole(user?.role));
+        });
+    const now = Date.now();
+    let created = 0;
+
+    organizations.forEach((org) => {
+        if (!org.chair_user_id) {
+            created += createDedupedNotifications(
+                admins,
+                "Organisation ohne Vorsitz",
+                `Organisation "${org.name}" hat aktuell keinen Vorsitzenden.`,
+                "high",
+                { type: "org_missing_chair", organizationId: org.id },
+                `org-missing-chair:${org.id}`
+            );
+        }
+    });
+
+    teams.forEach((team) => {
+        const recipients = [...admins];
+        const org = organizations.find((entry) => Number(entry.id) === Number(team.organization_id));
+        if (org?.chair_user_id) recipients.push(org.chair_user_id);
+        if (team.manager_user_id) recipients.push(team.manager_user_id);
+        if (String(team.registration_status || "").toLowerCase() === "revision_requested") {
+            created += createDedupedNotifications(
+                recipients,
+                "Teammeldung in Rückfrage",
+                `Team "${team.name}" benötigt Überarbeitung.`,
+                "medium",
+                { type: "team_revision_requested", teamId: team.id, organizationId: team.organization_id },
+                `team-revision:${team.id}`
+            );
+        }
+        const springerRows = getTeamSpringerRows(team.id);
+        const invalidSpringerCount = springerRows.filter((member) => Number(member.is_springer) === 1 && String(member.license_status || "").toLowerCase() !== "confirmed").length;
+        if (invalidSpringerCount > 0) {
+            created += createDedupedNotifications(
+                recipients,
+                "Springer-Lizenzen unbestätigt",
+                `Team "${team.name}" hat ${invalidSpringerCount} Springer ohne bestätigte Lizenz.`,
+                "high",
+                { type: "team_springer_unconfirmed", teamId: team.id, invalidSpringerCount },
+                `team-springer:${team.id}:${invalidSpringerCount}`
+            );
+        }
+        const deadlineRaw = team.registration_deadline_at || team.season_deadline || null;
+        if (deadlineRaw) {
+            const deadline = new Date(deadlineRaw);
+            const delta = deadline.getTime() - now;
+            if (!Number.isNaN(deadline.getTime()) && delta > 0 && delta <= 72 * 60 * 60 * 1000) {
+                created += createDedupedNotifications(
+                    recipients,
+                    "Meldeschluss nähert sich",
+                    `Team "${team.name}" (${team.season_name || "Saison"}) hat in weniger als 72h Meldeschluss.`,
+                    "info",
+                    { type: "team_deadline_soon", teamId: team.id, deadline: deadline.toISOString() },
+                    `team-deadline:${team.id}:${deadline.toISOString().slice(0, 13)}`
+                );
+            }
+        }
+    });
+
+    return {
+        scope,
+        scannedOrganizations: organizations.length,
+        scannedTeams: teams.length,
+        created
+    };
 }
 
 function findTeamManagedByUser(userId, exceptTeamId = null) {
@@ -2864,6 +3061,14 @@ app.get("/api/team-portal/error-report", authRequired, requirePermission("team_p
     });
 });
 
+app.post("/api/team-portal/rule-notifications/run", authRequired, requirePermission("team_portal.read"), (req, res) => {
+    const result = createTeamPortalRuleNotifications(req.user);
+    res.json({
+        generatedAt: new Date().toISOString(),
+        ...result
+    });
+});
+
 app.get("/api/auth/bootstrap-status", (_, res) => {
     const row = db.prepare("SELECT COUNT(*) AS count FROM users").get();
     res.json({ requiresBootstrap: row.count === 0 });
@@ -3068,7 +3273,7 @@ app.patch("/api/roles/:id", authRequired, requirePermission("roles.write"), (req
         return;
     }
 
-    updates.push("updated_at = CURRENT_TIMESTAMP");
+    updates.push("updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')");
     values.push(id);
     try {
         db.prepare(`UPDATE roles SET ${updates.join(", ")} WHERE id = ?`).run(...values);
@@ -3490,7 +3695,7 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
         return;
     }
     if (updates.length > 0) {
-        updates.push("updated_at = CURRENT_TIMESTAMP");
+        updates.push("updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')");
         values.push(id);
     }
 
@@ -3733,6 +3938,7 @@ app.patch("/api/organizations/:id", authRequired, requirePermission("organizatio
         res.status(404).json({ error: "Organization not found" });
         return;
     }
+    if (!assertEntityVersion(res, req, existing, { label: "Organisation" })) return;
     const updates = [];
     const values = [];
     let nextChairId = existing.chair_user_id || null;
@@ -3779,8 +3985,15 @@ app.patch("/api/organizations/:id", authRequired, requirePermission("organizatio
         res.status(400).json({ error: "No updatable fields provided" });
         return;
     }
-    updates.push("updated_at = CURRENT_TIMESTAMP");
+    updates.push("updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')");
     values.push(id);
+    const beforeState = {
+        chair_user_id: existing.chair_user_id,
+        name: existing.name,
+        short_name: existing.short_name,
+        status: existing.status,
+        updated_at: existing.updated_at
+    };
     db.prepare(`UPDATE organizations SET ${updates.join(", ")} WHERE id = ?`).run(...values);
     if (req.body?.chairUserId !== undefined || req.body?.chairUserLookup !== undefined) {
         if (existing.chair_user_id && existing.chair_user_id !== nextChairId) {
@@ -3806,7 +4019,135 @@ app.patch("/api/organizations/:id", authRequired, requirePermission("organizatio
         }
     }
     const updated = db.prepare("SELECT * FROM organizations WHERE id = ?").get(id);
+    if (Number(existing.chair_user_id || 0) !== Number(updated?.chair_user_id || 0)) {
+        logCriticalChange(req.user, "organizations", id, "chair_assignment", beforeState, {
+            chair_user_id: updated?.chair_user_id || null,
+            name: updated?.name || null,
+            short_name: updated?.short_name || null,
+            status: updated?.status || null,
+            updated_at: updated?.updated_at || null
+        });
+    }
     logAudit(req.user, "UPDATE_ORGANIZATION", "organizations", id, JSON.stringify(req.body));
+    res.json(updated);
+});
+
+app.get("/api/organizations/:id/history", authRequired, requirePermission("organizations.read"), (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Invalid organization id" });
+        return;
+    }
+    const org = getOrganizationById(id);
+    if (!org || String(org.status || "").toLowerCase() === "inactive") {
+        res.status(404).json({ error: "Organization not found" });
+        return;
+    }
+    const scope = getAccessibleTeamScope(req.user);
+    if (scope.type === "organization" && Number(scope.organizationId) !== Number(id) && !ADMIN_ROLES.includes(normalizeRole(req.user?.role))) {
+        res.status(403).json({ error: "Nicht genügend Rechte für diese Organisation" });
+        return;
+    }
+    const auditRows = db.prepare(
+        `SELECT id, created_at, actor_username, action, entity_type, entity_id, details
+         FROM audit_logs
+         WHERE (entity_type = 'organizations' AND entity_id = ?)
+            OR (entity_type = 'teams' AND entity_id IN (SELECT CAST(t.id AS TEXT) FROM teams t WHERE t.organization_id = ?))
+         ORDER BY datetime(created_at) DESC, id DESC
+         LIMIT 150`
+    ).all(String(id), id);
+    const criticalRows = db.prepare(
+        `SELECT id, created_at, actor_username, change_type, before_json, after_json
+         FROM critical_change_history
+         WHERE entity_type = 'organizations' AND entity_id = ?
+         ORDER BY id DESC
+         LIMIT 50`
+    ).all(String(id));
+    const mappedCritical = criticalRows.map((row) => ({
+        id: `critical-${row.id}`,
+        created_at: row.created_at,
+        actor_username: row.actor_username || "system",
+        action: `CRITICAL_${String(row.change_type || "CHANGE").toUpperCase()}`,
+        entity_type: "organizations",
+        entity_id: String(id),
+        details: `Before: ${row.before_json || "{}"} | After: ${row.after_json || "{}"}`
+    }));
+    const merged = [...auditRows, ...mappedCritical]
+        .sort((a, b) => {
+            const ta = new Date(a.created_at).getTime();
+            const tb = new Date(b.created_at).getTime();
+            if (ta !== tb) return tb - ta;
+            return String(b.id).localeCompare(String(a.id));
+        })
+        .slice(0, 200);
+    res.json(merged);
+});
+
+app.post("/api/organizations/:id/rollback-chair", authRequired, requirePermission("organizations.write"), (req, res) => {
+    if (!assertAdminUser(res, req.user)) return;
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Invalid organization id" });
+        return;
+    }
+    const org = db.prepare("SELECT * FROM organizations WHERE id = ?").get(id);
+    if (!org) {
+        res.status(404).json({ error: "Organization not found" });
+        return;
+    }
+    const change = db.prepare(
+        `SELECT *
+         FROM critical_change_history
+         WHERE entity_type = 'organizations'
+           AND entity_id = ?
+           AND change_type = 'chair_assignment'
+         ORDER BY id DESC
+         LIMIT 1`
+    ).get(String(id));
+    if (!change) {
+        res.status(404).json({ error: "Kein Rollback-Punkt für Vorsitzzuweisung gefunden." });
+        return;
+    }
+    const before = parseConfigJsonSafely(change.before_json);
+    const targetChairId = parseId(before?.chair_user_id) || null;
+    if (targetChairId) {
+        const targetChair = getUserById(targetChairId);
+        if (!targetChair || targetChair.status !== "active") {
+            res.status(409).json({ error: "Rollback-Zielvorsitz ist nicht aktiv oder nicht vorhanden." });
+            return;
+        }
+        const existingOrg = findOrganizationChairedByUser(targetChairId, id);
+        if (existingOrg) {
+            res.status(409).json({ error: `Rollback nicht möglich: Zielvorsitz ist bereits in "${existingOrg.name}" zugewiesen.` });
+            return;
+        }
+    }
+    db.transaction(() => {
+        if (org.chair_user_id && Number(org.chair_user_id) !== Number(targetChairId || 0)) {
+            db.prepare(
+                `INSERT INTO user_scope_assignments (user_id, organization_id, updated_at)
+                 VALUES (?, NULL, CURRENT_TIMESTAMP)
+                 ON CONFLICT(user_id) DO UPDATE SET
+                   organization_id = NULL,
+                   updated_at = CURRENT_TIMESTAMP`
+            ).run(org.chair_user_id);
+        }
+        db.prepare("UPDATE organizations SET chair_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(targetChairId, id);
+        if (targetChairId) {
+            const chairRole = resolveActiveRoleName("Vorsitzender") || "Vorsitzender";
+            db.prepare("UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(chairRole, targetChairId);
+            db.prepare(
+                `INSERT INTO user_scope_assignments (user_id, organization_id, updated_at)
+                 VALUES (?, ?, CURRENT_TIMESTAMP)
+                 ON CONFLICT(user_id) DO UPDATE SET
+                   organization_id = excluded.organization_id,
+                   updated_at = CURRENT_TIMESTAMP`
+            ).run(targetChairId, id);
+        }
+    })();
+    const updated = db.prepare("SELECT * FROM organizations WHERE id = ?").get(id);
+    logCriticalChange(req.user, "organizations", id, "rollback_chair_assignment", { chair_user_id: org.chair_user_id }, { chair_user_id: updated?.chair_user_id || null });
+    logAudit(req.user, "ROLLBACK_ORGANIZATION_CHAIR", "organizations", id, `Chair reverted to ${updated?.chair_user_id || "none"}`);
     res.json(updated);
 });
 
@@ -3831,7 +4172,7 @@ app.get("/api/teams", authRequired, requirePermission("teams.read"), (req, res) 
     const includeInactive = String(req.query.includeInactive || "").trim() === "1" || String(req.query.includeInactive || "").trim().toLowerCase() === "true";
     let rows = db.prepare(
         `SELECT t.id, t.name, t.organization_id, o.name AS organization_name, t.team_type, t.nation, t.category, t.status, t.season_id, s.name AS season_name,
-                t.registration_status, t.submitted_at, t.confirmed_at, t.registration_review_comment, t.registration_reviewed_at, t.registration_reviewed_by, t.registration_deadline_at, t.created_at, u.username AS manager_username,
+                t.registration_status, t.submitted_at, t.confirmed_at, t.registration_review_comment, t.registration_reviewed_at, t.registration_reviewed_by, t.registration_deadline_at, t.created_at, t.updated_at, u.username AS manager_username,
                 CASE
                     WHEN COALESCE(t.registration_deadline_at, s.registration_deadline_at) IS NOT NULL
                          AND datetime('now') > datetime(COALESCE(t.registration_deadline_at, s.registration_deadline_at))
@@ -3945,6 +4286,7 @@ app.patch("/api/teams/:id", authRequired, requirePermission("teams.write"), (req
     }
     const scope = getAccessibleTeamScope(req.user);
     if (!assertTeamAccess(res, req.user, existing, "write")) return;
+    if (!assertEntityVersion(res, req, existing, { label: "Team" })) return;
     if (req.body?.registrationStatus !== undefined || req.body?.registration_status !== undefined || req.body?.submitted_at !== undefined || req.body?.confirmed_at !== undefined) {
         res.status(400).json({ error: "Meldestatus darf nur über den festen Meldeablauf geändert werden." });
         return;
@@ -4045,10 +4387,37 @@ app.patch("/api/teams/:id", authRequired, requirePermission("teams.write"), (req
         res.status(400).json({ error: "No updatable fields provided" });
         return;
     }
-    updates.push("updated_at = CURRENT_TIMESTAMP");
+    updates.push("updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')");
     values.push(id);
+    const beforeState = {
+        registration_status: existing.registration_status,
+        submitted_at: existing.submitted_at,
+        confirmed_at: existing.confirmed_at,
+        registration_review_comment: existing.registration_review_comment,
+        registration_reviewed_at: existing.registration_reviewed_at,
+        registration_reviewed_by: existing.registration_reviewed_by,
+        status: existing.status,
+        registration_deadline_at: existing.registration_deadline_at,
+        updated_at: existing.updated_at
+    };
     db.prepare(`UPDATE teams SET ${updates.join(", ")} WHERE id = ?`).run(...values);
     const updated = db.prepare("SELECT * FROM teams WHERE id = ?").get(id);
+    if (
+        String(updated?.status || "") !== String(existing.status || "")
+        || String(updated?.registration_deadline_at || "") !== String(existing.registration_deadline_at || "")
+    ) {
+        logCriticalChange(req.user, "teams", id, "team_status_or_deadline", beforeState, {
+            registration_status: updated?.registration_status,
+            submitted_at: updated?.submitted_at,
+            confirmed_at: updated?.confirmed_at,
+            registration_review_comment: updated?.registration_review_comment,
+            registration_reviewed_at: updated?.registration_reviewed_at,
+            registration_reviewed_by: updated?.registration_reviewed_by,
+            status: updated?.status,
+            registration_deadline_at: updated?.registration_deadline_at,
+            updated_at: updated?.updated_at
+        });
+    }
     logAudit(req.user, "UPDATE_TEAM", "teams", id, JSON.stringify(req.body));
     res.json(updated);
 });
@@ -4092,6 +4461,15 @@ app.post("/api/teams/:id/submit-registration", authRequired, requirePermission("
         res.status(409).json({ error: "Teammeldung kann in diesem Status nicht eingereicht werden." });
         return;
     }
+    const beforeState = {
+        registration_status: team.registration_status,
+        submitted_at: team.submitted_at,
+        confirmed_at: team.confirmed_at,
+        registration_review_comment: team.registration_review_comment,
+        registration_reviewed_at: team.registration_reviewed_at,
+        registration_reviewed_by: team.registration_reviewed_by,
+        updated_at: team.updated_at
+    };
     db.prepare(
         `UPDATE teams
          SET registration_status = 'submitted',
@@ -4103,6 +4481,15 @@ app.post("/api/teams/:id/submit-registration", authRequired, requirePermission("
          WHERE id = ?`
     ).run(id);
     const updated = db.prepare("SELECT * FROM teams WHERE id = ?").get(id);
+    logCriticalChange(req.user, "teams", id, "registration_state", beforeState, {
+        registration_status: updated?.registration_status,
+        submitted_at: updated?.submitted_at,
+        confirmed_at: updated?.confirmed_at,
+        registration_review_comment: updated?.registration_review_comment,
+        registration_reviewed_at: updated?.registration_reviewed_at,
+        registration_reviewed_by: updated?.registration_reviewed_by,
+        updated_at: updated?.updated_at
+    });
     logAudit(req.user, "SUBMIT_TEAM_REGISTRATION", "teams", id, `${team.name} submitted for review`);
     res.json(updated);
 });
@@ -4119,6 +4506,7 @@ app.delete("/api/teams/:id", authRequired, requirePermission("teams.write"), (re
         return;
     }
     if (!assertTeamAccess(res, req.user, existing, "write")) return;
+    if (!assertEntityVersion(res, req, existing, { label: "Team" })) return;
     if (isTeamDeadlineLocked(existing) && !canBypassDeadlineLock(req.user)) {
         res.status(409).json({ error: "Dieses Team ist nach Meldeschluss gesperrt." });
         return;
@@ -4130,6 +4518,82 @@ app.delete("/api/teams/:id", authRequired, requirePermission("teams.write"), (re
     }
     logAudit(req.user, "DEACTIVATE_TEAM", "teams", id, "Soft-deactivated team");
     res.status(204).send();
+});
+
+app.post("/api/teams/bulk-update", authRequired, requirePermission("teams.write"), (req, res) => {
+    if (!assertAdminUser(res, req.user)) return;
+    const idsRaw = Array.isArray(req.body?.teamIds) ? req.body.teamIds : [];
+    const teamIds = [...new Set(idsRaw.map((value) => parseId(value)).filter(Boolean))];
+    if (teamIds.length === 0) {
+        res.status(400).json({ error: "teamIds muss mindestens ein gültiges Team enthalten." });
+        return;
+    }
+    const action = String(req.body?.action || "").trim();
+    if (!["assignSeason", "setOperationalStatus", "deactivate"].includes(action)) {
+        res.status(400).json({ error: "Ungültige Bulk-Aktion." });
+        return;
+    }
+    let seasonId = null;
+    if (action === "assignSeason") {
+        seasonId = req.body?.seasonId ? parseId(req.body.seasonId) : null;
+        if (!seasonId) {
+            res.status(400).json({ error: "Für assignSeason ist eine gültige seasonId erforderlich." });
+            return;
+        }
+        const season = getSeasonById(seasonId);
+        if (!season || String(season.status || "").toLowerCase() === "inactive") {
+            res.status(404).json({ error: "Saison wurde nicht gefunden oder ist inaktiv." });
+            return;
+        }
+    }
+    const requestedStatus = action === "setOperationalStatus"
+        ? String(req.body?.status || "").trim().toLowerCase()
+        : null;
+    if (action === "setOperationalStatus" && !["active", "inactive"].includes(requestedStatus)) {
+        res.status(400).json({ error: "status muss active oder inactive sein." });
+        return;
+    }
+    const existingRows = db.prepare(
+        `SELECT id, name, status, season_id, updated_at
+         FROM teams
+         WHERE id IN (${teamIds.map(() => "?").join(",")})`
+    ).all(...teamIds);
+    if (existingRows.length !== teamIds.length) {
+        res.status(404).json({ error: "Mindestens ein Team wurde nicht gefunden." });
+        return;
+    }
+    const tx = db.transaction(() => {
+        if (action === "assignSeason") {
+            const stmt = db.prepare("UPDATE teams SET season_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+            existingRows.forEach((row) => {
+                stmt.run(seasonId, row.id);
+                logCriticalChange(req.user, "teams", row.id, "bulk_assign_season", { season_id: row.season_id, updated_at: row.updated_at }, { season_id: seasonId });
+            });
+            return;
+        }
+        if (action === "setOperationalStatus") {
+            const stmt = db.prepare("UPDATE teams SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+            existingRows.forEach((row) => {
+                stmt.run(requestedStatus, row.id);
+                logCriticalChange(req.user, "teams", row.id, "bulk_set_status", { status: row.status, updated_at: row.updated_at }, { status: requestedStatus });
+            });
+            return;
+        }
+        const stmt = db.prepare("UPDATE teams SET status = 'inactive', updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+        existingRows.forEach((row) => {
+            stmt.run(row.id);
+            logCriticalChange(req.user, "teams", row.id, "bulk_deactivate", { status: row.status, updated_at: row.updated_at }, { status: "inactive" });
+        });
+    });
+    tx();
+    logAudit(req.user, "BULK_UPDATE_TEAMS", "teams", teamIds.join(","), JSON.stringify({ action, seasonId, requestedStatus }));
+    const updatedRows = db.prepare(
+        `SELECT id, name, status, season_id, updated_at
+         FROM teams
+         WHERE id IN (${teamIds.map(() => "?").join(",")})
+         ORDER BY id DESC`
+    ).all(...teamIds);
+    res.json({ updatedCount: updatedRows.length, action, teams: updatedRows });
 });
 
 app.get("/api/teams/:id/members", authRequired, requirePermission("team_members.read"), (req, res) => {
@@ -4354,6 +4818,13 @@ app.post("/api/seasons", authRequired, requirePermission("seasons.write"), (req,
             normalizedStatus
         );
     const created = db.prepare("SELECT * FROM seasons WHERE id = ?").get(result.lastInsertRowid);
+    logCriticalChange(req.user, "seasons", created.id, "season_created", {}, {
+        registration_deadline_at: created.registration_deadline_at || null,
+        transfer_window_open_at: created.transfer_window_open_at || null,
+        transfer_window_close_at: created.transfer_window_close_at || null,
+        status: created.status || null,
+        updated_at: created.updated_at || null
+    });
     logAudit(req.user, "CREATE_SEASON", "seasons", created.id, created.name);
     res.status(201).json(created);
 });
@@ -4370,6 +4841,7 @@ app.patch("/api/seasons/:id", authRequired, requirePermission("seasons.write"), 
         res.status(404).json({ error: "Season not found" });
         return;
     }
+    if (!assertEntityVersion(res, req, existing, { label: "Saison" })) return;
     const nextSnapshot = {
         name: req.body?.name !== undefined ? req.body.name : existing.name,
         startDate: req.body?.startDate !== undefined ? req.body.startDate : existing.start_date,
@@ -4421,10 +4893,31 @@ app.patch("/api/seasons/:id", authRequired, requirePermission("seasons.write"), 
         res.status(400).json({ error: "No updatable fields provided" });
         return;
     }
-    updates.push("updated_at = CURRENT_TIMESTAMP");
+    const beforeState = {
+        registration_deadline_at: existing.registration_deadline_at || null,
+        transfer_window_open_at: existing.transfer_window_open_at || null,
+        transfer_window_close_at: existing.transfer_window_close_at || null,
+        status: existing.status || null,
+        updated_at: existing.updated_at || null
+    };
+    updates.push("updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')");
     values.push(id);
     db.prepare(`UPDATE seasons SET ${updates.join(", ")} WHERE id = ?`).run(...values);
     const updated = db.prepare("SELECT * FROM seasons WHERE id = ?").get(id);
+    if (
+        String(existing.registration_deadline_at || "") !== String(updated?.registration_deadline_at || "")
+        || String(existing.transfer_window_open_at || "") !== String(updated?.transfer_window_open_at || "")
+        || String(existing.transfer_window_close_at || "") !== String(updated?.transfer_window_close_at || "")
+        || String(existing.status || "") !== String(updated?.status || "")
+    ) {
+        logCriticalChange(req.user, "seasons", id, "season_deadline_or_status", beforeState, {
+            registration_deadline_at: updated?.registration_deadline_at || null,
+            transfer_window_open_at: updated?.transfer_window_open_at || null,
+            transfer_window_close_at: updated?.transfer_window_close_at || null,
+            status: updated?.status || null,
+            updated_at: updated?.updated_at || null
+        });
+    }
     logAudit(req.user, "UPDATE_SEASON", "seasons", id, JSON.stringify(req.body));
     res.json(updated);
 });
@@ -4436,6 +4929,12 @@ app.delete("/api/seasons/:id", authRequired, requirePermission("seasons.write"),
         res.status(400).json({ error: "Invalid season id" });
         return;
     }
+    const existing = db.prepare("SELECT * FROM seasons WHERE id = ?").get(id);
+    if (!existing) {
+        res.status(404).json({ error: "Season not found" });
+        return;
+    }
+    if (!assertEntityVersion(res, req, existing, { label: "Saison" })) return;
     const result = db.prepare("DELETE FROM seasons WHERE id = ?").run(id);
     if (result.changes === 0) {
         res.status(404).json({ error: "Season not found" });
@@ -4443,6 +4942,119 @@ app.delete("/api/seasons/:id", authRequired, requirePermission("seasons.write"),
     }
     logAudit(req.user, "DELETE_SEASON", "seasons", id, "Season removed");
     res.status(204).send();
+});
+
+app.get("/api/seasons/:id/history", authRequired, requirePermission("seasons.read"), (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Invalid season id" });
+        return;
+    }
+    const season = db.prepare("SELECT * FROM seasons WHERE id = ?").get(id);
+    if (!season) {
+        res.status(404).json({ error: "Season not found" });
+        return;
+    }
+    const auditRows = db.prepare(
+        `SELECT id, created_at, actor_username, action, entity_type, entity_id, details
+         FROM audit_logs
+         WHERE (entity_type = 'seasons' AND entity_id = ?)
+            OR (entity_type = 'teams' AND entity_id IN (SELECT CAST(t.id AS TEXT) FROM teams t WHERE t.season_id = ?))
+         ORDER BY datetime(created_at) DESC, id DESC
+         LIMIT 150`
+    ).all(String(id), id);
+    const criticalRows = db.prepare(
+        `SELECT id, created_at, actor_username, change_type, before_json, after_json
+         FROM critical_change_history
+         WHERE entity_type = 'seasons' AND entity_id = ?
+         ORDER BY id DESC
+         LIMIT 50`
+    ).all(String(id));
+    const mappedCritical = criticalRows.map((row) => ({
+        id: `critical-${row.id}`,
+        created_at: row.created_at,
+        actor_username: row.actor_username || "system",
+        action: `CRITICAL_${String(row.change_type || "CHANGE").toUpperCase()}`,
+        entity_type: "seasons",
+        entity_id: String(id),
+        details: `Before: ${row.before_json || "{}"} | After: ${row.after_json || "{}"}`
+    }));
+    const merged = [...auditRows, ...mappedCritical]
+        .sort((a, b) => {
+            const ta = new Date(a.created_at).getTime();
+            const tb = new Date(b.created_at).getTime();
+            if (ta !== tb) return tb - ta;
+            return String(b.id).localeCompare(String(a.id));
+        })
+        .slice(0, 200);
+    res.json(merged);
+});
+
+app.post("/api/seasons/:id/rollback-deadlines", authRequired, requirePermission("seasons.write"), (req, res) => {
+    if (!assertAdminUser(res, req.user)) return;
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Invalid season id" });
+        return;
+    }
+    const existing = db.prepare("SELECT * FROM seasons WHERE id = ?").get(id);
+    if (!existing) {
+        res.status(404).json({ error: "Season not found" });
+        return;
+    }
+    const change = db.prepare(
+        `SELECT *
+         FROM critical_change_history
+         WHERE entity_type = 'seasons'
+           AND entity_id = ?
+           AND change_type IN ('season_deadline_or_status', 'season_created')
+         ORDER BY id DESC
+         LIMIT 1`
+    ).get(String(id));
+    if (!change) {
+        res.status(404).json({ error: "Kein Rollback-Punkt für diese Saison gefunden." });
+        return;
+    }
+    const before = parseConfigJsonSafely(change.before_json);
+    const nextState = {
+        registration_deadline_at: before?.registration_deadline_at || null,
+        transfer_window_open_at: before?.transfer_window_open_at || null,
+        transfer_window_close_at: before?.transfer_window_close_at || null,
+        status: before?.status ? String(before.status).toLowerCase() : "planned"
+    };
+    if (!["planned", "active", "inactive"].includes(nextState.status)) {
+        res.status(400).json({ error: "Rollback enthält einen ungültigen Saisonstatus." });
+        return;
+    }
+    db.prepare(
+        `UPDATE seasons
+         SET registration_deadline_at = ?,
+             transfer_window_open_at = ?,
+             transfer_window_close_at = ?,
+             status = ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`
+    ).run(
+        nextState.registration_deadline_at,
+        nextState.transfer_window_open_at,
+        nextState.transfer_window_close_at,
+        nextState.status,
+        id
+    );
+    const updated = db.prepare("SELECT * FROM seasons WHERE id = ?").get(id);
+    logCriticalChange(req.user, "seasons", id, "rollback_season_deadlines", {
+        registration_deadline_at: existing.registration_deadline_at,
+        transfer_window_open_at: existing.transfer_window_open_at,
+        transfer_window_close_at: existing.transfer_window_close_at,
+        status: existing.status
+    }, {
+        registration_deadline_at: updated?.registration_deadline_at || null,
+        transfer_window_open_at: updated?.transfer_window_open_at || null,
+        transfer_window_close_at: updated?.transfer_window_close_at || null,
+        status: updated?.status || null
+    });
+    logAudit(req.user, "ROLLBACK_SEASON_DEADLINES", "seasons", id, "Season deadlines/status rolled back");
+    res.json(updated);
 });
 
 app.post("/api/teams/:id/confirm-registration", authRequired, requirePermission("team_portal.write"), (req, res) => {
@@ -4493,6 +5105,15 @@ app.post("/api/teams/:id/confirm-registration", authRequired, requirePermission(
         return;
     }
     const reviewComment = req.body?.comment ? String(req.body.comment).trim() : null;
+    const beforeState = {
+        registration_status: team.registration_status,
+        submitted_at: team.submitted_at,
+        confirmed_at: team.confirmed_at,
+        registration_review_comment: team.registration_review_comment,
+        registration_reviewed_at: team.registration_reviewed_at,
+        registration_reviewed_by: team.registration_reviewed_by,
+        updated_at: team.updated_at
+    };
     db.prepare(
         `UPDATE teams
          SET registration_status = 'confirmed',
@@ -4505,6 +5126,15 @@ app.post("/api/teams/:id/confirm-registration", authRequired, requirePermission(
          WHERE id = ?`
     ).run(reviewComment, req.user?.sub || req.user?.id || null, id);
     const updated = db.prepare("SELECT * FROM teams WHERE id = ?").get(id);
+    logCriticalChange(req.user, "teams", id, "registration_state", beforeState, {
+        registration_status: updated?.registration_status,
+        submitted_at: updated?.submitted_at,
+        confirmed_at: updated?.confirmed_at,
+        registration_review_comment: updated?.registration_review_comment,
+        registration_reviewed_at: updated?.registration_reviewed_at,
+        registration_reviewed_by: updated?.registration_reviewed_by,
+        updated_at: updated?.updated_at
+    });
     logAudit(req.user, "CONFIRM_TEAM_REGISTRATION", "teams", id, `${team.name} confirmed for season ${season.name}${reviewComment ? ` · ${reviewComment}` : ""}`);
     res.json(updated);
 });
@@ -4531,6 +5161,15 @@ app.post("/api/teams/:id/request-revision", authRequired, requirePermission("tea
         res.status(400).json({ error: "Ein Kommentar ist für eine Rückfrage erforderlich." });
         return;
     }
+    const beforeState = {
+        registration_status: team.registration_status,
+        submitted_at: team.submitted_at,
+        confirmed_at: team.confirmed_at,
+        registration_review_comment: team.registration_review_comment,
+        registration_reviewed_at: team.registration_reviewed_at,
+        registration_reviewed_by: team.registration_reviewed_by,
+        updated_at: team.updated_at
+    };
     db.prepare(
         `UPDATE teams
          SET registration_status = 'revision_requested',
@@ -4541,6 +5180,15 @@ app.post("/api/teams/:id/request-revision", authRequired, requirePermission("tea
          WHERE id = ?`
     ).run(comment, req.user?.sub || req.user?.id || null, id);
     const updated = db.prepare("SELECT * FROM teams WHERE id = ?").get(id);
+    logCriticalChange(req.user, "teams", id, "registration_state", beforeState, {
+        registration_status: updated?.registration_status,
+        submitted_at: updated?.submitted_at,
+        confirmed_at: updated?.confirmed_at,
+        registration_review_comment: updated?.registration_review_comment,
+        registration_reviewed_at: updated?.registration_reviewed_at,
+        registration_reviewed_by: updated?.registration_reviewed_by,
+        updated_at: updated?.updated_at
+    });
     logAudit(req.user, "REQUEST_TEAM_REVISION", "teams", id, `${team.name} revision requested · ${comment}`);
     res.json(updated);
 });
@@ -4565,7 +5213,96 @@ app.get("/api/teams/:id/history", authRequired, requirePermission("teams.read"),
          ORDER BY datetime(a.created_at) DESC, a.id DESC
          LIMIT 100`
     ).all(String(teamId), teamId);
-    res.json(rows);
+    const criticalRows = db.prepare(
+        `SELECT id, created_at, actor_username, change_type, before_json, after_json
+         FROM critical_change_history
+         WHERE entity_type = 'teams' AND entity_id = ?
+         ORDER BY id DESC
+         LIMIT 50`
+    ).all(String(teamId));
+    const mappedCritical = criticalRows.map((row) => ({
+        id: `critical-${row.id}`,
+        action: `CRITICAL_${String(row.change_type || "CHANGE").toUpperCase()}`,
+        entity_type: "teams",
+        entity_id: String(teamId),
+        details: `Before: ${row.before_json || "{}"} | After: ${row.after_json || "{}"}`,
+        created_at: row.created_at,
+        actor_username: row.actor_username || "system"
+    }));
+    const merged = [...rows, ...mappedCritical]
+        .sort((a, b) => {
+            const ta = new Date(a.created_at).getTime();
+            const tb = new Date(b.created_at).getTime();
+            if (ta !== tb) return tb - ta;
+            return String(b.id).localeCompare(String(a.id));
+        })
+        .slice(0, 200);
+    res.json(merged);
+});
+
+app.post("/api/teams/:id/rollback-registration", authRequired, requirePermission("team_portal.write"), (req, res) => {
+    if (!assertAdminUser(res, req.user)) return;
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Invalid team id" });
+        return;
+    }
+    const team = getTeamById(id);
+    if (!team || team.status === "inactive") {
+        res.status(404).json({ error: "Team not found" });
+        return;
+    }
+    const historyRow = db.prepare(
+        `SELECT *
+         FROM critical_change_history
+         WHERE entity_type = 'teams'
+           AND entity_id = ?
+           AND change_type = 'registration_state'
+         ORDER BY id DESC
+         LIMIT 1`
+    ).get(String(id));
+    if (!historyRow) {
+        res.status(404).json({ error: "Kein Rollback-Punkt für den Meldestatus gefunden." });
+        return;
+    }
+    const before = parseConfigJsonSafely(historyRow.before_json);
+    db.prepare(
+        `UPDATE teams
+         SET registration_status = ?,
+             submitted_at = ?,
+             confirmed_at = ?,
+             registration_review_comment = ?,
+             registration_reviewed_at = ?,
+             registration_reviewed_by = ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`
+    ).run(
+        before?.registration_status ? String(before.registration_status).trim().toLowerCase() : "draft",
+        before?.submitted_at || null,
+        before?.confirmed_at || null,
+        before?.registration_review_comment || null,
+        before?.registration_reviewed_at || null,
+        before?.registration_reviewed_by || null,
+        id
+    );
+    const updated = db.prepare("SELECT * FROM teams WHERE id = ?").get(id);
+    logCriticalChange(req.user, "teams", id, "rollback_registration_state", {
+        registration_status: team.registration_status,
+        submitted_at: team.submitted_at,
+        confirmed_at: team.confirmed_at,
+        registration_review_comment: team.registration_review_comment,
+        registration_reviewed_at: team.registration_reviewed_at,
+        registration_reviewed_by: team.registration_reviewed_by
+    }, {
+        registration_status: updated?.registration_status || null,
+        submitted_at: updated?.submitted_at || null,
+        confirmed_at: updated?.confirmed_at || null,
+        registration_review_comment: updated?.registration_review_comment || null,
+        registration_reviewed_at: updated?.registration_reviewed_at || null,
+        registration_reviewed_by: updated?.registration_reviewed_by || null
+    });
+    logAudit(req.user, "ROLLBACK_TEAM_REGISTRATION", "teams", id, `Team registration rolled back for ${team.name}`);
+    res.json(updated);
 });
 
 app.get("/api/events", authRequired, requirePermission("events.read"), (_, res) => {

@@ -983,6 +983,16 @@ html, body {
     margin: 0;
 }
 
+.workspace-filter-presets {
+    margin-bottom: 10px;
+}
+
+.workspace-filter-presets .btn.active {
+    border-color: var(--secondary);
+    color: var(--secondary);
+    background: #eef3ff;
+}
+
 .workspace-saved-view-bar {
     display: grid;
     grid-template-columns: 1.4fr 1.2fr 1fr auto auto;
@@ -1104,6 +1114,28 @@ html, body {
     flex-wrap: wrap;
     gap: 8px;
     margin-bottom: 10px;
+}
+
+.workspace-bulk-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin: 10px 0 12px;
+}
+
+.workspace-bulk-actions label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+}
+
+.workspace-onboarding ol {
+    margin: 8px 0 0 18px;
+    display: grid;
+    gap: 6px;
+    font-size: 13px;
 }
 
 .workspace-inline-details {
