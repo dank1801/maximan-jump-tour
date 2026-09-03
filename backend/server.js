@@ -1109,21 +1109,7 @@ function authRequired(req, res, next) {
             return;
         }
 
-        const roleRow = db
-            .prepare("SELECT permissions_json FROM roles WHERE name = ? AND status = 'active'")
-            .get(dbUser.role);
-        const defaultRole = DEFAULT_ROLE_DEFINITIONS.find(
-            (entry) => normalizeRole(entry.name) === normalizeRole(dbUser.role)
-        );
-        let permissions = defaultRole ? [...defaultRole.permissions] : [];
-        if (roleRow?.permissions_json) {
-            try {
-                permissions = parsePermissions(JSON.parse(roleRow.permissions_json));
-            } catch (error) {
-                permissions = parsePermissions(permissions);
-            }
-        }
-
+        const permissions = resolvePermissionsForRole(dbUser.role);
         req.user = { ...payload, ...dbUser, permissions };
         next();
     } catch (error) {
@@ -1158,6 +1144,24 @@ function requireAnyPermission(permissions) {
         if (!permissions.some((permission) => userPermissions.includes(permission))) {
             res.status(403).json({ error: `Missing one of permissions: ${permissions.join(", ")}` });
             return;
+        }
+
+        function resolvePermissionsForRole(roleName) {
+            const roleRow = db
+                .prepare("SELECT permissions_json FROM roles WHERE name = ? AND status = 'active'")
+                .get(roleName);
+            const defaultRole = DEFAULT_ROLE_DEFINITIONS.find(
+                (entry) => normalizeRole(entry.name) === normalizeRole(roleName)
+            );
+            let permissions = defaultRole ? [...defaultRole.permissions] : [];
+            if (roleRow?.permissions_json) {
+                try {
+                    permissions = parsePermissions(JSON.parse(roleRow.permissions_json));
+                } catch (_error) {
+                    permissions = parsePermissions(permissions);
+                }
+            }
+            return parsePermissions(permissions);
         }
         next();
     };
@@ -1469,9 +1473,10 @@ app.post("/api/auth/bootstrap", (req, res) => {
         .run(username.trim(), name.trim(), email.trim().toLowerCase(), passwordHash);
 
     const user = db.prepare("SELECT id, username, name, email, role, status FROM users WHERE id = ?").get(result.lastInsertRowid);
+    const permissions = resolvePermissionsForRole(user.role);
     const token = signToken(user);
     logAudit({ sub: user.id, username: user.username }, "BOOTSTRAP_ADMIN", "users", user.id, "Initial admin account created");
-    res.status(201).json({ token, user });
+    res.status(201).json({ token, user: { ...user, permissions } });
 });
 
 app.post("/api/auth/login", (req, res) => {
@@ -1501,7 +1506,8 @@ app.post("/api/auth/login", (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        status: user.status
+        status: user.status,
+        permissions: resolvePermissionsForRole(user.role)
     };
     const token = signToken(safeUser);
     logAudit({ sub: user.id, username: user.username }, "LOGIN", "users", user.id, "User logged in");
@@ -1514,7 +1520,7 @@ app.get("/api/auth/me", authRequired, (req, res) => {
         res.status(404).json({ error: "User not found" });
         return;
     }
-    res.json({ user });
+    res.json({ user: { ...user, permissions: parsePermissions(req.user?.permissions || []) } });
 });
 
 app.get("/api/permissions", authRequired, requirePermission("roles.read"), (_req, res) => {
