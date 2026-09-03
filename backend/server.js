@@ -1138,30 +1138,30 @@ function requirePermission(permission) {
     };
 }
 
+function resolvePermissionsForRole(roleName) {
+    const defaultRole = DEFAULT_ROLE_DEFINITIONS.find(
+        (entry) => normalizeRole(entry.name) === normalizeRole(roleName)
+    );
+    let permissions = defaultRole ? [...defaultRole.permissions] : [];
+    try {
+        const roleRow = db
+            .prepare("SELECT permissions_json FROM roles WHERE name = ? AND status = 'active'")
+            .get(roleName);
+        if (roleRow?.permissions_json) {
+            permissions = parsePermissions(JSON.parse(roleRow.permissions_json));
+        }
+    } catch (_error) {
+        // Legacy schemas or transient lookup errors must not break auth/login flows.
+    }
+    return parsePermissions(permissions);
+}
+
 function requireAnyPermission(permissions) {
     return (req, res, next) => {
         const userPermissions = parsePermissions(req.user?.permissions || []);
         if (!permissions.some((permission) => userPermissions.includes(permission))) {
             res.status(403).json({ error: `Missing one of permissions: ${permissions.join(", ")}` });
             return;
-        }
-
-        function resolvePermissionsForRole(roleName) {
-            const roleRow = db
-                .prepare("SELECT permissions_json FROM roles WHERE name = ? AND status = 'active'")
-                .get(roleName);
-            const defaultRole = DEFAULT_ROLE_DEFINITIONS.find(
-                (entry) => normalizeRole(entry.name) === normalizeRole(roleName)
-            );
-            let permissions = defaultRole ? [...defaultRole.permissions] : [];
-            if (roleRow?.permissions_json) {
-                try {
-                    permissions = parsePermissions(JSON.parse(roleRow.permissions_json));
-                } catch (_error) {
-                    permissions = parsePermissions(permissions);
-                }
-            }
-            return parsePermissions(permissions);
         }
         next();
     };
