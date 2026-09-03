@@ -1102,6 +1102,39 @@ body.ux-guided-mode .workspace-guidance-card {
     border-left: 4px solid var(--secondary);
 }
 
+body.ux-minimal-mode .workspace-secondary-card,
+body.ux-minimal-mode #ws-filter-row,
+body.ux-minimal-mode #ws-saved-view-row,
+body.ux-minimal-mode .workspace-advanced-block,
+body.ux-minimal-mode .permission-matrix,
+body.ux-minimal-mode #ws-intelligence-card,
+body.ux-minimal-mode #ws-model-card,
+body.ux-minimal-mode #ws-command-deck-card {
+    display: none !important;
+}
+
+body.ux-minimal-mode .workspace-guidance-card,
+body.ux-minimal-mode #ws-problem-scanner-card {
+    border-left: 4px solid var(--secondary);
+}
+
+.workspace-scanner-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+}
+
+.workspace-scanner-pills {
+    margin-top: 10px;
+}
+
+.workspace-scanner-next {
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--primary-dark);
+}
+
 .ux-mode-toggle {
     margin-right: 8px;
 }

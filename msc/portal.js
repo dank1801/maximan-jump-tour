@@ -87,6 +87,22 @@ const PAGE_READONLY_ACTION_SELECTORS = {
     "public-site.html": ["[data-edit-record]", "[data-delete-record]", "[data-restore-record]", "[data-mark-live]", "[data-mark-blocked]", "[data-run-workflow]", "[data-run-playbook]", "[data-quick-action]"],
 };
 
+const STATUS_LABELS = {
+    active: "Aktiv",
+    inactive: "Inaktiv",
+    pending: "Offen",
+    planned: "Geplant",
+    in_progress: "In Arbeit",
+    blocked: "Blockiert",
+    completed: "Erledigt",
+    live: "Live",
+    submitted: "Eingereicht",
+    revision_requested: "Rückfrage",
+    confirmed: "Bestätigt",
+    requested: "Angefragt",
+    approved: "Freigegeben"
+};
+
 // ============ HELPERS ============
 
 function pageName() {
@@ -541,11 +557,11 @@ function hasAnyPermission(permissions = []) {
 
 function getUiMode() {
     const stored = localStorage.getItem(UI_MODE_KEY);
-    return stored === "advanced" ? "advanced" : "guided";
+    return ["guided", "minimal", "advanced"].includes(stored) ? stored : "guided";
 }
 
 function setUiMode(mode) {
-    const next = mode === "advanced" ? "advanced" : "guided";
+    const next = ["guided", "minimal", "advanced"].includes(mode) ? mode : "guided";
     localStorage.setItem(UI_MODE_KEY, next);
     applyUiMode();
     return next;
@@ -555,18 +571,30 @@ function isGuidedMode() {
     return getUiMode() === "guided";
 }
 
+function isMinimalMode() {
+    return getUiMode() === "minimal";
+}
+
 function applyUiMode() {
     document.body.classList.toggle("ux-guided-mode", isGuidedMode());
-    document.body.classList.toggle("ux-advanced-mode", !isGuidedMode());
+    document.body.classList.toggle("ux-minimal-mode", isMinimalMode());
+    document.body.classList.toggle("ux-advanced-mode", getUiMode() === "advanced");
     const button = document.getElementById("ux-mode-toggle");
     if (button) {
-        button.textContent = isGuidedMode() ? "Einfachmodus" : "Erweitert";
-        button.setAttribute("aria-pressed", String(!isGuidedMode()));
+        const label = isMinimalMode() ? "Nur das Nötigste" : (isGuidedMode() ? "Einfachmodus" : "Erweitert");
+        button.textContent = label;
+        button.setAttribute("aria-pressed", String(getUiMode() !== "guided"));
+        button.title = isMinimalMode()
+            ? "Zeigt nur die wichtigsten Bereiche"
+            : isGuidedMode()
+                ? "Wechselt in einen einfachen, geführten Modus"
+                : "Zeigt alle Bereiche";
     }
 }
 
 function toggleUiMode() {
-    setUiMode(isGuidedMode() ? "advanced" : "guided");
+    const next = isGuidedMode() ? "minimal" : isMinimalMode() ? "advanced" : "guided";
+    setUiMode(next);
     if (typeof window.refreshDomainWorkspacePage === "function" && isDomainWorkspacePage()) {
         window.refreshDomainWorkspacePage().catch(() => {});
     }
@@ -1017,24 +1045,28 @@ function setTableRows(ids, html, colspan, emptyText) {
 }
 
 function statusBadge(status) {
+    const normalized = String(status || "").toLowerCase().replace(/ü/g, "ue");
     const colors = {
         active: "success",
         inactive: "danger",
         pending: "warning",
         planned: "info",
         in_progress: "warning",
-        live: "success",
         blocked: "danger",
         completed: "success",
         in_pruefung: "info",
         gueltig: "success",
         abgelaufen: "danger",
         approved: "success",
-        requested: "warning"
+        requested: "warning",
+        submitted: "info",
+        revision_requested: "warning",
+        confirmed: "success",
+        live: "success"
     };
-    const normalized = String(status || "").toLowerCase().replace(/ü/g, "ue");
     const color = colors[normalized] || "info";
-    return `<span class="badge badge-${color}">${status || "—"}</span>`;
+    const label = STATUS_LABELS[normalized] || String(status || "—");
+    return `<span class="badge badge-${color}">${label}</span>`;
 }
 
 function button(label, attrs = "") {

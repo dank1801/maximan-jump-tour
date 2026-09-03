@@ -353,6 +353,17 @@ function initDomainWorkspace(config) {
             else content.prepend(commandCard);
         }
 
+        if (!document.getElementById("ws-problem-scanner-card")) {
+            const scannerCard = document.createElement("div");
+            scannerCard.className = "card workspace-essential-card";
+            scannerCard.id = "ws-problem-scanner-card";
+            scannerCard.innerHTML = `
+                <div class="card-header"><h2>Problem-Scanner</h2></div>
+                <div class="card-body" id="ws-problem-scanner"></div>
+            `;
+            document.getElementById("ws-command-deck-card")?.insertAdjacentElement("afterend", scannerCard);
+        }
+
         if (!document.getElementById("ws-intelligence-card")) {
             const intelCard = document.createElement("div");
             intelCard.className = "card workspace-secondary-card";
@@ -1334,6 +1345,89 @@ function initDomainWorkspace(config) {
         `).join("");
     }
 
+    function renderProblemScanner() {
+        const node = document.getElementById("ws-problem-scanner");
+        if (!node) return;
+        const records = Array.isArray(state.records) ? state.records : [];
+        const orgs = Array.isArray(state.organizations) ? state.organizations : [];
+        const teams = Array.isArray(state.teams) ? state.teams : [];
+        const seasons = Array.isArray(state.seasons) ? state.seasons : [];
+        const issues = [];
+        const scanRecords = records.reduce((acc, record) => {
+            const meta = extractMeta(record);
+            const status = normalizedStatus(record.status);
+            const due = dueState(meta.dueAt);
+            if (status === "blocked") acc.blocked += 1;
+            if (due.overdue) acc.overdue += 1;
+            if (due.dueSoon) acc.dueSoon += 1;
+            if (normalizedSeverity(meta.severity) === "critical") acc.critical += 1;
+            return acc;
+        }, { blocked: 0, overdue: 0, dueSoon: 0, critical: 0 });
+
+        if (scanRecords.blocked > 0) {
+            issues.push({ label: `${scanRecords.blocked} Blocker`, tone: "danger" });
+        }
+        if (scanRecords.overdue > 0) {
+            issues.push({ label: `${scanRecords.overdue} überfällige Einträge`, tone: "warning" });
+        }
+        if (scanRecords.critical > 0) {
+            issues.push({ label: `${scanRecords.critical} kritische Punkte`, tone: "danger" });
+        }
+
+        if (domainKey === "team_portal") {
+            const nextDeadline = teams
+                .map((team) => {
+                    const deadline = team.registration_deadline_at || seasons.find((season) => Number(season.id) === Number(team.season_id))?.registration_deadline_at || null;
+                    if (!deadline) return null;
+                    const date = new Date(deadline);
+                    return Number.isNaN(date.getTime()) ? null : date;
+                })
+                .filter(Boolean)
+                .sort((a, b) => a.getTime() - b.getTime())[0] || null;
+            const orgIssues = orgs.reduce((acc, org) => {
+                const orgTeams = teams.filter((team) => Number(team.organization_id) === Number(org.id));
+                const hasA = orgTeams.some((team) => String(team.team_type || "").trim().toUpperCase() === "A");
+                if (orgTeams.length > 3) acc.push(`${org.name}: mehr als 3 Teams`);
+                if (orgTeams.length > 0 && !hasA) acc.push(`${org.name}: kein A-Team`);
+                return acc;
+            }, []);
+            issues.push(...orgIssues.map((label) => ({ label, tone: "warning" })));
+            if (nextDeadline) {
+                issues.push({ label: `Nächste Frist: ${formatDateTime(nextDeadline.toISOString())}`, tone: Date.now() > nextDeadline.getTime() ? "danger" : "info" });
+            }
+        }
+
+        let nextStep = "Alles wirkt aktuell ruhig.";
+        if (domainKey === "team_portal") {
+            const confirmedTeams = teams.filter((team) => String(team.registration_status || "").toLowerCase() === "confirmed").length;
+            const revisionTeams = teams.filter((team) => String(team.registration_status || "").toLowerCase() === "revision_requested").length;
+            if (revisionTeams > 0) {
+                nextStep = "Nächster sinnvoller Schritt: Rückfragen mit den Vorsitzenden klären.";
+            } else if (confirmedTeams === 0 && teams.length > 0) {
+                nextStep = "Nächster sinnvoller Schritt: Erstes Team prüfen und bestätigen.";
+            } else if (teams.length === 0) {
+                nextStep = "Nächster sinnvoller Schritt: Erste Organisation oder erstes Team anlegen.";
+            } else {
+                nextStep = "Nächster sinnvoller Schritt: Springer und Lizenzen gegenprüfen.";
+            }
+        } else if (scanRecords.blocked > 0) {
+            nextStep = "Nächster sinnvoller Schritt: Blocker öffnen und erledigen.";
+        } else if (scanRecords.overdue > 0) {
+            nextStep = "Nächster sinnvoller Schritt: Überfällige Punkte priorisieren.";
+        }
+
+        node.innerHTML = `
+            <div class="workspace-scanner-head">
+                <strong>Problem-Scanner</strong>
+                <span class="workspace-muted">${escapeHtml(issues.length > 0 ? `${issues.length} Hinweise` : "Keine Hinweise")}</span>
+            </div>
+            <div class="workspace-mini-pill-list workspace-scanner-pills">
+                ${issues.length > 0 ? issues.slice(0, 6).map((issue) => `<span class="badge badge-${issue.tone}">${escapeHtml(issue.label)}</span>`).join("") : "<span class='workspace-team-ok'>Alles im grünen Bereich</span>"}
+            </div>
+            <div class="workspace-scanner-next">${escapeHtml(nextStep)}</div>
+        `;
+    }
+
     function renderTeamAdminPanel() {
         if (domainKey !== "team_portal") return;
         const orgSelect = document.querySelector("#ws-team-admin-form select[name='organizationId']");
@@ -1888,6 +1982,7 @@ function initDomainWorkspace(config) {
         renderWorkflowOptions();
         renderWorkflowLogs();
         renderNotifications();
+        renderProblemScanner();
         renderTeamAdminPanel();
         bindTeamAdminPanel();
         if (!hasPermission("organizations.write")) {
