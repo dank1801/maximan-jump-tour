@@ -132,8 +132,9 @@ function scheduleSnapshotPersist(reason = "write") {
 let DB_DIR = DEFAULT_RUNTIME_DIR;
 let usingPersistentStorage = false;
 let lastPersistentError = null;
+const USE_DISK_PERSISTENCE = !ENABLE_ONLINE_SNAPSHOT;
 
-if (IS_PRODUCTION) {
+if (IS_PRODUCTION && USE_DISK_PERSISTENCE) {
     for (const candidate of PERSISTENT_DIR_CANDIDATES) {
         try {
             ensureWritableDirectory(candidate);
