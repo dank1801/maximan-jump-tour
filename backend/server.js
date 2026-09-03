@@ -659,6 +659,13 @@ function ensureOrganizationEnhancements() {
         );
     `);
 
+    const organizationColumns = db.prepare("PRAGMA table_info(organizations)").all();
+    const organizationColumnNames = new Set(organizationColumns.map((column) => String(column.name || "")));
+    if (!organizationColumnNames.has("updated_at")) {
+        db.prepare("ALTER TABLE organizations ADD COLUMN updated_at TEXT").run();
+        db.prepare("UPDATE organizations SET updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP)").run();
+    }
+
     const teamColumns = db.prepare("PRAGMA table_info(teams)").all();
     const teamColumnNames = new Set(teamColumns.map((column) => String(column.name || "")));
     if (!teamColumnNames.has("organization_id")) {
@@ -690,6 +697,10 @@ function ensureOrganizationEnhancements() {
     }
     if (!teamColumnNames.has("registration_deadline_at")) {
         db.prepare("ALTER TABLE teams ADD COLUMN registration_deadline_at TEXT").run();
+    }
+    if (!teamColumnNames.has("updated_at")) {
+        db.prepare("ALTER TABLE teams ADD COLUMN updated_at TEXT").run();
+        db.prepare("UPDATE teams SET updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP)").run();
     }
 
     const memberColumns = db.prepare("PRAGMA table_info(team_members)").all();
