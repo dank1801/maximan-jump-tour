@@ -4274,8 +4274,11 @@ app.post("/api/teams", authRequired, requireAnyPermission(["teams.write", "team_
     }
     const result = db
         .prepare(
-            `INSERT INTO teams (name, organization_id, team_type, nation, category, manager_user_id, season_id, registration_status, registration_deadline_at, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`
+            `INSERT INTO teams (
+                name, organization_id, team_type, nation, category, manager_user_id, season_id,
+                registration_status, registration_deadline_at, status, created_at, updated_at
+            )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`
         )
         .run(
             name.trim(),
