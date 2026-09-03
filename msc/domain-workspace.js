@@ -4,68 +4,113 @@
 
 const DOMAIN_EXPERIENCE_PRESETS = {
     msc_admin: {
-        subtitle: "Regelversionierung, Saisonplanung, Jury, Disziplinar und Finanzen in einer Leitstelle.",
+        subtitle: "Governance-Cockpit für Regelwerk, Jury, Disziplinar und Finanzen.",
         quickActions: [
-            { label: "Neue Regelversion", capabilityKey: "rule_versioning", status: "planned", title: "Regelwerk Update" },
-            { label: "Jury-Fall eröffnen", capabilityKey: "jury_management", status: "in_progress", title: "Jury Incident Case" },
-            { label: "Disziplinarvorgang starten", capabilityKey: "discipline_cases", status: "in_progress", title: "Disziplinarfall" }
+            { label: "Regelupdate starten", capabilityKey: "rule_versioning", status: "planned", severity: "medium", dueHours: 48, title: "Regelversion anpassen" },
+            { label: "Jury-Clearance anlegen", capabilityKey: "jury_management", status: "in_progress", severity: "high", dueHours: 12, title: "Jury Intervention vorbereiten" },
+            { label: "Disziplinarfall eröffnen", capabilityKey: "discipline_cases", status: "in_progress", severity: "high", dueHours: 24, title: "Disziplinarprüfung" }
+        ],
+        playbooks: [
+            { label: "Saison-Freigabe Playbook", capabilityKey: "season_planning", title: "Saisonplan Freigabe", status: "in_progress", severity: "high", workflowKey: "event_setup", dueHours: 24, note: "Freigabezyklus MSC/LOC/Jury starten" },
+            { label: "Jury Incident Playbook", capabilityKey: "jury_management", title: "Jury Incident", status: "blocked", severity: "critical", workflowKey: "jury_intervention", dueHours: 3, note: "Eskalationskette mit Audit aktivieren" }
         ],
         relatedLinks: [
             { href: "points.html", label: "Punkte & Wertungen" },
             { href: "events.html", label: "Wettkämpfe" },
             { href: "reporting.html", label: "Reporting & Audit" }
+        ],
+        intelligence: [
+            { title: "Freigaben in Bearbeitung", kind: "status_count", status: "in_progress", tone: "warning" },
+            { title: "Kritische Risiken", kind: "severity_count", severity: "critical", tone: "danger" },
+            { title: "Überfällige Governance-Tasks", kind: "overdue_count", tone: "danger" }
         ]
     },
     loc: {
-        subtitle: "Schanzenfreigabe, Windmonitoring, Gate-Steuerung und Notfallmanagement.",
+        subtitle: "Live Operations für Schanze, Wind, Gate und Notfallprotokolle.",
         quickActions: [
-            { label: "Schanze freigeben", capabilityKey: "hill_clearance", status: "live", title: "Hill Clearance Ready" },
-            { label: "Wind-Alarm anlegen", capabilityKey: "wind_monitoring", status: "blocked", title: "Wind Alert" },
-            { label: "Notfallprotokoll starten", capabilityKey: "emergency_protocols", status: "in_progress", title: "Emergency Protocol" }
+            { label: "Schanze auf Live", capabilityKey: "hill_clearance", status: "live", severity: "medium", dueHours: 2, title: "Schanzenfreigabe aktivieren" },
+            { label: "Windwarnung erfassen", capabilityKey: "wind_monitoring", status: "blocked", severity: "critical", dueHours: 1, title: "Wind-Alarm" },
+            { label: "Notfallmodus vorbereiten", capabilityKey: "emergency_protocols", status: "in_progress", severity: "critical", dueHours: 1, title: "Emergency Readiness" }
+        ],
+        playbooks: [
+            { label: "Emergency Activation", capabilityKey: "emergency_protocols", title: "LOC Emergency Activation", status: "blocked", severity: "critical", workflowKey: "loc_emergency_activation", dueHours: 1, note: "Gate freeze + Alarmkette" },
+            { label: "Gate Recalibration", capabilityKey: "gate_panel", title: "Gate Recalibration", status: "in_progress", severity: "high", workflowKey: "jury_intervention", dueHours: 2, note: "Neuparametrisierung mit Jury-Sync" }
         ],
         relatedLinks: [
             { href: "operations.html", label: "Operations Hub" },
-            { href: "events.html", label: "Wettkampfsteuerung" },
-            { href: "dashboard.html", label: "Gesamtdashboard" }
+            { href: "events.html", label: "Eventsteuerung" },
+            { href: "dashboard.html", label: "Mission Control" }
+        ],
+        intelligence: [
+            { title: "Live-Module", kind: "status_count", status: "live", tone: "success" },
+            { title: "Wind/Gate Blocker", kind: "blocked_capabilities", capabilityKeys: ["wind_monitoring", "gate_panel"], tone: "danger" },
+            { title: "Sicherheitskritisch", kind: "severity_count", severity: "critical", tone: "danger" }
         ]
     },
     team_portal: {
-        subtitle: "Registrierung, Athletenpflege, Materialchecks, Transfers und Medical Uploads.",
+        subtitle: "Team Operations Suite für Registrierung, Material, Transfers und Medical.",
         quickActions: [
-            { label: "Team-Registrierung prüfen", capabilityKey: "registration", status: "in_progress", title: "Registrierung Check" },
-            { label: "Materialcheck öffnen", capabilityKey: "material_checks", status: "planned", title: "Materialprüfung" },
-            { label: "Medical Upload prüfen", capabilityKey: "medical_uploads", status: "in_progress", title: "Medical Review" }
+            { label: "Registrierungscheck", capabilityKey: "registration", status: "in_progress", severity: "medium", dueHours: 24, title: "Team Registrierung prüfen" },
+            { label: "Materialcheck starten", capabilityKey: "material_checks", status: "planned", severity: "medium", dueHours: 18, title: "Materialprüfung vorbereiten" },
+            { label: "Medical Upload review", capabilityKey: "medical_uploads", status: "in_progress", severity: "high", dueHours: 8, title: "Medical Upload verifizieren" }
+        ],
+        playbooks: [
+            { label: "Registration Review", capabilityKey: "registration", title: "Registrierung komplett prüfen", status: "in_progress", severity: "high", workflowKey: "team_registration_review", dueHours: 12, note: "Regeln/Lizenzen/Material/Medical prüfen" },
+            { label: "Medical Fast-Track", capabilityKey: "medical_uploads", title: "Medical Fast-Track", status: "in_progress", severity: "high", workflowKey: "medical_flow", dueHours: 4, note: "Schnelle Freigabe für Eventstart" }
         ],
         relatedLinks: [
             { href: "teams.html", label: "Teams & Lizenzen" },
             { href: "transfers.html", label: "Transfers & Verträge" },
-            { href: "events.html", label: "Eventbezug" }
+            { href: "events.html", label: "Events" }
+        ],
+        intelligence: [
+            { title: "Offene Registrierungen", kind: "status_count", status: "planned", tone: "info" },
+            { title: "Medical Risiken", kind: "capability_severity", capabilityKey: "medical_uploads", severity: "high", tone: "warning" },
+            { title: "Transfer-Kritisch", kind: "capability_severity", capabilityKey: "transfer_control", severity: "critical", tone: "danger" }
         ]
     },
     athlete_app: {
-        subtitle: "Athletenprofil, Medical Clearance, Startlisten, Resultate und Notifications.",
+        subtitle: "Readiness Hub für Profile, Medical-Clearance, Startlisten und Notifications.",
         quickActions: [
-            { label: "Profil aktualisieren", capabilityKey: "profiles", status: "in_progress", title: "Athlete Profile Update" },
-            { label: "Medical Status setzen", capabilityKey: "medical_clearance", status: "live", title: "Medical Clearance" },
-            { label: "Notification einplanen", capabilityKey: "notifications", status: "planned", title: "Push Benachrichtigung" }
+            { label: "Profil Audit", capabilityKey: "profiles", status: "in_progress", severity: "medium", dueHours: 36, title: "Athlete Profile Audit" },
+            { label: "Medical Clearance", capabilityKey: "medical_clearance", status: "live", severity: "high", dueHours: 6, title: "Medical Clearance Update" },
+            { label: "Push vorbereiten", capabilityKey: "notifications", status: "planned", severity: "low", dueHours: 12, title: "Athlete Notification" }
+        ],
+        playbooks: [
+            { label: "Athlete Clearance Gate", capabilityKey: "medical_clearance", title: "Clearance Gate", status: "in_progress", severity: "high", workflowKey: "athlete_clearance_gate", dueHours: 2, note: "Startrecht vor Event validieren" },
+            { label: "Result Push Cycle", capabilityKey: "results", title: "Result Distribution", status: "in_progress", severity: "medium", workflowKey: "result_flow", dueHours: 2, note: "Resultat- und Notification-Lauf" }
         ],
         relatedLinks: [
             { href: "events.html", label: "Startlisten & Events" },
             { href: "reporting.html", label: "Resultat-Reporting" },
             { href: "operations.html", label: "Operations Hub" }
+        ],
+        intelligence: [
+            { title: "Clearance Live", kind: "capability_status", capabilityKey: "medical_clearance", status: "live", tone: "success" },
+            { title: "Profile unvollständig", kind: "status_count", status: "planned", tone: "warning" },
+            { title: "Überfällige Athlete Tasks", kind: "overdue_count", tone: "danger" }
         ]
     },
     public_site: {
-        subtitle: "Live Ticker, Startlisten, Standings und Clip-Publikation mit Embargo-Kontrolle.",
+        subtitle: "Media Engine für Live-Ticker, Standings und Embargo-gesteuerte Releases.",
         quickActions: [
-            { label: "Ticker-Eintrag live schalten", capabilityKey: "live_ticker", status: "live", title: "Live Ticker Update" },
-            { label: "Standings einfrieren", capabilityKey: "standings", status: "in_progress", title: "Standings Freeze" },
-            { label: "Embargo-Clip vorbereiten", capabilityKey: "embargo_clips", status: "planned", title: "Embargo Clip Queue" }
+            { label: "Ticker live", capabilityKey: "live_ticker", status: "live", severity: "medium", dueHours: 1, title: "Live Ticker Update" },
+            { label: "Standings Freeze", capabilityKey: "standings", status: "in_progress", severity: "high", dueHours: 2, title: "Standings Freeze auslösen" },
+            { label: "Embargo Clip Queue", capabilityKey: "embargo_clips", status: "planned", severity: "high", dueHours: 6, title: "Embargo Clip vorbereiten" }
+        ],
+        playbooks: [
+            { label: "Embargo Release", capabilityKey: "embargo_clips", title: "Embargo Release", status: "in_progress", severity: "high", workflowKey: "public_embargo_release", dueHours: 2, note: "Freigabefenster und Public Push" },
+            { label: "Final Result Publish", capabilityKey: "standings", title: "Final Standing Publish", status: "live", severity: "high", workflowKey: "result_flow", dueHours: 1, note: "Finales Ranking auf Public ausrollen" }
         ],
         relatedLinks: [
             { href: "reporting.html", label: "Publikationen" },
             { href: "points.html", label: "Wertungen" },
             { href: "operations.html", label: "Live Operations" }
+        ],
+        intelligence: [
+            { title: "Live Ticker Slots", kind: "capability_status", capabilityKey: "live_ticker", status: "live", tone: "success" },
+            { title: "Embargo Blocker", kind: "capability_status", capabilityKey: "embargo_clips", status: "blocked", tone: "danger" },
+            { title: "Publish Risiken", kind: "severity_count", severity: "critical", tone: "danger" }
         ]
     }
 };
@@ -77,6 +122,13 @@ const WORKSPACE_STATUS_LABELS = {
     live: "Live",
     blocked: "Blockiert",
     completed: "Abgeschlossen"
+};
+const WORKSPACE_SEVERITIES = ["low", "medium", "high", "critical"];
+const WORKSPACE_SEVERITY_LABELS = {
+    low: "Low",
+    medium: "Medium",
+    high: "High",
+    critical: "Critical"
 };
 
 function initDomainWorkspace(config) {
@@ -90,7 +142,6 @@ function initDomainWorkspace(config) {
         workflows: [],
         records: [],
         workflowLogs: [],
-        editingRecordId: null,
         canWrite: false
     };
 
@@ -98,7 +149,9 @@ function initDomainWorkspace(config) {
         return {
             subtitle: config.subtitle || preset.subtitle || "Domänensteuerung",
             quickActions: Array.isArray(config.quickActions) ? config.quickActions : (preset.quickActions || []),
-            relatedLinks: Array.isArray(config.relatedLinks) ? config.relatedLinks : (preset.relatedLinks || [])
+            playbooks: Array.isArray(config.playbooks) ? config.playbooks : (preset.playbooks || []),
+            relatedLinks: Array.isArray(config.relatedLinks) ? config.relatedLinks : (preset.relatedLinks || []),
+            intelligence: Array.isArray(config.intelligence) ? config.intelligence : (preset.intelligence || [])
         };
     }
 
@@ -116,9 +169,51 @@ function initDomainWorkspace(config) {
         return WORKSPACE_STATUS_ORDER.includes(key) ? key : "planned";
     }
 
+    function normalizedSeverity(value) {
+        const key = String(value || "").trim().toLowerCase();
+        return WORKSPACE_SEVERITIES.includes(key) ? key : "medium";
+    }
+
+    function severityBadge(level) {
+        const normalized = normalizedSeverity(level);
+        const tone = normalized === "critical" ? "danger" : (normalized === "high" ? "warning" : (normalized === "medium" ? "info" : "success"));
+        return `<span class="badge badge-${tone}">${WORKSPACE_SEVERITY_LABELS[normalized]}</span>`;
+    }
+
+    function parseTags(value) {
+        if (Array.isArray(value)) return value.map((entry) => String(entry || "").trim()).filter(Boolean);
+        return String(value || "")
+            .split(",")
+            .map((entry) => entry.trim())
+            .filter(Boolean);
+    }
+
+    function dueState(dueAt) {
+        if (!dueAt) return { label: "Kein SLA", tone: "info", overdue: false, dueSoon: false };
+        const date = new Date(dueAt);
+        if (Number.isNaN(date.getTime())) return { label: "Ungültig", tone: "warning", overdue: false, dueSoon: false };
+        const diffMs = date.getTime() - Date.now();
+        if (diffMs < 0) return { label: "Überfällig", tone: "danger", overdue: true, dueSoon: false };
+        if (diffMs <= 6 * 60 * 60 * 1000) return { label: "Bald fällig", tone: "warning", overdue: false, dueSoon: true };
+        return { label: "Im Zeitfenster", tone: "success", overdue: false, dueSoon: false };
+    }
+
+    function extractMeta(record) {
+        const payload = record?.payload && typeof record.payload === "object" ? record.payload : {};
+        return {
+            notes: String(payload.notes || ""),
+            severity: normalizedSeverity(payload.severity || "medium"),
+            dueAt: payload.dueAt ? String(payload.dueAt) : "",
+            escalation: String(payload.escalation || "none"),
+            tags: parseTags(payload.tags),
+            externalRef: String(payload.externalRef || "")
+        };
+    }
+
     function ensureEnhancedSections() {
         const content = document.querySelector(".portal-content");
         if (!content) return;
+
         if (!document.getElementById("ws-command-deck-card")) {
             const commandCard = document.createElement("div");
             commandCard.className = "card";
@@ -132,6 +227,10 @@ function initDomainWorkspace(config) {
                             <div class="workspace-chip-list" id="ws-quick-actions"></div>
                         </div>
                         <div class="workspace-action-box">
+                            <h3>Playbooks</h3>
+                            <div class="workspace-chip-list" id="ws-playbook-actions"></div>
+                        </div>
+                        <div class="workspace-action-box">
                             <h3>One-Click Workflows</h3>
                             <div class="workspace-chip-list" id="ws-workflow-shortcuts"></div>
                         </div>
@@ -143,11 +242,21 @@ function initDomainWorkspace(config) {
                 </div>
             `;
             const secondCard = content.querySelectorAll(".card")[1];
-            if (secondCard) {
-                secondCard.insertAdjacentElement("afterend", commandCard);
-            } else {
-                content.prepend(commandCard);
-            }
+            if (secondCard) secondCard.insertAdjacentElement("afterend", commandCard);
+            else content.prepend(commandCard);
+        }
+
+        if (!document.getElementById("ws-intelligence-card")) {
+            const intelCard = document.createElement("div");
+            intelCard.className = "card";
+            intelCard.id = "ws-intelligence-card";
+            intelCard.innerHTML = `
+                <div class="card-header"><h2>Domain Intelligence</h2></div>
+                <div class="card-body">
+                    <div class="workspace-intelligence-grid" id="ws-intelligence-grid"></div>
+                </div>
+            `;
+            document.getElementById("ws-command-deck-card")?.insertAdjacentElement("afterend", intelCard);
         }
 
         if (!document.getElementById("ws-status-board-card")) {
@@ -160,10 +269,31 @@ function initDomainWorkspace(config) {
                     <div class="workspace-lane-grid" id="ws-status-board"></div>
                 </div>
             `;
-            const commandCard = document.getElementById("ws-command-deck-card");
-            if (commandCard) {
-                commandCard.insertAdjacentElement("afterend", boardCard);
-            }
+            document.getElementById("ws-intelligence-card")?.insertAdjacentElement("afterend", boardCard);
+        }
+
+        if (!document.getElementById("ws-sla-card")) {
+            const slaCard = document.createElement("div");
+            slaCard.className = "card";
+            slaCard.id = "ws-sla-card";
+            slaCard.innerHTML = `
+                <div class="card-header"><h2>SLA & Risiko Monitor</h2></div>
+                <div class="card-body">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Eintrag</th>
+                                <th>Funktion</th>
+                                <th>Severity</th>
+                                <th>Fällig</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ws-sla-body"></tbody>
+                    </table>
+                </div>
+            `;
+            document.getElementById("ws-status-board-card")?.insertAdjacentElement("afterend", slaCard);
         }
 
         const recordsBody = document.getElementById("ws-records-body");
@@ -173,13 +303,57 @@ function initDomainWorkspace(config) {
             filterBar.id = "ws-filter-row";
             filterBar.className = "workspace-filter-bar";
             filterBar.innerHTML = `
-                <input type="search" id="ws-filter-search" placeholder="Suche nach Titel, Funktion, Owner, Notiz..." />
+                <input type="search" id="ws-filter-search" placeholder="Suche nach Titel, Funktion, Owner, Tag, Referenz..." />
                 <select id="ws-filter-status"><option value="">Alle Status</option></select>
                 <select id="ws-filter-capability"><option value="">Alle Funktionen</option></select>
                 <select id="ws-filter-owner"><option value="">Alle Owner</option></select>
+                <select id="ws-filter-severity"><option value="">Alle Severity</option></select>
+                <select id="ws-filter-due"><option value="">Alle SLA</option><option value="overdue">Überfällig</option><option value="soon">Bald fällig</option></select>
                 <button type="button" class="btn btn-secondary btn-small" id="ws-clear-filters">Filter zurücksetzen</button>
             `;
             recordsCardBody.prepend(filterBar);
+        }
+
+        const form = document.getElementById("ws-record-form");
+        const noteGroup = form?.querySelector("textarea[name='notes']")?.closest(".form-group");
+        if (form && noteGroup && !form.querySelector("[data-ws-advanced='1']")) {
+            const advanced = document.createElement("div");
+            advanced.className = "grid-3";
+            advanced.dataset.wsAdvanced = "1";
+            advanced.innerHTML = `
+                <div class="form-group">
+                    <label>Severity</label>
+                    <select name="severity">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Fällig bis</label>
+                    <input type="datetime-local" name="dueAt" />
+                </div>
+                <div class="form-group">
+                    <label>Eskalation</label>
+                    <select name="escalation">
+                        <option value="none">Keine</option>
+                        <option value="loc">LOC</option>
+                        <option value="msc">MSC</option>
+                        <option value="medical">Medical</option>
+                        <option value="legal">Legal</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Tags (Komma-getrennt)</label>
+                    <input type="text" name="tags" placeholder="critical, finals, weather" />
+                </div>
+                <div class="form-group">
+                    <label>Externe Referenz</label>
+                    <input type="text" name="externalRef" placeholder="INC-2026-0042 / DOC-91" />
+                </div>
+            `;
+            noteGroup.insertAdjacentElement("beforebegin", advanced);
         }
     }
 
@@ -188,23 +362,31 @@ function initDomainWorkspace(config) {
             search: String(document.getElementById("ws-filter-search")?.value || "").trim().toLowerCase(),
             status: String(document.getElementById("ws-filter-status")?.value || "").trim().toLowerCase(),
             capability: String(document.getElementById("ws-filter-capability")?.value || "").trim(),
-            owner: String(document.getElementById("ws-filter-owner")?.value || "").trim().toLowerCase()
+            owner: String(document.getElementById("ws-filter-owner")?.value || "").trim().toLowerCase(),
+            severity: String(document.getElementById("ws-filter-severity")?.value || "").trim().toLowerCase(),
+            due: String(document.getElementById("ws-filter-due")?.value || "").trim().toLowerCase()
         };
     }
 
     function filteredRecords() {
         const filters = getFilterValues();
         return state.records.filter((entry) => {
-            const entryStatus = normalizedStatus(entry.status);
-            if (filters.status && entryStatus !== filters.status) return false;
+            const meta = extractMeta(entry);
+            const due = dueState(meta.dueAt);
+            if (filters.status && normalizedStatus(entry.status) !== filters.status) return false;
             if (filters.capability && String(entry.capability_key || "") !== filters.capability) return false;
             if (filters.owner && String(entry.owner_role || "").toLowerCase() !== filters.owner) return false;
+            if (filters.severity && normalizedSeverity(meta.severity) !== filters.severity) return false;
+            if (filters.due === "overdue" && !due.overdue) return false;
+            if (filters.due === "soon" && !due.dueSoon) return false;
             if (filters.search) {
                 const source = [
                     entry.title,
                     capabilityLabel(entry.capability_key),
                     entry.owner_role,
-                    entry.payload?.notes
+                    meta.notes,
+                    meta.externalRef,
+                    meta.tags.join(" ")
                 ].map((part) => String(part || "").toLowerCase()).join(" ");
                 if (!source.includes(filters.search)) return false;
             }
@@ -221,18 +403,20 @@ function initDomainWorkspace(config) {
 
     function updateKpis() {
         const records = filteredRecords();
-        const total = records.length;
         const live = records.filter((entry) => normalizedStatus(entry.status) === "live").length;
         const blocked = records.filter((entry) => normalizedStatus(entry.status) === "blocked").length;
+        const critical = records.filter((entry) => normalizedSeverity(extractMeta(entry).severity) === "critical").length;
         const latest = records[0]?.updated_at || records[0]?.created_at || null;
-        const kpiTotal = document.getElementById("ws-kpi-total");
-        const kpiLive = document.getElementById("ws-kpi-live");
-        const kpiBlocked = document.getElementById("ws-kpi-blocked");
-        const kpiUpdated = document.getElementById("ws-kpi-updated");
-        if (kpiTotal) kpiTotal.textContent = String(total);
-        if (kpiLive) kpiLive.textContent = String(live);
-        if (kpiBlocked) kpiBlocked.textContent = String(blocked);
-        if (kpiUpdated) kpiUpdated.textContent = latest ? formatDateTime(latest) : "—";
+
+        const totalNode = document.getElementById("ws-kpi-total");
+        const liveNode = document.getElementById("ws-kpi-live");
+        const blockedNode = document.getElementById("ws-kpi-blocked");
+        const updatedNode = document.getElementById("ws-kpi-updated");
+
+        if (totalNode) totalNode.textContent = String(records.length);
+        if (liveNode) liveNode.textContent = String(live);
+        if (blockedNode) blockedNode.textContent = `${blocked} (${critical} kritisch)`;
+        if (updatedNode) updatedNode.textContent = latest ? formatDateTime(latest) : "—";
     }
 
     function renderCapabilities() {
@@ -241,13 +425,16 @@ function initDomainWorkspace(config) {
         const capabilities = Array.isArray(state.scopeDomain?.capabilities) ? state.scopeDomain.capabilities : [];
         const html = capabilities.map((entry) => {
             const records = state.records.filter((record) => record.capability_key === entry.key);
-            const liveCount = records.filter((record) => normalizedStatus(record.status) === "live").length;
-            const blockedCount = records.filter((record) => normalizedStatus(record.status) === "blocked").length;
+            const done = records.filter((record) => normalizedStatus(record.status) === "completed").length;
+            const readiness = records.length > 0 ? Math.round((done / records.length) * 100) : 0;
             return `
                 <div class="kpi-card">
                     <div class="kpi-label">${escapeHtml(entry.name)}</div>
                     <div class="kpi-value">${records.length}</div>
-                    <div class="kpi-subtext">Live: ${liveCount} · Blockiert: ${blockedCount}</div>
+                    <div class="kpi-subtext">Readiness ${readiness}%</div>
+                    <div class="workspace-progress">
+                        <span style="width:${readiness}%"></span>
+                    </div>
                     <div class="form-actions">
                         <button class="btn btn-secondary btn-small" type="button" data-prefill-capability="${escapeHtml(entry.key)}">Eintrag erstellen</button>
                     </div>
@@ -284,7 +471,8 @@ function initDomainWorkspace(config) {
         if (!form) return;
         form.reset();
         form.elements.recordId.value = "";
-        state.editingRecordId = null;
+        form.elements.severity.value = "medium";
+        form.elements.escalation.value = "none";
         const submit = document.getElementById("ws-record-submit");
         if (submit) submit.textContent = "Eintrag speichern";
         document.getElementById("ws-record-cancel")?.classList.add("hidden");
@@ -292,17 +480,21 @@ function initDomainWorkspace(config) {
     }
 
     function openRecordDetails(record) {
+        const meta = extractMeta(record);
+        const dueInfo = dueState(meta.dueAt);
         const payload = record?.payload && typeof record.payload === "object" ? record.payload : {};
-        const notes = String(payload.notes || "—");
         const json = escapeHtml(JSON.stringify(payload, null, 2));
         showModal(
             `Eintrag: ${escapeHtml(record.title || "—")}`,
             `
                 <p><strong>Funktion:</strong> ${escapeHtml(capabilityLabel(record.capability_key))}</p>
                 <p><strong>Status:</strong> ${escapeHtml(WORKSPACE_STATUS_LABELS[normalizedStatus(record.status)] || record.status || "—")}</p>
-                <p><strong>Owner:</strong> ${escapeHtml(record.owner_role || "—")}</p>
-                <p><strong>Event-ID:</strong> ${escapeHtml(record.event_id ? String(record.event_id) : "—")}</p>
-                <p><strong>Notiz:</strong> ${escapeHtml(notes)}</p>
+                <p><strong>Severity:</strong> ${WORKSPACE_SEVERITY_LABELS[meta.severity]}</p>
+                <p><strong>SLA:</strong> ${meta.dueAt ? escapeHtml(formatDateTime(meta.dueAt)) : "—"} (${escapeHtml(dueInfo.label)})</p>
+                <p><strong>Eskalation:</strong> ${escapeHtml(meta.escalation || "none")}</p>
+                <p><strong>Tags:</strong> ${escapeHtml(meta.tags.join(", ") || "—")}</p>
+                <p><strong>Referenz:</strong> ${escapeHtml(meta.externalRef || "—")}</p>
+                <p><strong>Notiz:</strong> ${escapeHtml(meta.notes || "—")}</p>
                 <pre class="workspace-json-preview">${json}</pre>
             `,
             [{ id: "close", label: "Schließen", primary: true }]
@@ -313,6 +505,13 @@ function initDomainWorkspace(config) {
         await api("/workflows/execute", {
             method: "POST",
             body: JSON.stringify({ workflowKey, input })
+        });
+    }
+
+    async function createDomainRecord(payload) {
+        await api("/domain-records", {
+            method: "POST",
+            body: JSON.stringify(payload)
         });
     }
 
@@ -327,31 +526,41 @@ function initDomainWorkspace(config) {
         const tbody = document.getElementById("ws-records-body");
         if (!tbody) return;
         const rows = filteredRecords();
-        const html = rows.map((entry) => `
-            <tr>
-                <td>${formatDateTime(entry.updated_at || entry.created_at)}</td>
-                <td>${escapeHtml(capabilityLabel(entry.capability_key))}</td>
-                <td><strong>${escapeHtml(entry.title || "—")}</strong></td>
-                <td>${statusBadge(normalizedStatus(entry.status))}</td>
-                <td>${escapeHtml(entry.owner_role || "—")}</td>
-                <td>${escapeHtml(entry.payload?.notes || "—")}</td>
-                <td>
-                    <div class="actions-inline">
-                        <button class="btn btn-small btn-secondary" type="button" data-view-record="${entry.id}">Details</button>
-                        ${state.canWrite ? `<button class="btn btn-small btn-secondary" type="button" data-edit-record="${entry.id}">Bearbeiten</button>` : ""}
-                        ${state.canWrite ? `<button class="btn btn-small btn-danger" type="button" data-delete-record="${entry.id}">Löschen</button>` : ""}
-                    </div>
-                </td>
-            </tr>
-        `).join("");
+        const html = rows.map((entry) => {
+            const meta = extractMeta(entry);
+            const due = dueState(meta.dueAt);
+            const tags = meta.tags.length ? `<span class="workspace-mini-pill-list">${meta.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</span>` : "";
+            const noteBlock = `
+                <div>${escapeHtml(meta.notes || "—")}</div>
+                <div class="workspace-note-meta">${severityBadge(meta.severity)} <span class="badge badge-${due.tone}">${escapeHtml(due.label)}</span></div>
+                ${tags}
+            `;
+            return `
+                <tr>
+                    <td>${formatDateTime(entry.updated_at || entry.created_at)}</td>
+                    <td>${escapeHtml(capabilityLabel(entry.capability_key))}</td>
+                    <td><strong>${escapeHtml(entry.title || "—")}</strong></td>
+                    <td>${statusBadge(normalizedStatus(entry.status))}</td>
+                    <td>${escapeHtml(entry.owner_role || "—")}</td>
+                    <td>${noteBlock}</td>
+                    <td>
+                        <div class="actions-inline">
+                            <button class="btn btn-small btn-secondary" type="button" data-view-record="${entry.id}">Details</button>
+                            ${state.canWrite ? `<button class="btn btn-small btn-secondary" type="button" data-edit-record="${entry.id}">Bearbeiten</button>` : ""}
+                            ${state.canWrite ? `<button class="btn btn-small btn-secondary" type="button" data-mark-blocked="${entry.id}">Blockiert</button>` : ""}
+                            ${state.canWrite ? `<button class="btn btn-small btn-danger" type="button" data-delete-record="${entry.id}">Löschen</button>` : ""}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join("");
         tbody.innerHTML = html || "<tr><td colspan='7' class='table-empty'>Keine Einträge für die aktuelle Filterung.</td></tr>";
 
         tbody.querySelectorAll("[data-view-record]").forEach((button) => {
             button.addEventListener("click", () => {
                 const id = Number(button.getAttribute("data-view-record"));
                 const record = state.records.find((entry) => Number(entry.id) === id);
-                if (!record) return;
-                openRecordDetails(record);
+                if (record) openRecordDetails(record);
             });
         });
 
@@ -360,6 +569,7 @@ function initDomainWorkspace(config) {
                 const id = Number(button.getAttribute("data-edit-record"));
                 const record = state.records.find((entry) => Number(entry.id) === id);
                 if (!record) return;
+                const meta = extractMeta(record);
                 const form = document.getElementById("ws-record-form");
                 form.elements.recordId.value = String(record.id);
                 form.elements.capabilityKey.value = record.capability_key || "";
@@ -367,12 +577,29 @@ function initDomainWorkspace(config) {
                 form.elements.status.value = normalizedStatus(record.status);
                 form.elements.ownerRole.value = record.owner_role || "";
                 form.elements.eventId.value = record.event_id ? String(record.event_id) : "";
-                form.elements.notes.value = record.payload?.notes || "";
-                state.editingRecordId = record.id;
+                form.elements.notes.value = meta.notes || "";
+                form.elements.severity.value = meta.severity || "medium";
+                form.elements.dueAt.value = meta.dueAt ? String(meta.dueAt).slice(0, 16) : "";
+                form.elements.escalation.value = meta.escalation || "none";
+                form.elements.tags.value = meta.tags.join(", ");
+                form.elements.externalRef.value = meta.externalRef || "";
                 const submit = document.getElementById("ws-record-submit");
                 if (submit) submit.textContent = "Eintrag aktualisieren";
                 document.getElementById("ws-record-cancel")?.classList.remove("hidden");
                 form.scrollIntoView({ behavior: "smooth", block: "start" });
+            });
+        });
+
+        tbody.querySelectorAll("[data-mark-blocked]").forEach((button) => {
+            button.addEventListener("click", async () => {
+                const id = Number(button.getAttribute("data-mark-blocked"));
+                try {
+                    await updateRecordStatus(id, "blocked");
+                    showToast("Status auf Blockiert gesetzt.", "warning");
+                    await refreshDomainWorkspacePage();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
             });
         });
 
@@ -390,43 +617,86 @@ function initDomainWorkspace(config) {
         applyReadOnlyActionButtons(tbody);
     }
 
+    function computeMetric(entry) {
+        const records = filteredRecords();
+        const kind = String(entry?.kind || "");
+        if (kind === "status_count") {
+            return records.filter((record) => normalizedStatus(record.status) === normalizedStatus(entry.status)).length;
+        }
+        if (kind === "severity_count") {
+            return records.filter((record) => normalizedSeverity(extractMeta(record).severity) === normalizedSeverity(entry.severity)).length;
+        }
+        if (kind === "overdue_count") {
+            return records.filter((record) => dueState(extractMeta(record).dueAt).overdue).length;
+        }
+        if (kind === "capability_status") {
+            return records.filter((record) => record.capability_key === entry.capabilityKey && normalizedStatus(record.status) === normalizedStatus(entry.status)).length;
+        }
+        if (kind === "capability_severity") {
+            return records.filter((record) => record.capability_key === entry.capabilityKey && normalizedSeverity(extractMeta(record).severity) === normalizedSeverity(entry.severity)).length;
+        }
+        if (kind === "blocked_capabilities") {
+            const keys = Array.isArray(entry.capabilityKeys) ? entry.capabilityKeys : [];
+            return records.filter((record) => keys.includes(record.capability_key) && normalizedStatus(record.status) === "blocked").length;
+        }
+        return 0;
+    }
+
+    function renderIntelligence() {
+        const container = document.getElementById("ws-intelligence-grid");
+        if (!container) return;
+        const intelligence = experience().intelligence;
+        if (!Array.isArray(intelligence) || intelligence.length === 0) {
+            container.innerHTML = "<div class='table-empty'>Keine Intelligence-Module konfiguriert.</div>";
+            return;
+        }
+        container.innerHTML = intelligence.map((entry) => {
+            const value = computeMetric(entry);
+            const tone = String(entry.tone || "info");
+            return `
+                <div class="workspace-intelligence-card tone-${escapeHtml(tone)}">
+                    <div class="workspace-intelligence-title">${escapeHtml(entry.title || "Metrik")}</div>
+                    <div class="workspace-intelligence-value">${value}</div>
+                </div>
+            `;
+        }).join("");
+    }
+
     function renderStatusBoard() {
         const board = document.getElementById("ws-status-board");
         if (!board) return;
         const rows = filteredRecords();
-        const html = WORKSPACE_STATUS_ORDER.map((status) => {
+        board.innerHTML = WORKSPACE_STATUS_ORDER.map((status) => {
             const items = rows.filter((entry) => normalizedStatus(entry.status) === status);
-            const rowsHtml = items.slice(0, 8).map((entry) => `
-                <li>
-                    <button type="button" class="workspace-lane-item" data-focus-record="${entry.id}">
-                        <span>${escapeHtml(entry.title || "—")}</span>
-                        <small>${escapeHtml(capabilityLabel(entry.capability_key))}</small>
-                    </button>
-                    ${
-                        state.canWrite && status !== "live"
-                            ? `<button type="button" class="btn btn-small btn-secondary" data-mark-live="${entry.id}">Live</button>`
-                            : ""
-                    }
-                </li>
-            `).join("");
+            const itemsHtml = items.slice(0, 8).map((entry) => {
+                const meta = extractMeta(entry);
+                return `
+                    <li>
+                        <button type="button" class="workspace-lane-item" data-focus-record="${entry.id}">
+                            <span>${escapeHtml(entry.title || "—")}</span>
+                            <small>${escapeHtml(capabilityLabel(entry.capability_key))}</small>
+                            <small>${WORKSPACE_SEVERITY_LABELS[meta.severity]}</small>
+                        </button>
+                        ${state.canWrite && status !== "live" ? `<button type="button" class="btn btn-small btn-secondary" data-mark-live="${entry.id}">Live</button>` : ""}
+                    </li>
+                `;
+            }).join("");
             return `
                 <section class="workspace-lane">
                     <header>
                         <span class="workspace-lane-title">${escapeHtml(WORKSPACE_STATUS_LABELS[status] || status)}</span>
                         <span class="workspace-lane-count">${items.length}</span>
                     </header>
-                    <ul>${rowsHtml || "<li class='table-empty'>Keine Einträge</li>"}</ul>
+                    <ul>${itemsHtml || "<li class='table-empty'>Keine Einträge</li>"}</ul>
                 </section>
             `;
         }).join("");
-        board.innerHTML = html;
 
         board.querySelectorAll("[data-focus-record]").forEach((button) => {
             button.addEventListener("click", () => {
                 const id = Number(button.getAttribute("data-focus-record"));
                 const record = state.records.find((entry) => Number(entry.id) === id);
-                if (!record) return;
-                openRecordDetails(record);
+                if (record) openRecordDetails(record);
             });
         });
 
@@ -445,11 +715,33 @@ function initDomainWorkspace(config) {
         applyReadOnlyActionButtons(board);
     }
 
+    function renderSlaMonitor() {
+        const tbody = document.getElementById("ws-sla-body");
+        if (!tbody) return;
+        const rows = filteredRecords()
+            .filter((entry) => extractMeta(entry).dueAt)
+            .sort((a, b) => new Date(extractMeta(a).dueAt).getTime() - new Date(extractMeta(b).dueAt).getTime())
+            .slice(0, 12);
+
+        tbody.innerHTML = rows.map((entry) => {
+            const meta = extractMeta(entry);
+            const due = dueState(meta.dueAt);
+            return `
+                <tr>
+                    <td><strong>${escapeHtml(entry.title || "—")}</strong></td>
+                    <td>${escapeHtml(capabilityLabel(entry.capability_key))}</td>
+                    <td>${severityBadge(meta.severity)}</td>
+                    <td>${escapeHtml(formatDateTime(meta.dueAt))} · <span class="badge badge-${due.tone}">${escapeHtml(due.label)}</span></td>
+                    <td>${statusBadge(normalizedStatus(entry.status))}</td>
+                </tr>
+            `;
+        }).join("") || "<tr><td colspan='5' class='table-empty'>Keine SLA-Einträge vorhanden.</td></tr>";
+    }
+
     function relevantWorkflows(scopeWorkflows = []) {
-        const byConfig = workflowKeys.length > 0
+        return workflowKeys.length > 0
             ? scopeWorkflows.filter((entry) => workflowKeys.includes(entry.key))
             : scopeWorkflows;
-        return byConfig;
     }
 
     function renderWorkflowOptions() {
@@ -491,6 +783,64 @@ function initDomainWorkspace(config) {
         });
     }
 
+    function renderPlaybooks() {
+        const box = document.getElementById("ws-playbook-actions");
+        if (!box) return;
+        const playbooks = experience().playbooks;
+        if (!Array.isArray(playbooks) || playbooks.length === 0) {
+            box.innerHTML = "<span class='workspace-muted'>Keine Playbooks konfiguriert.</span>";
+            return;
+        }
+        box.innerHTML = playbooks.map((entry, idx) => `
+            <button type="button" class="workspace-chip-btn" data-run-playbook="${idx}">${escapeHtml(entry.label || "Playbook")}</button>
+        `).join("");
+        box.querySelectorAll("[data-run-playbook]").forEach((button) => {
+            if (!state.canWrite) {
+                button.classList.add("readonly-action");
+                button.disabled = true;
+                return;
+            }
+            button.addEventListener("click", async () => {
+                const idx = Number(button.getAttribute("data-run-playbook"));
+                const playbook = playbooks[idx];
+                if (!playbook) return;
+                button.disabled = true;
+                try {
+                    const dueAt = playbook.dueHours
+                        ? new Date(Date.now() + Number(playbook.dueHours) * 60 * 60 * 1000).toISOString()
+                        : null;
+                    await createDomainRecord({
+                        domainKey,
+                        capabilityKey: playbook.capabilityKey,
+                        title: playbook.title || playbook.label || "Playbook Task",
+                        status: playbook.status || "in_progress",
+                        ownerRole: "",
+                        eventId: null,
+                        payload: {
+                            notes: playbook.note || `Playbook run: ${playbook.label || ""}`.trim(),
+                            severity: playbook.severity || "medium",
+                            dueAt,
+                            escalation: playbook.escalation || "none",
+                            tags: [`playbook:${String(playbook.label || "").toLowerCase().replace(/\s+/g, "_")}`]
+                        }
+                    });
+                    if (playbook.workflowKey) {
+                        await runWorkflow(playbook.workflowKey, {
+                            note: playbook.note || `Playbook ${playbook.label || ""}`,
+                            source: "domain-playbook"
+                        });
+                    }
+                    showToast("Playbook ausgeführt.", "success");
+                    await refreshDomainWorkspacePage();
+                } catch (error) {
+                    showToast(error.message, "error");
+                } finally {
+                    button.disabled = false;
+                }
+            });
+        });
+    }
+
     function renderWorkflowLogs() {
         const tbody = document.getElementById("ws-workflow-body");
         if (!tbody) return;
@@ -499,7 +849,7 @@ function initDomainWorkspace(config) {
                 <td>${formatDateTime(entry.created_at)}</td>
                 <td><strong>${escapeHtml(entry.workflow_name || entry.workflow_key || "—")}</strong></td>
                 <td>${statusBadge(entry.status || "completed")}</td>
-                <td>${escapeHtml(entry.payload?.decision || entry.payload?.steps?.join(" → ") || "—")}</td>
+                <td>${escapeHtml(entry.payload?.decision || entry.payload?.steps?.join(" → ") || entry.payload?.note || "—")}</td>
             </tr>
         `).join("");
         tbody.innerHTML = html || "<tr><td colspan='4' class='table-empty'>Keine Workflow-Läufe vorhanden.</td></tr>";
@@ -540,8 +890,8 @@ function initDomainWorkspace(config) {
                 const idx = Number(button.getAttribute("data-quick-action"));
                 const action = actions[idx];
                 if (!action) return;
+                const dueAt = action.dueHours ? new Date(Date.now() + Number(action.dueHours) * 60 * 60 * 1000) : null;
                 const form = document.getElementById("ws-record-form");
-                if (!form) return;
                 form.elements.recordId.value = "";
                 form.elements.capabilityKey.value = action.capabilityKey || "";
                 form.elements.title.value = action.title || "";
@@ -549,6 +899,11 @@ function initDomainWorkspace(config) {
                 form.elements.notes.value = action.note || "";
                 form.elements.ownerRole.value = "";
                 form.elements.eventId.value = "";
+                form.elements.severity.value = action.severity || "medium";
+                form.elements.escalation.value = action.escalation || "none";
+                form.elements.tags.value = action.tags ? parseTags(action.tags).join(", ") : "";
+                form.elements.externalRef.value = "";
+                form.elements.dueAt.value = dueAt ? dueAt.toISOString().slice(0, 16) : "";
                 const submit = document.getElementById("ws-record-submit");
                 if (submit) submit.textContent = "Eintrag speichern";
                 document.getElementById("ws-record-cancel")?.classList.add("hidden");
@@ -563,6 +918,13 @@ function initDomainWorkspace(config) {
         if (statusSelect && statusSelect.options.length <= 1) {
             statusSelect.innerHTML = `<option value="">Alle Status</option>${
                 WORKSPACE_STATUS_ORDER.map((status) => `<option value="${status}">${WORKSPACE_STATUS_LABELS[status]}</option>`).join("")
+            }`;
+        }
+
+        const severitySelect = document.getElementById("ws-filter-severity");
+        if (severitySelect && severitySelect.options.length <= 1) {
+            severitySelect.innerHTML = `<option value="">Alle Severity</option>${
+                WORKSPACE_SEVERITIES.map((entry) => `<option value="${entry}">${WORKSPACE_SEVERITY_LABELS[entry]}</option>`).join("")
             }`;
         }
 
@@ -593,32 +955,38 @@ function initDomainWorkspace(config) {
         }
     }
 
+    function rerenderFilteredViews() {
+        updateKpis();
+        renderIntelligence();
+        renderStatusBoard();
+        renderSlaMonitor();
+        renderRecordsTable();
+    }
+
     function bindFilterEvents() {
         const search = document.getElementById("ws-filter-search");
         const status = document.getElementById("ws-filter-status");
         const capability = document.getElementById("ws-filter-capability");
         const owner = document.getElementById("ws-filter-owner");
+        const severity = document.getElementById("ws-filter-severity");
+        const due = document.getElementById("ws-filter-due");
         const clear = document.getElementById("ws-clear-filters");
         if (!search || search.dataset.bound === "1") return;
 
-        const rerender = () => {
-            updateKpis();
-            renderRecordsTable();
-            renderStatusBoard();
-        };
-
         search.dataset.bound = "1";
-        [search, status, capability, owner].forEach((node) => {
+        [search, status, capability, owner, severity, due].forEach((node) => {
             if (!node) return;
-            node.addEventListener("input", rerender);
-            node.addEventListener("change", rerender);
+            node.addEventListener("input", rerenderFilteredViews);
+            node.addEventListener("change", rerenderFilteredViews);
         });
         clear?.addEventListener("click", () => {
             search.value = "";
             if (status) status.value = "";
             if (capability) capability.value = "";
             if (owner) owner.value = "";
-            rerender();
+            if (severity) severity.value = "";
+            if (due) due.value = "";
+            rerenderFilteredViews();
         });
     }
 
@@ -628,7 +996,6 @@ function initDomainWorkspace(config) {
             api(`/domain-records?domainKey=${encodeURIComponent(domainKey)}`),
             api("/workflows/logs")
         ]);
-
         const domains = Array.isArray(scope?.domains) ? scope.domains : [];
         const workflows = Array.isArray(scope?.workflows) ? scope.workflows : [];
         state.scopeDomain = domains.find((entry) => entry.key === domainKey) || null;
@@ -641,15 +1008,14 @@ function initDomainWorkspace(config) {
         renderRecordForm();
         renderFilterOptions();
         bindFilterEvents();
-        updateKpis();
         renderCapabilities();
         renderQuickActions();
-        renderRelatedLinks();
-        renderStatusBoard();
-        renderRecordsTable();
-        renderWorkflowOptions();
+        renderPlaybooks();
         renderWorkflowShortcuts();
+        renderRelatedLinks();
+        renderWorkflowOptions();
         renderWorkflowLogs();
+        rerenderFilteredViews();
     }
 
     window.refreshDomainWorkspacePage = refreshDomainWorkspacePage;
@@ -669,7 +1035,14 @@ function initDomainWorkspace(config) {
                 status: data.status || "planned",
                 ownerRole: data.ownerRole || "",
                 eventId: data.eventId ? Number(data.eventId) : null,
-                payload: { notes: data.notes || "" }
+                payload: {
+                    notes: data.notes || "",
+                    severity: normalizedSeverity(data.severity || "medium"),
+                    dueAt: data.dueAt ? new Date(data.dueAt).toISOString() : null,
+                    escalation: data.escalation || "none",
+                    tags: parseTags(data.tags),
+                    externalRef: data.externalRef || ""
+                }
             };
             try {
                 const recordId = Number(data.recordId || 0);
@@ -688,16 +1061,13 @@ function initDomainWorkspace(config) {
         workflowForm?.addEventListener("submit", async (event) => {
             event.preventDefault();
             const data = getFormData(workflowForm);
-            const payload = {
-                workflowKey: data.workflowKey || "",
-                input: {
+            try {
+                await runWorkflow(data.workflowKey || "", {
                     eventId: data.eventId ? Number(data.eventId) : null,
                     note: data.note || "",
-                    clearance: data.clearance === "true"
-                }
-            };
-            try {
-                await runWorkflow(payload.workflowKey, payload.input);
+                    clearance: data.clearance === "true",
+                    source: `domain:${domainKey}`
+                });
                 showToast("Workflow ausgeführt.", "success");
                 workflowForm.reset();
                 await refreshDomainWorkspacePage();

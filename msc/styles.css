@@ -763,6 +763,61 @@ html, body {
     cursor: pointer;
 }
 
+.workspace-progress {
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    background: #edf2f7;
+    overflow: hidden;
+    margin-top: 8px;
+}
+
+.workspace-progress span {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #6aa7ff, #3498db);
+}
+
+.workspace-intelligence-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+}
+
+.workspace-intelligence-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    background: var(--white);
+}
+
+.workspace-intelligence-card.tone-success {
+    border-color: rgba(39, 174, 96, 0.35);
+    background: rgba(39, 174, 96, 0.06);
+}
+
+.workspace-intelligence-card.tone-warning {
+    border-color: rgba(243, 156, 18, 0.35);
+    background: rgba(243, 156, 18, 0.08);
+}
+
+.workspace-intelligence-card.tone-danger {
+    border-color: rgba(231, 76, 60, 0.35);
+    background: rgba(231, 76, 60, 0.08);
+}
+
+.workspace-intelligence-title {
+    font-size: 12px;
+    color: var(--gray-dark);
+    margin-bottom: 8px;
+}
+
+.workspace-intelligence-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--primary-dark);
+}
+
 .workspace-lane-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -832,7 +887,7 @@ html, body {
 
 .workspace-filter-bar {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr auto;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr auto;
     gap: 10px;
     margin-bottom: 16px;
     align-items: center;
@@ -846,6 +901,29 @@ html, body {
 .workspace-muted {
     color: var(--gray-dark);
     font-size: 12px;
+}
+
+.workspace-note-meta {
+    margin-top: 6px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.workspace-mini-pill-list {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 6px;
+}
+
+.workspace-mini-pill-list span {
+    font-size: 11px;
+    background: #eef3ff;
+    color: var(--secondary);
+    border: 1px solid #d8e4ff;
+    border-radius: 999px;
+    padding: 2px 8px;
 }
 
 .workspace-json-preview {
@@ -977,7 +1055,7 @@ html, body {
     }
 
     .workspace-filter-bar {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(3, 1fr);
     }
 }
 

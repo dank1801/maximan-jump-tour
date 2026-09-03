@@ -45,17 +45,6 @@ const PAGE_PERMISSION_RULES = {
             "msc_admin.write", "loc.write", "team_portal.write", "athlete_app.write", "public_site.write"
         ]
     },
-    "domain.html": {
-        readAny: [
-            "dashboard.read",
-            "msc_admin.read", "msc_admin.write",
-            "loc.read", "loc.write",
-            "team_portal.read", "team_portal.write",
-            "athlete_app.read", "athlete_app.write",
-            "public_site.read", "public_site.write"
-        ],
-        writeAny: ["dashboard.read", "msc_admin.write", "loc.write", "team_portal.write", "athlete_app.write", "public_site.write"]
-    },
     "msc-admin.html": { readAny: ["dashboard.read", "msc_admin.read", "msc_admin.write"], writeAny: ["dashboard.read", "msc_admin.write"] },
     "loc-dashboard.html": { readAny: ["dashboard.read", "loc.read", "loc.write"], writeAny: ["dashboard.read", "loc.write"] },
     "team-portal.html": { readAny: ["dashboard.read", "team_portal.read", "team_portal.write"], writeAny: ["dashboard.read", "team_portal.write"] },
@@ -72,7 +61,6 @@ const PAGE_WRITE_FORM_SELECTORS = {
     "transfers.html": ["#transfer-window-form", "#create-transfer-form"],
     "reporting.html": ["#create-publication-form"],
     "operations.html": ["#module-record-form", "#workflow-execution-form", "#domain-record-form"],
-    "domain.html": ["#domain-studio-form"],
     "msc-admin.html": ["#ws-record-form", "#ws-workflow-form"],
     "loc-dashboard.html": ["#ws-record-form", "#ws-workflow-form"],
     "team-portal.html": ["#ws-record-form", "#ws-workflow-form"],
@@ -89,12 +77,11 @@ const PAGE_READONLY_ACTION_SELECTORS = {
     "transfers.html": ["#transfers-list .btn", "#contracts-list .btn"],
     "reporting.html": ["#audit-log-tbody + .form-actions .btn", "#publications-list .btn"],
     "operations.html": ["#module-records-body .btn", "#workflow-logs-body .btn", "#domain-records-body .btn"],
-    "domain.html": ["#domain-studio-records .btn", "#domain-studio-switch .btn"],
-    "msc-admin.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-run-workflow]", "[data-quick-action]"],
-    "loc-dashboard.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-run-workflow]", "[data-quick-action]"],
-    "team-portal.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-run-workflow]", "[data-quick-action]"],
-    "athlete-app.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-run-workflow]", "[data-quick-action]"],
-    "public-site.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-run-workflow]", "[data-quick-action]"],
+    "msc-admin.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-mark-blocked]", "[data-run-workflow]", "[data-run-playbook]", "[data-quick-action]"],
+    "loc-dashboard.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-mark-blocked]", "[data-run-workflow]", "[data-run-playbook]", "[data-quick-action]"],
+    "team-portal.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-mark-blocked]", "[data-run-workflow]", "[data-run-playbook]", "[data-quick-action]"],
+    "athlete-app.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-mark-blocked]", "[data-run-workflow]", "[data-run-playbook]", "[data-quick-action]"],
+    "public-site.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-mark-blocked]", "[data-run-workflow]", "[data-run-playbook]", "[data-quick-action]"],
 };
 
 // ============ HELPERS ============
@@ -566,14 +553,6 @@ function applyNavPermissionVisibility() {
         "team-portal.html": ["dashboard.read", "team_portal.read", "team_portal.write"],
         "athlete-app.html": ["dashboard.read", "athlete_app.read", "athlete_app.write"],
         "public-site.html": ["dashboard.read", "public_site.read", "public_site.write"],
-        "domain.html": [
-            "dashboard.read",
-            "msc_admin.read", "msc_admin.write",
-            "loc.read", "loc.write",
-            "team_portal.read", "team_portal.write",
-            "athlete_app.read", "athlete_app.write",
-            "public_site.read", "public_site.write"
-        ],
         "settings.html": ["settings.read", "settings.write"]
     };
     document.querySelectorAll(".portal-nav a").forEach((link) => {
@@ -2074,10 +2053,6 @@ async function rerenderCurrentPageForTimezone() {
         if (typeof window.refreshDomainWorkspacePage === "function") {
             await window.refreshDomainWorkspacePage();
         }
-    } else if (page === "domain.html") {
-        if (typeof window.refreshDomainStudioPage === "function") {
-            await window.refreshDomainStudioPage();
-        }
     }
 }
 
@@ -2132,10 +2107,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             } else if (isDomainWorkspacePage(page)) {
                 if (typeof window.refreshDomainWorkspacePage === "function") {
                     await window.refreshDomainWorkspacePage();
-                }
-            } else if (page === "domain.html") {
-                if (typeof window.refreshDomainStudioPage === "function") {
-                    await window.refreshDomainStudioPage();
                 }
             }
         }
