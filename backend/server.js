@@ -1386,7 +1386,16 @@ function getUserScopeAssignments(userId) {
 const app = express();
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
-app.use(helmet());
+app.use(helmet({
+    contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+            "script-src": ["'self'", "'unsafe-inline'"],
+            "script-src-attr": ["'unsafe-inline'"],
+            "connect-src": ["'self'", "ws:", "wss:"]
+        }
+    }
+}));
 app.use(compression());
 app.use(morgan(IS_PRODUCTION ? "combined" : "dev"));
 app.use(cors({ origin: CORS_ORIGIN === "*" ? true : CORS_ORIGIN }));
