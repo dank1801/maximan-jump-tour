@@ -24,7 +24,20 @@ const PAGE_PERMISSION_RULES = {
     "points.html": { readAny: ["point_rules.read", "point_rules.write"], writeAny: ["point_rules.write"] },
     "transfers.html": { readAny: ["transfers.read", "transfers.write"], writeAny: ["transfers.write"] },
     "reporting.html": { readAny: ["audit.read", "publications.read", "public_api.read", "event_scores.read", "publications.write"], writeAny: ["publications.write"] },
-    "operations.html": { readAny: ["dashboard.read", "workflows.execute"], writeAny: ["dashboard.read", "workflows.execute"] },
+    "operations.html": {
+        readAny: [
+            "dashboard.read", "workflows.execute",
+            "msc_admin.read", "msc_admin.write",
+            "loc.read", "loc.write",
+            "team_portal.read", "team_portal.write",
+            "athlete_app.read", "athlete_app.write",
+            "public_site.read", "public_site.write"
+        ],
+        writeAny: [
+            "dashboard.read", "workflows.execute",
+            "msc_admin.write", "loc.write", "team_portal.write", "athlete_app.write", "public_site.write"
+        ]
+    },
     "settings.html": { readAny: ["settings.read", "settings.write"], writeAny: ["settings.write"] }
 };
 
@@ -35,7 +48,7 @@ const PAGE_WRITE_FORM_SELECTORS = {
     "points.html": ["#points-rules-form"],
     "transfers.html": ["#transfer-window-form", "#create-transfer-form"],
     "reporting.html": ["#create-publication-form"],
-    "operations.html": ["#module-record-form", "#workflow-execution-form"],
+    "operations.html": ["#module-record-form", "#workflow-execution-form", "#domain-record-form"],
     "settings.html": ["#system-config-form", "#security-config-form", "#email-config-form"]
 };
 
@@ -46,7 +59,7 @@ const PAGE_READONLY_ACTION_SELECTORS = {
     "points.html": ["#save-rule-button", "#reset-rule-button", "#add-points-row", "#add-bonus-profile", "#generate-scale", "#normalize-scale", "#clear-scale"],
     "transfers.html": ["#transfers-list .btn", "#contracts-list .btn"],
     "reporting.html": ["#audit-log-tbody + .form-actions .btn", "#publications-list .btn"],
-    "operations.html": ["#module-records-list .btn", "#workflow-logs-list .btn"]
+    "operations.html": ["#module-records-body .btn", "#workflow-logs-body .btn", "#domain-records-body .btn"]
 };
 
 // ============ HELPERS ============
@@ -879,7 +892,17 @@ const PERMISSION_LABELS = {
     "accreditation.read": "Akkreditierungen lesen",
     "accreditation.write": "Akkreditierungen verwalten",
     "public_api.read": "Public API lesen",
-    "workflows.execute": "Workflows ausführen"
+    "workflows.execute": "Workflows ausführen",
+    "msc_admin.read": "MSC Admin lesen",
+    "msc_admin.write": "MSC Admin verwalten",
+    "loc.read": "LOC Dashboard lesen",
+    "loc.write": "LOC Dashboard verwalten",
+    "team_portal.read": "Team Portal lesen",
+    "team_portal.write": "Team Portal verwalten",
+    "athlete_app.read": "Athlete App lesen",
+    "athlete_app.write": "Athlete App verwalten",
+    "public_site.read": "Public Site lesen",
+    "public_site.write": "Public Site verwalten"
 };
 
 const usersPageState = {

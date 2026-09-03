@@ -349,6 +349,25 @@ function initDb() {
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS domain_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            domain_key TEXT NOT NULL,
+            capability_key TEXT NOT NULL,
+            title TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'planned',
+            owner_role TEXT,
+            event_id INTEGER,
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            created_by INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE SET NULL,
+            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_domain_records_domain ON domain_records(domain_key);
+        CREATE INDEX IF NOT EXISTS idx_domain_records_capability ON domain_records(capability_key);
+        CREATE INDEX IF NOT EXISTS idx_domain_records_event ON domain_records(event_id);
+
         CREATE TABLE IF NOT EXISTS workflow_runs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             workflow_key TEXT NOT NULL,
@@ -575,7 +594,17 @@ const ALL_PERMISSIONS = [
     "accreditation.read",
     "accreditation.write",
     "public_api.read",
-    "workflows.execute"
+    "workflows.execute",
+    "msc_admin.read",
+    "msc_admin.write",
+    "loc.read",
+    "loc.write",
+    "team_portal.read",
+    "team_portal.write",
+    "athlete_app.read",
+    "athlete_app.write",
+    "public_site.read",
+    "public_site.write"
 ];
 
 const DEFAULT_ROLE_DEFINITIONS = [
@@ -598,7 +627,10 @@ const DEFAULT_ROLE_DEFINITIONS = [
             "point_rules.read",
             "event_scores.read",
             "transfers.read",
-            "contracts.read"
+            "contracts.read",
+            "team_portal.read",
+            "team_portal.write",
+            "athlete_app.read"
         ]
     },
     {
@@ -618,7 +650,13 @@ const DEFAULT_ROLE_DEFINITIONS = [
             "teams.read",
             "team_members.read",
             "transfers.read",
-            "publications.read"
+            "publications.read",
+            "msc_admin.read",
+            "msc_admin.write",
+            "loc.read",
+            "loc.write",
+            "athlete_app.read",
+            "public_site.read"
         ]
     },
     {
@@ -634,7 +672,10 @@ const DEFAULT_ROLE_DEFINITIONS = [
             "transfers.write",
             "contracts.read",
             "contracts.write",
-            "audit.read"
+            "audit.read",
+            "team_portal.read",
+            "team_portal.write",
+            "athlete_app.read"
         ]
     },
     {
@@ -648,7 +689,43 @@ const DEFAULT_ROLE_DEFINITIONS = [
             "event_scores.read",
             "publications.read",
             "publications.write",
-            "audit.read"
+            "audit.read",
+            "public_site.read",
+            "public_site.write",
+            "athlete_app.read"
+        ]
+    },
+    {
+        name: "LOC Operator",
+        description: "Steuert lokale Event-Operationen an Schanzen und Sicherheit.",
+        requiredAssignments: ["venue", "event"],
+        permissions: [
+            "dashboard.read",
+            "events.read",
+            "events.write",
+            "venues.read",
+            "venues.write",
+            "competition_engine.read",
+            "competition_engine.write",
+            "loc.read",
+            "loc.write",
+            "workflows.execute"
+        ]
+    },
+    {
+        name: "Athlete Service",
+        description: "Verwaltet Athlete-App Prozesse inklusive Medical und Notifications.",
+        requiredAssignments: ["event"],
+        permissions: [
+            "dashboard.read",
+            "events.read",
+            "event_scores.read",
+            "medical.read",
+            "medical.write",
+            "athlete_app.read",
+            "athlete_app.write",
+            "team_portal.read",
+            "public_site.read"
         ]
     }
 ];
@@ -701,6 +778,80 @@ const SYSTEM_SCOPE_MODULES = [
     { key: "reporting_public_api", name: "Reporting & Public API", priority: "critical", category: "media" }
 ];
 
+const PORTAL_DOMAIN_BLUEPRINTS = [
+    {
+        key: "msc_admin",
+        name: "MSC Admin Dashboard",
+        description: "Regelversionierung, Saisonplanung, Jury, Disziplinar, Finanzen",
+        readPermission: "msc_admin.read",
+        writePermission: "msc_admin.write",
+        capabilities: [
+            { key: "rule_versioning", name: "Regelversionierung" },
+            { key: "season_planning", name: "Saisonplanung" },
+            { key: "jury_management", name: "Jury-Management" },
+            { key: "discipline_cases", name: "Disziplinarfälle" },
+            { key: "finance_operations", name: "Finanzprozesse" }
+        ]
+    },
+    {
+        key: "loc",
+        name: "LOC Dashboard",
+        description: "Schanzenfreigabe, Windmonitoring, Gate Panel, Notfallprotokolle",
+        readPermission: "loc.read",
+        writePermission: "loc.write",
+        capabilities: [
+            { key: "hill_clearance", name: "Schanzenfreigabe" },
+            { key: "wind_monitoring", name: "Windmonitoring" },
+            { key: "gate_panel", name: "Gate Panel" },
+            { key: "emergency_protocols", name: "Notfallprotokolle" }
+        ]
+    },
+    {
+        key: "team_portal",
+        name: "Team Portal",
+        description: "Registrierung, Athleten, Materialchecks, Transfers, Medical Uploads",
+        readPermission: "team_portal.read",
+        writePermission: "team_portal.write",
+        capabilities: [
+            { key: "registration", name: "Registrierung" },
+            { key: "athlete_registry", name: "Athletenverwaltung" },
+            { key: "material_checks", name: "Materialchecks" },
+            { key: "transfer_control", name: "Transfers" },
+            { key: "medical_uploads", name: "Medical Uploads" }
+        ]
+    },
+    {
+        key: "athlete_app",
+        name: "Athlete App",
+        description: "Profile, Medical Clearance, Startlisten, Ergebnisse, Notifications",
+        readPermission: "athlete_app.read",
+        writePermission: "athlete_app.write",
+        capabilities: [
+            { key: "profiles", name: "Profile" },
+            { key: "medical_clearance", name: "Medical Clearance" },
+            { key: "startlists", name: "Startlisten" },
+            { key: "results", name: "Ergebnisse" },
+            { key: "notifications", name: "Notifications" }
+        ]
+    },
+    {
+        key: "public_site",
+        name: "Public Site",
+        description: "Live Ticker, Startlisten, Standings, Clips mit Embargo-Regeln",
+        readPermission: "public_site.read",
+        writePermission: "public_site.write",
+        capabilities: [
+            { key: "live_ticker", name: "Live Ticker" },
+            { key: "startlists", name: "Startlisten" },
+            { key: "standings", name: "Standings" },
+            { key: "embargo_clips", name: "Clips & Embargo" }
+        ]
+    }
+];
+
+const DOMAIN_READ_PERMISSIONS = PORTAL_DOMAIN_BLUEPRINTS.map((entry) => entry.readPermission);
+const DOMAIN_WRITE_PERMISSIONS = PORTAL_DOMAIN_BLUEPRINTS.map((entry) => entry.writePermission);
+
 const WORKFLOW_BLUEPRINTS = [
     {
         key: "event_setup",
@@ -721,6 +872,26 @@ const WORKFLOW_BLUEPRINTS = [
         key: "medical_flow",
         name: "Medical Flow",
         steps: ["SPU/ZU/FPU/NSU Upload", "Medical Clearance gesetzt", "Startfreigabe geprüft"]
+    },
+    {
+        key: "loc_emergency_activation",
+        name: "LOC Emergency Activation",
+        steps: ["Notfallprotokoll aktivieren", "Gate Freeze", "Medical/Jury alarmieren", "Incident Audit schreiben"]
+    },
+    {
+        key: "team_registration_review",
+        name: "Team Registration Review",
+        steps: ["Registrierung prüfen", "Materialcheck verifizieren", "Medical Upload checken", "Startrecht vergeben"]
+    },
+    {
+        key: "public_embargo_release",
+        name: "Public Embargo Release",
+        steps: ["Embargo-Clip validieren", "Release-Fenster prüfen", "Freigabe signieren", "Public Push auslösen"]
+    },
+    {
+        key: "athlete_clearance_gate",
+        name: "Athlete Clearance Gate",
+        steps: ["Athlete-Profil laden", "Medical Clearance prüfen", "Startliste aktualisieren", "Status benachrichtigen"]
     }
 ];
 
@@ -1165,6 +1336,37 @@ function requireAnyPermission(permissions) {
         }
         next();
     };
+}
+
+function findDomainBlueprint(domainKey) {
+    const normalized = String(domainKey || "").trim();
+    return PORTAL_DOMAIN_BLUEPRINTS.find((entry) => entry.key === normalized) || null;
+}
+
+function isValidDomainCapability(domainKey, capabilityKey) {
+    const domain = findDomainBlueprint(domainKey);
+    if (!domain) return false;
+    const normalizedCapability = String(capabilityKey || "").trim();
+    return domain.capabilities.some((entry) => entry.key === normalizedCapability);
+}
+
+function hasPermissionValue(user, permission) {
+    const permissions = parsePermissions(user?.permissions || []);
+    return permissions.includes(permission);
+}
+
+function assertDomainPermission(res, user, domainKey, permissionType) {
+    const domain = findDomainBlueprint(domainKey);
+    if (!domain) {
+        res.status(400).json({ error: "Unbekannte Domäne" });
+        return null;
+    }
+    const requiredPermission = permissionType === "write" ? domain.writePermission : domain.readPermission;
+    if (!hasPermissionValue(user, requiredPermission)) {
+        res.status(403).json({ error: `Missing permission: ${requiredPermission}` });
+        return null;
+    }
+    return domain;
 }
 
 function logAudit(actor, action, entityType, entityId, details) {
@@ -2469,7 +2671,11 @@ app.get("/api/point-rules", authRequired, requirePermission("point_rules.read"),
     res.json(db.prepare("SELECT * FROM point_rules ORDER BY id DESC").all());
 });
 
-app.get("/api/system-scope", authRequired, requirePermission("dashboard.read"), (_req, res) => {
+app.get(
+    "/api/system-scope",
+    authRequired,
+    requireAnyPermission(["dashboard.read", ...DOMAIN_READ_PERMISSIONS, ...DOMAIN_WRITE_PERMISSIONS, "workflows.execute"]),
+    (_req, res) => {
     const rows = db
         .prepare("SELECT module_key, title, status, owner_role, payload_json, created_at, updated_at FROM module_records ORDER BY id DESC")
         .all();
@@ -2495,11 +2701,213 @@ app.get("/api/system-scope", authRequired, requirePermission("dashboard.read"), 
         ...entry,
         state: latestPerModule[entry.key] || null
     }));
+
+    const domainRows = db
+        .prepare(
+            `SELECT domain_key, capability_key, title, status, owner_role, payload_json, created_at, updated_at
+             FROM domain_records
+             ORDER BY id DESC`
+        )
+        .all();
+    const latestPerDomain = {};
+    domainRows.forEach((row) => {
+        if (latestPerDomain[row.domain_key]) return;
+        latestPerDomain[row.domain_key] = {
+            capabilityKey: row.capability_key,
+            title: row.title,
+            status: row.status,
+            ownerRole: row.owner_role || null,
+            payload: parseConfigJsonSafely(row.payload_json),
+            created_at: row.created_at,
+            updated_at: row.updated_at
+        };
+    });
+    const workflows = WORKFLOW_BLUEPRINTS.filter((workflow) => {
+        if (hasPermissionValue(_req.user, "dashboard.read") || hasPermissionValue(_req.user, "workflows.execute")) return true;
+        if (workflow.key.startsWith("loc_")) return hasPermissionValue(_req.user, "loc.write");
+        if (workflow.key.startsWith("team_")) return hasPermissionValue(_req.user, "team_portal.write");
+        if (workflow.key.startsWith("public_")) return hasPermissionValue(_req.user, "public_site.write");
+        if (workflow.key.startsWith("athlete_")) return hasPermissionValue(_req.user, "athlete_app.write");
+        if (workflow.key.startsWith("medical_")) return hasPermissionValue(_req.user, "athlete_app.write") || hasPermissionValue(_req.user, "medical.write");
+        return true;
+    });
+
+    const visibleDomains = PORTAL_DOMAIN_BLUEPRINTS.filter(
+        (entry) =>
+            hasPermissionValue(_req.user, "dashboard.read")
+            || hasPermissionValue(_req.user, entry.readPermission)
+            || hasPermissionValue(_req.user, entry.writePermission)
+    );
+
     res.json({
         modules,
-        workflows: WORKFLOW_BLUEPRINTS
+        domains: visibleDomains.map((entry) => ({
+            ...entry,
+            state: latestPerDomain[entry.key] || null
+        })),
+        workflows
     });
 });
+
+app.get(
+    "/api/domain-records",
+    authRequired,
+    requireAnyPermission([...DOMAIN_READ_PERMISSIONS, ...DOMAIN_WRITE_PERMISSIONS, "dashboard.read"]),
+    (req, res) => {
+        const requestedDomain = String(req.query.domainKey || "").trim();
+        const requestedCapability = String(req.query.capabilityKey || "").trim();
+        if (requestedDomain) {
+            const domain = assertDomainPermission(res, req.user, requestedDomain, "read");
+            if (!domain) return;
+            if (requestedCapability && !isValidDomainCapability(domain.key, requestedCapability)) {
+                res.status(400).json({ error: "Unbekannte Capability für diese Domäne" });
+                return;
+            }
+        }
+
+        const readableDomains = PORTAL_DOMAIN_BLUEPRINTS
+            .filter((entry) => hasPermissionValue(req.user, entry.readPermission) || hasPermissionValue(req.user, entry.writePermission))
+            .map((entry) => entry.key);
+        if (readableDomains.length === 0 && !hasPermissionValue(req.user, "dashboard.read")) {
+            res.json([]);
+            return;
+        }
+
+        let rows = db.prepare("SELECT * FROM domain_records ORDER BY id DESC LIMIT 500").all();
+        if (requestedDomain) {
+            rows = rows.filter((row) => row.domain_key === requestedDomain);
+        } else if (!hasPermissionValue(req.user, "dashboard.read")) {
+            rows = rows.filter((row) => readableDomains.includes(row.domain_key));
+        }
+        if (requestedCapability) {
+            rows = rows.filter((row) => row.capability_key === requestedCapability);
+        }
+        res.json(rows.map((row) => ({
+            ...row,
+            payload: parseConfigJsonSafely(row.payload_json)
+        })));
+    }
+);
+
+app.post(
+    "/api/domain-records",
+    authRequired,
+    requireAnyPermission([...DOMAIN_WRITE_PERMISSIONS, "dashboard.read"]),
+    (req, res) => {
+        const domainKey = String(req.body?.domainKey || "").trim();
+        const capabilityKey = String(req.body?.capabilityKey || "").trim();
+        const title = String(req.body?.title || "").trim();
+        if (!domainKey || !capabilityKey || !title) {
+            res.status(400).json({ error: "domainKey, capabilityKey und title sind erforderlich" });
+            return;
+        }
+        const domain = assertDomainPermission(res, req.user, domainKey, "write");
+        if (!domain) return;
+        if (!isValidDomainCapability(domainKey, capabilityKey)) {
+            res.status(400).json({ error: "Unbekannte Capability für diese Domäne" });
+            return;
+        }
+        const status = String(req.body?.status || "planned").trim();
+        const ownerRole = req.body?.ownerRole ? String(req.body.ownerRole).trim() : null;
+        const eventId = req.body?.eventId ? parseId(req.body.eventId) : null;
+        if (req.body?.eventId && !eventId) {
+            res.status(400).json({ error: "Ungültige Event-ID" });
+            return;
+        }
+        const payloadJson = JSON.stringify(req.body?.payload || {});
+        const result = db.prepare(
+            `INSERT INTO domain_records
+             (domain_key, capability_key, title, status, owner_role, event_id, payload_json, created_by, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+        ).run(domain.key, capabilityKey, title, status, ownerRole, eventId, payloadJson, req.user.sub);
+        const created = db.prepare("SELECT * FROM domain_records WHERE id = ?").get(result.lastInsertRowid);
+        logAudit(req.user, "CREATE_DOMAIN_RECORD", "domain_records", created.id, `${domain.key}/${capabilityKey}: ${title}`);
+        res.status(201).json({
+            ...created,
+            payload: parseConfigJsonSafely(created.payload_json)
+        });
+    }
+);
+
+app.patch(
+    "/api/domain-records/:id",
+    authRequired,
+    requireAnyPermission([...DOMAIN_WRITE_PERMISSIONS, "dashboard.read"]),
+    (req, res) => {
+        const id = parseId(req.params.id);
+        if (!id) {
+            res.status(400).json({ error: "Ungültige Datensatz-ID" });
+            return;
+        }
+        const existing = db.prepare("SELECT * FROM domain_records WHERE id = ?").get(id);
+        if (!existing) {
+            res.status(404).json({ error: "Datensatz nicht gefunden" });
+            return;
+        }
+        const domain = assertDomainPermission(res, req.user, existing.domain_key, "write");
+        if (!domain) return;
+
+        const nextCapability = req.body?.capabilityKey !== undefined
+            ? String(req.body.capabilityKey || "").trim()
+            : existing.capability_key;
+        if (!nextCapability || !isValidDomainCapability(existing.domain_key, nextCapability)) {
+            res.status(400).json({ error: "Unbekannte Capability für diese Domäne" });
+            return;
+        }
+        const nextTitle = req.body?.title !== undefined ? String(req.body.title || "").trim() : existing.title;
+        if (!nextTitle) {
+            res.status(400).json({ error: "title darf nicht leer sein" });
+            return;
+        }
+        const nextStatus = req.body?.status !== undefined ? String(req.body.status || "").trim() : existing.status;
+        const nextOwnerRole = req.body?.ownerRole !== undefined
+            ? (req.body.ownerRole ? String(req.body.ownerRole).trim() : null)
+            : existing.owner_role;
+        let nextEventId = existing.event_id;
+        if (req.body?.eventId !== undefined) {
+            nextEventId = req.body.eventId ? parseId(req.body.eventId) : null;
+            if (req.body.eventId && !nextEventId) {
+                res.status(400).json({ error: "Ungültige Event-ID" });
+                return;
+            }
+        }
+        const payloadSource = req.body?.payload !== undefined ? req.body.payload : parseConfigJsonSafely(existing.payload_json);
+        db.prepare(
+            `UPDATE domain_records
+             SET capability_key = ?, title = ?, status = ?, owner_role = ?, event_id = ?, payload_json = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?`
+        ).run(nextCapability, nextTitle, nextStatus, nextOwnerRole, nextEventId, JSON.stringify(payloadSource || {}), id);
+        const updated = db.prepare("SELECT * FROM domain_records WHERE id = ?").get(id);
+        logAudit(req.user, "UPDATE_DOMAIN_RECORD", "domain_records", id, `${updated.domain_key}/${updated.capability_key}: ${updated.title}`);
+        res.json({
+            ...updated,
+            payload: parseConfigJsonSafely(updated.payload_json)
+        });
+    }
+);
+
+app.delete(
+    "/api/domain-records/:id",
+    authRequired,
+    requireAnyPermission([...DOMAIN_WRITE_PERMISSIONS, "dashboard.read"]),
+    (req, res) => {
+        const id = parseId(req.params.id);
+        if (!id) {
+            res.status(400).json({ error: "Ungültige Datensatz-ID" });
+            return;
+        }
+        const existing = db.prepare("SELECT id, domain_key, capability_key, title FROM domain_records WHERE id = ?").get(id);
+        if (!existing) {
+            res.status(404).json({ error: "Datensatz nicht gefunden" });
+            return;
+        }
+        const domain = assertDomainPermission(res, req.user, existing.domain_key, "write");
+        if (!domain) return;
+        db.prepare("DELETE FROM domain_records WHERE id = ?").run(id);
+        logAudit(req.user, "DELETE_DOMAIN_RECORD", "domain_records", id, `${domain.key}/${existing.capability_key}: ${existing.title}`);
+        res.status(204).send();
+    }
+);
 
 app.get("/api/module-records", authRequired, requirePermission("dashboard.read"), (req, res) => {
     const moduleKey = String(req.query.moduleKey || "").trim();
@@ -2589,7 +2997,11 @@ app.delete("/api/module-records/:id", authRequired, requirePermission("dashboard
     res.status(204).send();
 });
 
-app.post("/api/workflows/execute", authRequired, requireAnyPermission(["dashboard.read", "workflows.execute"]), (req, res) => {
+app.post(
+    "/api/workflows/execute",
+    authRequired,
+    requireAnyPermission(["dashboard.read", "workflows.execute", ...DOMAIN_WRITE_PERMISSIONS]),
+    (req, res) => {
     const workflowKey = String(req.body?.workflowKey || "").trim();
     const workflow = WORKFLOW_BLUEPRINTS.find((entry) => entry.key === workflowKey);
     if (!workflow) {
@@ -2610,6 +3022,21 @@ app.post("/api/workflows/execute", authRequired, requireAnyPermission(["dashboar
     if (workflow.key === "jury_intervention") {
         payload.decision = "Intervention dokumentiert, Teams benachrichtigt, Recalc markiert";
     }
+    if (workflow.key === "loc_emergency_activation") {
+        payload.decision = "LOC-Notfallkette ausgelöst, Gate auf Hold gesetzt, Eskalation dokumentiert";
+        payload.priority = "critical";
+    }
+    if (workflow.key === "team_registration_review" && !input.eventId) {
+        status = "blocked";
+        payload.decision = "Registrierungsreview benötigt eine gültige Event-ID";
+    }
+    if (workflow.key === "public_embargo_release") {
+        payload.decision = "Embargo-Release vorbereitet und für Public Push protokolliert";
+    }
+    if (workflow.key === "athlete_clearance_gate" && input.clearance !== true) {
+        status = "blocked";
+        payload.decision = "Athlete Clearance Gate verweigert: Clearance fehlt";
+    }
     const result = db.prepare(
         `INSERT INTO workflow_runs (workflow_key, workflow_name, status, payload_json, created_by)
          VALUES (?, ?, ?, ?, ?)`
@@ -2622,9 +3049,23 @@ app.post("/api/workflows/execute", authRequired, requireAnyPermission(["dashboar
     });
 });
 
-app.get("/api/workflows/logs", authRequired, requirePermission("dashboard.read"), (_req, res) => {
+app.get(
+    "/api/workflows/logs",
+    authRequired,
+    requireAnyPermission(["dashboard.read", "workflows.execute", ...DOMAIN_READ_PERMISSIONS, ...DOMAIN_WRITE_PERMISSIONS]),
+    (req, res) => {
     const rows = db.prepare("SELECT * FROM workflow_runs ORDER BY id DESC LIMIT 200").all();
-    const mapped = rows.map((row) => ({
+    const filteredRows = rows.filter((row) => {
+        if (hasPermissionValue(req.user, "dashboard.read") || hasPermissionValue(req.user, "workflows.execute")) return true;
+        if (row.workflow_key.startsWith("loc_")) return hasPermissionValue(req.user, "loc.read") || hasPermissionValue(req.user, "loc.write");
+        if (row.workflow_key.startsWith("team_")) return hasPermissionValue(req.user, "team_portal.read") || hasPermissionValue(req.user, "team_portal.write");
+        if (row.workflow_key.startsWith("public_")) return hasPermissionValue(req.user, "public_site.read") || hasPermissionValue(req.user, "public_site.write");
+        if (row.workflow_key.startsWith("athlete_") || row.workflow_key.startsWith("medical_")) {
+            return hasPermissionValue(req.user, "athlete_app.read") || hasPermissionValue(req.user, "athlete_app.write");
+        }
+        return true;
+    });
+    const mapped = filteredRows.map((row) => ({
         ...row,
         payload: parseConfigJsonSafely(row.payload_json)
     }));

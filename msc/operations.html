@@ -90,6 +90,72 @@
 
                 <div class="card">
                     <div class="card-header">
+                        <h2>Domänensteuerung (MSC / LOC / Team / Athlete / Public)</h2>
+                    </div>
+                    <form id="domain-record-form">
+                        <div class="grid-3">
+                            <div class="form-group">
+                                <label>Domäne *</label>
+                                <select name="domainKey" id="domain-record-domain" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Funktion *</label>
+                                <select name="capabilityKey" id="domain-record-capability" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Status *</label>
+                                <select name="status" required>
+                                    <option value="planned">Geplant</option>
+                                    <option value="in_progress">In Bearbeitung</option>
+                                    <option value="live">Live</option>
+                                    <option value="blocked">Blockiert</option>
+                                    <option value="completed">Abgeschlossen</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Titel *</label>
+                                <input type="text" name="title" placeholder="Beispiel: Windmonitoring Event 6 kalibriert" required />
+                            </div>
+                            <div class="form-group">
+                                <label>Owner Rolle</label>
+                                <input type="text" name="ownerRole" placeholder="z.B. LOC Operator, Jury, Teammanager" />
+                            </div>
+                            <div class="form-group">
+                                <label>Event-ID (optional)</label>
+                                <input type="number" name="eventId" min="1" placeholder="z.B. 8" />
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Detailnotiz</label>
+                            <textarea name="notes" placeholder="Konkrete Maßnahme, Entscheidung oder Ergebnis"></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">Domäneneintrag speichern</button>
+                        </div>
+                    </form>
+                    <div class="card-body">
+                        <div class="form-actions">
+                            <select id="domain-record-filter" class="btn btn-secondary btn-small"></select>
+                        </div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Zeit</th>
+                                    <th>Domäne</th>
+                                    <th>Funktion</th>
+                                    <th>Titel</th>
+                                    <th>Status</th>
+                                    <th>Details</th>
+                                    <th>Aktion</th>
+                                </tr>
+                            </thead>
+                            <tbody id="domain-records-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
                         <h2>Moduleintrag erfassen</h2>
                     </div>
                     <form id="module-record-form">
@@ -235,8 +301,10 @@
         if (!isLoginPage()) {
             const state = {
                 modules: [],
+                domains: [],
                 workflows: [],
                 records: [],
+                domainRecords: [],
                 workflowLogs: []
             };
 
@@ -254,6 +322,50 @@
                     .map((workflowEntry) => `<option value="${escapeHtml(workflowEntry.key)}">${escapeHtml(workflowEntry.name)}</option>`)
                     .join("");
                 workflowSelect.innerHTML = `<option value="">-- Bitte auswählen --</option>${options}`;
+            }
+
+            function capabilitiesForDomain(domainKey) {
+                const domain = state.domains.find((entry) => entry.key === domainKey);
+                return Array.isArray(domain?.capabilities) ? domain.capabilities : [];
+            }
+
+            function domainLabel(domainKey) {
+                return state.domains.find((entry) => entry.key === domainKey)?.name || domainKey || "—";
+            }
+
+            function capabilityLabel(domainKey, capabilityKey) {
+                const capability = capabilitiesForDomain(domainKey).find((entry) => entry.key === capabilityKey);
+                return capability?.name || capabilityKey || "—";
+            }
+
+            function renderDomainOptions() {
+                const domainSelect = document.getElementById("domain-record-domain");
+                const filterSelect = document.getElementById("domain-record-filter");
+                const options = state.domains
+                    .map((entry) => `<option value="${escapeHtml(entry.key)}">${escapeHtml(entry.name)}</option>`)
+                    .join("");
+                domainSelect.innerHTML = `<option value="">-- Bitte auswählen --</option>${options}`;
+                const selected = filterSelect?.value || "";
+                if (filterSelect) {
+                    filterSelect.innerHTML = `<option value="">Alle Domänen</option>${options}`;
+                    filterSelect.value = selected;
+                }
+                if (!domainSelect.value && state.domains.length > 0) {
+                    domainSelect.value = state.domains[0].key;
+                }
+                renderDomainCapabilityOptions();
+            }
+
+            function renderDomainCapabilityOptions() {
+                const domainSelect = document.getElementById("domain-record-domain");
+                const capabilitySelect = document.getElementById("domain-record-capability");
+                if (!domainSelect || !capabilitySelect) return;
+                const entries = capabilitiesForDomain(domainSelect.value);
+                const options = entries.map((entry) => `<option value="${escapeHtml(entry.key)}">${escapeHtml(entry.name)}</option>`).join("");
+                capabilitySelect.innerHTML = `<option value="">-- Bitte auswählen --</option>${options}`;
+                if (!capabilitySelect.value && entries.length > 0) {
+                    capabilitySelect.value = entries[0].key;
+                }
             }
 
             function renderScopeModules() {
@@ -284,7 +396,8 @@
                         const moduleSelect = document.getElementById("module-record-module");
                         moduleSelect.value = key;
                         const moduleName = state.modules.find((entry) => entry.key === key)?.name || "";
-                        document.querySelector("input[name='title']").value = `${moduleName} - Update`;
+                        const titleField = document.querySelector("#module-record-form input[name='title']");
+                        if (titleField) titleField.value = `${moduleName} - Update`;
                         window.scrollTo({ top: 580, behavior: "smooth" });
                     });
                 });
@@ -311,6 +424,45 @@
                             try {
                                 await api(`/module-records/${id}`, { method: "DELETE" });
                                 showToast("Eintrag gelöscht.", "success");
+                                await refreshOperationsPage();
+                            } catch (error) {
+                                showToast(error.message, "error");
+                            }
+                        });
+                    });
+                });
+            }
+
+            function filteredDomainRecords() {
+                const filter = document.getElementById("domain-record-filter")?.value || "";
+                if (!filter) return state.domainRecords;
+                return state.domainRecords.filter((entry) => entry.domain_key === filter);
+            }
+
+            function renderDomainRecords() {
+                const body = document.getElementById("domain-records-body");
+                const rows = filteredDomainRecords();
+                const html = rows.map((entry) => `
+                    <tr>
+                        <td>${formatDateTime(entry.updated_at || entry.created_at)}</td>
+                        <td><strong>${escapeHtml(domainLabel(entry.domain_key))}</strong></td>
+                        <td>${escapeHtml(capabilityLabel(entry.domain_key, entry.capability_key))}</td>
+                        <td>${escapeHtml(entry.title)}</td>
+                        <td>${statusBadge(entry.status || "planned")}</td>
+                        <td>${escapeHtml(entry.payload?.notes || "—")}</td>
+                        <td>
+                            <button type="button" class="btn btn-small btn-danger" data-delete-domain-record="${entry.id}">Löschen</button>
+                        </td>
+                    </tr>
+                `).join("");
+                body.innerHTML = html || "<tr><td colspan='7' class='table-empty'>Noch keine Domäneneinträge vorhanden.</td></tr>";
+                body.querySelectorAll("[data-delete-domain-record]").forEach((buttonNode) => {
+                    buttonNode.addEventListener("click", () => {
+                        const id = Number(buttonNode.getAttribute("data-delete-domain-record"));
+                        confirmDelete("Diesen Domäneneintrag", async () => {
+                            try {
+                                await api(`/domain-records/${id}`, { method: "DELETE" });
+                                showToast("Domäneneintrag gelöscht.", "success");
                                 await refreshOperationsPage();
                             } catch (error) {
                                 showToast(error.message, "error");
@@ -351,20 +503,36 @@
                 }
             }
 
+            async function fetchWithFallback(path, fallbackValue) {
+                try {
+                    return await api(path);
+                } catch (error) {
+                    if (String(error?.message || "").includes("403")) {
+                        return fallbackValue;
+                    }
+                    throw error;
+                }
+            }
+
             async function refreshOperationsPage() {
-                const [scope, records, workflowLogs] = await Promise.all([
-                    api("/system-scope"),
-                    api("/module-records"),
-                    api("/workflows/logs")
+                const [scope, records, domainRecords, workflowLogs] = await Promise.all([
+                    fetchWithFallback("/system-scope", { modules: [], domains: [], workflows: [] }),
+                    fetchWithFallback("/module-records", []),
+                    fetchWithFallback("/domain-records", []),
+                    fetchWithFallback("/workflows/logs", [])
                 ]);
                 state.modules = Array.isArray(scope?.modules) ? scope.modules : [];
+                state.domains = Array.isArray(scope?.domains) ? scope.domains : [];
                 state.workflows = Array.isArray(scope?.workflows) ? scope.workflows : [];
                 state.records = Array.isArray(records) ? records : [];
+                state.domainRecords = Array.isArray(domainRecords) ? domainRecords : [];
                 state.workflowLogs = Array.isArray(workflowLogs) ? workflowLogs : [];
                 renderModuleOptions();
+                renderDomainOptions();
                 renderWorkflowOptions();
                 renderScopeModules();
                 renderRecords();
+                renderDomainRecords();
                 renderWorkflowLogs();
             }
 
@@ -391,6 +559,34 @@
                     });
                     showToast("Moduleintrag gespeichert.", "success");
                     event.target.reset();
+                    await refreshOperationsPage();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+
+            document.getElementById("domain-record-form").addEventListener("submit", async (event) => {
+                event.preventDefault();
+                const data = getFormData(event.target);
+                const payload = {
+                    domainKey: data.domainKey,
+                    capabilityKey: data.capabilityKey,
+                    title: data.title,
+                    status: data.status,
+                    ownerRole: data.ownerRole,
+                    eventId: data.eventId ? Number(data.eventId) : null,
+                    payload: {
+                        notes: data.notes || ""
+                    }
+                };
+                try {
+                    await api("/domain-records", {
+                        method: "POST",
+                        body: JSON.stringify(payload)
+                    });
+                    showToast("Domäneneintrag gespeichert.", "success");
+                    event.target.reset();
+                    renderDomainOptions();
                     await refreshOperationsPage();
                 } catch (error) {
                     showToast(error.message, "error");
@@ -426,6 +622,8 @@
             });
 
             document.getElementById("load-public-standings").addEventListener("click", loadPublicStandings);
+            document.getElementById("domain-record-domain")?.addEventListener("change", renderDomainCapabilityOptions);
+            document.getElementById("domain-record-filter")?.addEventListener("change", renderDomainRecords);
 
             document.addEventListener("DOMContentLoaded", async () => {
                 try {
