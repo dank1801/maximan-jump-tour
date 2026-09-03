@@ -329,6 +329,27 @@
                 return candidate ? candidate.value : "";
             }
 
+            function resolvePreferredTimeZone() {
+                if (typeof getPreferredTimeZone === "function") {
+                    return getPreferredTimeZone();
+                }
+                try {
+                    return Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Berlin";
+                } catch (_error) {
+                    return "Europe/Berlin";
+                }
+            }
+
+            function ensureTimezoneOption(select, value) {
+                if (!select || !value) return;
+                const exists = Array.from(select.options || []).some((option) => option.value === value);
+                if (exists) return;
+                const option = document.createElement("option");
+                option.value = value;
+                option.textContent = `${value} (lokal erkannt)`;
+                select.appendChild(option);
+            }
+
             function applySystemFormFallbacks() {
                 if (!systemConfigForm) return;
                 const timezoneField = systemConfigForm.elements.namedItem("timezone");
@@ -337,7 +358,9 @@
                 const defaultPointsField = systemConfigForm.elements.namedItem("default_points_schema");
 
                 if (timezoneField && !String(timezoneField.value || "").trim()) {
-                    timezoneField.value = "Europe/Berlin";
+                    const detectedTimezone = resolvePreferredTimeZone();
+                    ensureTimezoneOption(timezoneField, detectedTimezone);
+                    timezoneField.value = detectedTimezone;
                 }
                 if (languageField && !String(languageField.value || "").trim()) {
                     languageField.value = "de";
@@ -412,6 +435,10 @@
                     }
                     applyLicenseCategoryPayload(map.license_categories || {});
                     applySystemFormFallbacks();
+                    const timezoneField = systemConfigForm?.elements?.namedItem("timezone");
+                    if (timezoneField && typeof setPreferredTimeZone === "function") {
+                        setPreferredTimeZone(timezoneField.value, { persist: true, broadcast: false });
+                    }
                     return true;
                 } catch (error) {
                     showToast("Gespeicherte Einstellungen konnten nicht geladen werden.", "warning");
@@ -422,6 +449,9 @@
             systemConfigForm?.addEventListener("submit", async (e) => {
                 e.preventDefault();
                 const data = getFormData(systemConfigForm);
+                if (typeof setPreferredTimeZone === "function") {
+                    setPreferredTimeZone(data.timezone, { persist: true, broadcast: true });
+                }
                 try {
                     await api("/settings", {
                         method: "POST",
@@ -431,6 +461,13 @@
                     showToast("Systemkonfiguration gespeichert.", "success");
                 } catch (error) {
                     showToast(error.message, "error");
+                }
+            });
+
+            systemConfigForm?.elements?.namedItem("timezone")?.addEventListener("change", (event) => {
+                const nextZone = event?.target?.value;
+                if (typeof setPreferredTimeZone === "function") {
+                    setPreferredTimeZone(nextZone, { persist: true, broadcast: true });
                 }
             });
 

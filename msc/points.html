@@ -548,7 +548,7 @@
                         <td><strong>${escapeHtml(rule.name)}</strong></td>
                         <td>${escapeHtml(rule.rule_type)}</td>
                         <td>${rule.active === 1 ? "<span class='badge badge-success'>Aktiv</span>" : "<span class='badge badge-info'>Entwurf</span>"}</td>
-                        <td>${rule.created_at ? new Date(rule.created_at).toLocaleString("de-DE") : "—"}</td>
+                        <td>${formatDateTime(rule.created_at)}</td>
                         <td class="actions-inline">
                             <button type="button" class="btn btn-small btn-secondary" data-copy-rule="${rule.id}">Als Vorlage laden</button>
                             <button type="button" class="btn btn-small btn-secondary" data-edit-rule="${rule.id}">Direkt bearbeiten</button>

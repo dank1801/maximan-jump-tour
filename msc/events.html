@@ -198,7 +198,7 @@
                         <tr>
                             <td><strong>${escapeHtml(eventEntry.name || "—")}</strong></td>
                             <td>${escapeHtml(eventEntry.location || "—")}</td>
-                            <td>${eventEntry.event_date ? new Date(eventEntry.event_date).toLocaleDateString("de-DE") : "—"}</td>
+                            <td>${formatDate(eventEntry.event_date)}</td>
                             <td>${escapeHtml(eventEntry.event_type || "—")}</td>
                             <td>${statusBadge(eventEntry.status || "planned")}</td>
                             <td>

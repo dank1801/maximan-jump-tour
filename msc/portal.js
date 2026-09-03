@@ -7,6 +7,7 @@ const TOAST_TIMEOUT = 4000;
 const LIVE_RECONNECT_DELAY_MS = 2000;
 const LIVE_REFRESH_DEBOUNCE_MS = 700;
 const LIVE_POLL_INTERVAL_MS = 15000;
+const TIMEZONE_STORAGE_KEY = "msc_portal_timezone";
 let liveSocket = null;
 let liveRefreshTimer = null;
 let livePollTimer = null;
@@ -56,6 +57,87 @@ function pageName() {
 
 function isLoginPage() {
     return pageName() === "login.html";
+}
+
+function detectBrowserTimeZone() {
+    try {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Berlin";
+    } catch (_error) {
+        return "Europe/Berlin";
+    }
+}
+
+function isValidTimeZone(value) {
+    const zone = String(value || "").trim();
+    if (!zone) return false;
+    try {
+        new Intl.DateTimeFormat("de-DE", { timeZone: zone }).format(new Date());
+        return true;
+    } catch (_error) {
+        return false;
+    }
+}
+
+let currentTimeZone = (() => {
+    const stored = localStorage.getItem(TIMEZONE_STORAGE_KEY);
+    if (isValidTimeZone(stored)) return stored;
+    return detectBrowserTimeZone();
+})();
+
+function getPreferredTimeZone() {
+    return currentTimeZone;
+}
+
+function setPreferredTimeZone(timeZone, { persist = true, broadcast = true } = {}) {
+    const next = isValidTimeZone(timeZone) ? String(timeZone).trim() : detectBrowserTimeZone();
+    if (next === currentTimeZone) return currentTimeZone;
+    currentTimeZone = next;
+    if (persist) {
+        localStorage.setItem(TIMEZONE_STORAGE_KEY, next);
+    }
+    if (broadcast) {
+        window.dispatchEvent(new CustomEvent("msc:timezone-changed", { detail: { timeZone: next } }));
+    }
+    return currentTimeZone;
+}
+
+function formatDate(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    return new Intl.DateTimeFormat("de-DE", {
+        timeZone: currentTimeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+    }).format(date);
+}
+
+function formatTime(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    return new Intl.DateTimeFormat("de-DE", {
+        timeZone: currentTimeZone,
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+    }).format(date);
+}
+
+function formatDateTime(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    return new Intl.DateTimeFormat("de-DE", {
+        timeZone: currentTimeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+    }).format(date);
 }
 
 // ============ STORAGE ============
@@ -739,13 +821,13 @@ async function loadDashboard() {
     const eventsHtml = data.nextEvents.map(e => tableRow([
         `<strong>${e.name}</strong>`,
         e.location || "—",
-        e.event_date ? new Date(e.event_date).toLocaleDateString("de-DE") : "—",
+        formatDate(e.event_date),
         statusBadge(e.status)
     ])).join("");
     setTableRows(["events-table", "events-tbody"], eventsHtml, 4, "Keine kommenden Events");
 
     const auditHtml = data.recentAudit.slice(0, 10).map(a => tableRow([
-        a.created_at ? new Date(a.created_at).toLocaleTimeString("de-DE") : "—",
+        formatTime(a.created_at),
         a.actor_username || "—",
         a.action || "—",
         a.entity_type || "—"
@@ -1098,7 +1180,7 @@ async function loadUsers() {
             <td><span class="badge badge-info">${escapeHtml(user.role || "—")}</span></td>
             <td>${escapeHtml(assignmentSummary(user))}</td>
             <td>${statusBadge(user.status)}</td>
-            <td>${user.last_login_at ? new Date(user.last_login_at).toLocaleDateString("de-DE") : "—"}</td>
+            <td>${formatDate(user.last_login_at)}</td>
             <td>${canManageUsers
                 ? `
                     <button class="btn btn-small btn-secondary" data-edit-user="${user.id}">Bearbeiten</button>
@@ -1611,7 +1693,7 @@ async function loadEvents() {
                 <td><strong>${e.name}</strong></td>
                 <td>${e.event_type || "—"}</td>
                 <td>${e.location || "—"}</td>
-                <td>${e.event_date ? new Date(e.event_date).toLocaleDateString("de-DE") : "—"}</td>
+                <td>${formatDate(e.event_date)}</td>
                 <td>${statusBadge(e.status || "pending")}</td>
                 <td>
                     <button class="btn-small btn-secondary" onclick="editEventModal(${e.id})">Bearbeiten</button>
@@ -1666,7 +1748,7 @@ async function loadTransfers() {
                 <td>${t.to_team_name || "—"}</td>
                 <td>${t.is_emergency ? "Notfall" : "Normal"}</td>
                 <td>${statusBadge(t.status || "requested")}</td>
-                <td>${t.lock_until ? new Date(t.lock_until).toLocaleDateString("de-DE") : "—"}</td>
+                <td>${formatDate(t.lock_until)}</td>
                 <td>
                     <button class="btn-small btn-secondary" onclick="editTransferModal(${t.id})">Details</button>
                 </td>
@@ -1685,7 +1767,7 @@ async function loadAuditLog() {
         const logs = await api("/audit-logs?limit=100");
         const html = logs.map(l => `
             <tr>
-                <td>${l.created_at ? new Date(l.created_at).toLocaleString("de-DE") : "—"}</td>
+                <td>${formatDateTime(l.created_at)}</td>
                 <td><strong>${l.actor_username || "—"}</strong></td>
                 <td><span class="badge badge-info">${l.action || "—"}</span></td>
                 <td>${l.entity_type || "—"}</td>
@@ -1709,6 +1791,44 @@ function editEventModal() {
 function editTransferModal() {
     showToast("Detailansicht ist in Kürze verfügbar.", "info");
 }
+
+async function rerenderCurrentPageForTimezone() {
+    if (isLoginPage()) return;
+    const permissionState = getPagePermissionState();
+    if (!permissionState.canRead) return;
+    const page = pageName();
+    if (page === "dashboard.html") {
+        await loadDashboard();
+    } else if (page === "users.html") {
+        await setupUsersPage();
+    } else if (page === "teams.html") {
+        await setupTeamsPage();
+    } else if (page === "events.html") {
+        if (typeof window.refreshEventsPage === "function") {
+            await window.refreshEventsPage();
+        } else {
+            await loadEvents();
+        }
+    } else if (page === "points.html") {
+        if (typeof window.refreshPointsPage === "function") {
+            await window.refreshPointsPage();
+        } else {
+            await loadPointsRules();
+        }
+    } else if (page === "transfers.html") {
+        await loadTransfers();
+    } else if (page === "reporting.html") {
+        await loadAuditLog();
+    } else if (page === "operations.html") {
+        if (typeof window.refreshOperationsPage === "function") {
+            await window.refreshOperationsPage();
+        }
+    }
+}
+
+window.addEventListener("msc:timezone-changed", () => {
+    rerenderCurrentPageForTimezone().catch(() => {});
+});
 
 // ============ INIT ============
 

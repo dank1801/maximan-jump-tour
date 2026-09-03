@@ -249,7 +249,7 @@
                     const logs = await api("/audit-logs?limit=100");
                     const html = logs.map(l => `
                         <tr>
-                            <td>${l.created_at ? new Date(l.created_at).toLocaleString("de-DE") : "—"}</td>
+                            <td>${formatDateTime(l.created_at)}</td>
                             <td><strong>${l.actor_username || "—"}</strong></td>
                             <td><span class="badge badge-info">${l.action || "—"}</span></td>
                             <td>${l.entity_type || "—"}</td>

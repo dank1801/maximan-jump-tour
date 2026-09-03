@@ -235,7 +235,7 @@
                             <td>${t.to_team_name || "—"}</td>
                             <td>${t.is_emergency ? "Notfall" : "Normal"}</td>
                             <td>${statusBadge(t.status)}</td>
-                            <td>${t.lock_until ? new Date(t.lock_until).toLocaleDateString("de-DE") : "—"}</td>
+                            <td>${formatDate(t.lock_until)}</td>
                             <td>
                                 <button class="btn btn-small btn-secondary">Bearbeiten</button>
                                 <button class="btn btn-small btn-primary">Genehmigen</button>

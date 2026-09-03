@@ -262,7 +262,7 @@
                     const moduleState = moduleEntry.state || {};
                     const status = moduleState.status || "planned";
                     const ownerRole = moduleState.ownerRole || "—";
-                    const updated = moduleState.updated_at ? new Date(moduleState.updated_at).toLocaleString("de-DE") : "—";
+                    const updated = formatDateTime(moduleState.updated_at);
                     return `
                         <tr>
                             <td><strong>${escapeHtml(moduleEntry.name)}</strong></td>
@@ -324,7 +324,7 @@
                 const body = document.getElementById("workflow-logs-body");
                 const html = state.workflowLogs.map((entry) => `
                     <tr>
-                        <td>${entry.created_at ? new Date(entry.created_at).toLocaleString("de-DE") : "—"}</td>
+                        <td>${formatDateTime(entry.created_at)}</td>
                         <td><strong>${escapeHtml(entry.workflow_name)}</strong></td>
                         <td>${statusBadge(entry.status || "completed")}</td>
                         <td>${escapeHtml(entry.payload?.steps?.join(" → ") || "—")}</td>
