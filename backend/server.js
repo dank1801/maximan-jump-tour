@@ -20,7 +20,14 @@ const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const JWT_SECRET = process.env.JWT_SECRET || "";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 const RENDER_DISK_MOUNT_PATH = process.env.RENDER_DISK_MOUNT_PATH || "";
-const REQUIRE_PERSISTENT_DB = process.env.REQUIRE_PERSISTENT_DB === "true";
+function parseEnvBoolean(value, fallback = false) {
+    const raw = String(value ?? "").trim().toLowerCase();
+    if (!raw) return fallback;
+    if (["true", "1", "yes", "on", "ja"].includes(raw)) return true;
+    if (["false", "0", "no", "off", "nein"].includes(raw)) return false;
+    return fallback;
+}
+const REQUIRE_PERSISTENT_DB = parseEnvBoolean(process.env.REQUIRE_PERSISTENT_DB, IS_PRODUCTION);
 const BASE_URL = process.env.BASE_URL || (IS_PRODUCTION ? "https://maximan-jump-tour.onrender.com" : "http://localhost:3000");
 const INVITATION_TOKEN_EXPIRES_HOURS = 48;
 
