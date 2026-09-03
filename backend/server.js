@@ -28,17 +28,17 @@ function parseEnvBoolean(value, fallback = false) {
     if (["false", "0", "no", "off", "nein"].includes(raw)) return false;
     return fallback;
 }
+const DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
+const ENABLE_ONLINE_SNAPSHOT = parseEnvBoolean(
+    process.env.ENABLE_ONLINE_SNAPSHOT,
+    Boolean(DATABASE_URL)
+);
 const REQUIRE_PERSISTENT_DB = parseEnvBoolean(
     process.env.REQUIRE_PERSISTENT_DB,
     IS_PRODUCTION && !ENABLE_ONLINE_SNAPSHOT
 );
 const BASE_URL = process.env.BASE_URL || (IS_PRODUCTION ? "https://maximan-jump-tour.onrender.com" : "http://localhost:3000");
 const INVITATION_TOKEN_EXPIRES_HOURS = 48;
-const DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
-const ENABLE_ONLINE_SNAPSHOT = parseEnvBoolean(
-    process.env.ENABLE_ONLINE_SNAPSHOT,
-    Boolean(DATABASE_URL)
-);
 
 let emailTransporter = null;
 
