@@ -144,6 +144,7 @@ function initDomainWorkspace(config) {
         workflowLogs: [],
         canWrite: false
     };
+    const draftKey = `msc_portal_domain_draft:${domainKey}`;
 
     function experience() {
         return {
@@ -186,6 +187,68 @@ function initDomainWorkspace(config) {
             .split(",")
             .map((entry) => entry.trim())
             .filter(Boolean);
+    }
+
+    function toLocalDateTimeInput(value) {
+        if (!value) return "";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return "";
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    function toIsoFromLocalInput(value) {
+        const raw = String(value || "").trim();
+        if (!raw) return null;
+        const date = new Date(raw);
+        if (Number.isNaN(date.getTime())) return null;
+        return date.toISOString();
+    }
+
+    function saveDraft(form) {
+        if (!form) return;
+        const data = getFormData(form);
+        const payload = {
+            capabilityKey: data.capabilityKey || "",
+            title: data.title || "",
+            status: data.status || "planned",
+            ownerRole: data.ownerRole || "",
+            eventId: data.eventId || "",
+            notes: data.notes || "",
+            severity: data.severity || "medium",
+            dueAt: data.dueAt || "",
+            escalation: data.escalation || "none",
+            tags: data.tags || "",
+            externalRef: data.externalRef || ""
+        };
+        localStorage.setItem(draftKey, JSON.stringify(payload));
+    }
+
+    function loadDraft() {
+        try {
+            return JSON.parse(localStorage.getItem(draftKey) || "null");
+        } catch (_error) {
+            return null;
+        }
+    }
+
+    function clearDraft() {
+        localStorage.removeItem(draftKey);
+    }
+
+    function applyDraftToForm(form, draft) {
+        if (!form || !draft || form.elements.recordId.value) return;
+        form.elements.capabilityKey.value = draft.capabilityKey || "";
+        form.elements.title.value = draft.title || "";
+        form.elements.status.value = draft.status || "planned";
+        form.elements.ownerRole.value = draft.ownerRole || "";
+        form.elements.eventId.value = draft.eventId || "";
+        form.elements.notes.value = draft.notes || "";
+        form.elements.severity.value = draft.severity || "medium";
+        form.elements.dueAt.value = draft.dueAt || "";
+        form.elements.escalation.value = draft.escalation || "none";
+        form.elements.tags.value = draft.tags || "";
+        form.elements.externalRef.value = draft.externalRef || "";
     }
 
     function dueState(dueAt) {
@@ -477,6 +540,7 @@ function initDomainWorkspace(config) {
         if (submit) submit.textContent = "Eintrag speichern";
         document.getElementById("ws-record-cancel")?.classList.add("hidden");
         renderRecordForm();
+        clearDraft();
     }
 
     function openRecordDetails(record) {
@@ -579,7 +643,7 @@ function initDomainWorkspace(config) {
                 form.elements.eventId.value = record.event_id ? String(record.event_id) : "";
                 form.elements.notes.value = meta.notes || "";
                 form.elements.severity.value = meta.severity || "medium";
-                form.elements.dueAt.value = meta.dueAt ? String(meta.dueAt).slice(0, 16) : "";
+                form.elements.dueAt.value = toLocalDateTimeInput(meta.dueAt);
                 form.elements.escalation.value = meta.escalation || "none";
                 form.elements.tags.value = meta.tags.join(", ");
                 form.elements.externalRef.value = meta.externalRef || "";
@@ -903,7 +967,7 @@ function initDomainWorkspace(config) {
                 form.elements.escalation.value = action.escalation || "none";
                 form.elements.tags.value = action.tags ? parseTags(action.tags).join(", ") : "";
                 form.elements.externalRef.value = "";
-                form.elements.dueAt.value = dueAt ? dueAt.toISOString().slice(0, 16) : "";
+                form.elements.dueAt.value = toLocalDateTimeInput(dueAt);
                 const submit = document.getElementById("ws-record-submit");
                 if (submit) submit.textContent = "Eintrag speichern";
                 document.getElementById("ws-record-cancel")?.classList.add("hidden");
@@ -1023,7 +1087,12 @@ function initDomainWorkspace(config) {
     document.addEventListener("DOMContentLoaded", async () => {
         const recordForm = document.getElementById("ws-record-form");
         const workflowForm = document.getElementById("ws-workflow-form");
-        state.canWrite = hasPermission(config.writePermission) || hasPermission("dashboard.read");
+        state.canWrite = hasPermission(config.writePermission);
+
+        if (recordForm && state.canWrite) {
+            recordForm.addEventListener("input", () => saveDraft(recordForm));
+            recordForm.addEventListener("change", () => saveDraft(recordForm));
+        }
 
         recordForm?.addEventListener("submit", async (event) => {
             event.preventDefault();
@@ -1038,13 +1107,19 @@ function initDomainWorkspace(config) {
                 payload: {
                     notes: data.notes || "",
                     severity: normalizedSeverity(data.severity || "medium"),
-                    dueAt: data.dueAt ? new Date(data.dueAt).toISOString() : null,
+                    dueAt: toIsoFromLocalInput(data.dueAt),
                     escalation: data.escalation || "none",
                     tags: parseTags(data.tags),
                     externalRef: data.externalRef || ""
                 }
             };
             try {
+                if (data.eventId && (!Number.isInteger(Number(data.eventId)) || Number(data.eventId) <= 0)) {
+                    throw new Error("Event-ID muss eine positive Zahl sein.");
+                }
+                if (data.dueAt && !payload.payload.dueAt) {
+                    throw new Error("Ungültiges Fälligkeitsdatum.");
+                }
                 const recordId = Number(data.recordId || 0);
                 await api(recordId > 0 ? `/domain-records/${recordId}` : "/domain-records", {
                     method: recordId > 0 ? "PATCH" : "POST",
@@ -1091,5 +1166,8 @@ function initDomainWorkspace(config) {
         }
 
         await refreshDomainWorkspacePage();
+        if (recordForm && state.canWrite) {
+            applyDraftToForm(recordForm, loadDraft());
+        }
     });
 }

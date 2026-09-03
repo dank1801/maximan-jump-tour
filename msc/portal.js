@@ -8,6 +8,7 @@ const LIVE_RECONNECT_DELAY_MS = 2000;
 const LIVE_REFRESH_DEBOUNCE_MS = 700;
 const LIVE_POLL_INTERVAL_MS = 15000;
 const TIMEZONE_STORAGE_KEY = "msc_portal_timezone";
+const COMMAND_PALETTE_HINT = "⌘/Ctrl + K";
 let liveSocket = null;
 let liveRefreshTimer = null;
 let livePollTimer = null;
@@ -41,15 +42,15 @@ const PAGE_PERMISSION_RULES = {
             "public_site.read", "public_site.write"
         ],
         writeAny: [
-            "dashboard.read", "workflows.execute",
+            "workflows.execute",
             "msc_admin.write", "loc.write", "team_portal.write", "athlete_app.write", "public_site.write"
         ]
     },
-    "msc-admin.html": { readAny: ["dashboard.read", "msc_admin.read", "msc_admin.write"], writeAny: ["dashboard.read", "msc_admin.write"] },
-    "loc-dashboard.html": { readAny: ["dashboard.read", "loc.read", "loc.write"], writeAny: ["dashboard.read", "loc.write"] },
-    "team-portal.html": { readAny: ["dashboard.read", "team_portal.read", "team_portal.write"], writeAny: ["dashboard.read", "team_portal.write"] },
-    "athlete-app.html": { readAny: ["dashboard.read", "athlete_app.read", "athlete_app.write"], writeAny: ["dashboard.read", "athlete_app.write"] },
-    "public-site.html": { readAny: ["dashboard.read", "public_site.read", "public_site.write"], writeAny: ["dashboard.read", "public_site.write"] },
+    "msc-admin.html": { readAny: ["dashboard.read", "msc_admin.read", "msc_admin.write"], writeAny: ["msc_admin.write"] },
+    "loc-dashboard.html": { readAny: ["dashboard.read", "loc.read", "loc.write"], writeAny: ["loc.write"] },
+    "team-portal.html": { readAny: ["dashboard.read", "team_portal.read", "team_portal.write"], writeAny: ["team_portal.write"] },
+    "athlete-app.html": { readAny: ["dashboard.read", "athlete_app.read", "athlete_app.write"], writeAny: ["athlete_app.write"] },
+    "public-site.html": { readAny: ["dashboard.read", "public_site.read", "public_site.write"], writeAny: ["public_site.write"] },
     "settings.html": { readAny: ["settings.read", "settings.write"], writeAny: ["settings.write"] }
 };
 
@@ -601,6 +602,154 @@ function ensureDomainNavLinks() {
             insertionParent.appendChild(li);
         }
         insertAfter = li;
+    });
+}
+
+function setupCommandPalette() {
+    if (isLoginPage()) return;
+    if (document.getElementById("command-palette-overlay")) return;
+
+    const overlay = document.createElement("div");
+    overlay.id = "command-palette-overlay";
+    overlay.className = "command-palette-overlay hidden";
+    overlay.innerHTML = `
+        <div class="command-palette">
+            <div class="command-palette-head">
+                <input id="command-palette-input" type="search" placeholder="Bereich oder Aktion suchen..." />
+                <span class="command-palette-hint">${COMMAND_PALETTE_HINT}</span>
+            </div>
+            <div class="command-palette-list" id="command-palette-list"></div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const input = document.getElementById("command-palette-input");
+    const listNode = document.getElementById("command-palette-list");
+
+    const staticActions = [
+        {
+            id: "refresh-page",
+            label: "Aktuelle Seite neu laden",
+            keywords: ["refresh", "reload", "neu laden"],
+            run: () => window.location.reload()
+        },
+        {
+            id: "refresh-live-data",
+            label: "Live-Daten aktualisieren",
+            keywords: ["live", "sync", "daten"],
+            run: async () => {
+                await rerenderCurrentPageForTimezone();
+                showToast("Aktuelle Seite aktualisiert.", "info");
+            }
+        },
+        {
+            id: "logout",
+            label: "Abmelden",
+            keywords: ["logout", "abmelden"],
+            run: () => {
+                clearAuth();
+                window.location.href = "login.html";
+            }
+        }
+    ];
+
+    function visibleNavItems() {
+        return Array.from(document.querySelectorAll(".portal-nav a"))
+            .filter((link) => !link.closest("li")?.classList.contains("hidden"))
+            .map((link) => ({
+                id: `nav:${(link.getAttribute("href") || "").toLowerCase()}`,
+                label: link.textContent?.trim() || link.getAttribute("href"),
+                subtitle: link.getAttribute("href") || "",
+                run: () => { window.location.href = link.getAttribute("href") || "dashboard.html"; },
+                keywords: [link.textContent || "", link.getAttribute("href") || ""]
+            }));
+    }
+
+    function renderItems(filterText = "") {
+        if (!listNode) return;
+        const normalized = String(filterText || "").trim().toLowerCase();
+        const items = [...visibleNavItems(), ...staticActions]
+            .filter((item) => {
+                if (!normalized) return true;
+                const source = [item.label, item.subtitle || "", ...(item.keywords || [])]
+                    .map((entry) => String(entry || "").toLowerCase())
+                    .join(" ");
+                return source.includes(normalized);
+            })
+            .slice(0, 12);
+        listNode.innerHTML = items.map((item, index) => `
+            <button type="button" class="command-item ${index === 0 ? "active" : ""}" data-cmd-id="${escapeHtml(item.id)}">
+                <span>${escapeHtml(item.label || "Aktion")}</span>
+                <small>${escapeHtml(item.subtitle || "Aktion")}</small>
+            </button>
+        `).join("") || "<div class='command-empty'>Keine Treffer</div>";
+        listNode.querySelectorAll("[data-cmd-id]").forEach((button) => {
+            button.addEventListener("click", async () => {
+                const id = button.getAttribute("data-cmd-id");
+                const found = items.find((entry) => entry.id === id);
+                if (!found) return;
+                closePalette();
+                await found.run();
+            });
+        });
+    }
+
+    function openPalette() {
+        overlay.classList.remove("hidden");
+        renderItems(input?.value || "");
+        input?.focus();
+        input?.select();
+    }
+
+    function closePalette() {
+        overlay.classList.add("hidden");
+    }
+
+    function moveSelection(direction) {
+        const nodes = Array.from(listNode?.querySelectorAll(".command-item") || []);
+        if (nodes.length === 0) return;
+        let activeIndex = nodes.findIndex((node) => node.classList.contains("active"));
+        if (activeIndex < 0) activeIndex = 0;
+        nodes[activeIndex]?.classList.remove("active");
+        activeIndex = (activeIndex + direction + nodes.length) % nodes.length;
+        nodes[activeIndex]?.classList.add("active");
+        nodes[activeIndex]?.scrollIntoView({ block: "nearest" });
+    }
+
+    document.addEventListener("keydown", async (event) => {
+        const key = String(event.key || "").toLowerCase();
+        if ((event.ctrlKey || event.metaKey) && key === "k") {
+            event.preventDefault();
+            if (overlay.classList.contains("hidden")) openPalette();
+            else closePalette();
+            return;
+        }
+        if (overlay.classList.contains("hidden")) return;
+        if (key === "escape") {
+            event.preventDefault();
+            closePalette();
+            return;
+        }
+        if (key === "arrowdown") {
+            event.preventDefault();
+            moveSelection(1);
+            return;
+        }
+        if (key === "arrowup") {
+            event.preventDefault();
+            moveSelection(-1);
+            return;
+        }
+        if (key === "enter") {
+            event.preventDefault();
+            const active = listNode?.querySelector(".command-item.active");
+            if (active instanceof HTMLButtonElement) active.click();
+        }
+    });
+
+    input?.addEventListener("input", () => renderItems(input.value));
+    overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) closePalette();
     });
 }
 
@@ -2073,6 +2222,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             ensureDomainNavLinks();
             applyNavPermissionVisibility();
             activateNav();
+            setupCommandPalette();
             const permissionState = getPagePermissionState();
             if (!permissionState.canRead) {
                 renderNoAccessPage();
