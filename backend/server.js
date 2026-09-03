@@ -232,6 +232,9 @@ function initDb() {
             registration_status TEXT NOT NULL DEFAULT 'draft',
             submitted_at TEXT,
             confirmed_at TEXT,
+            registration_review_comment TEXT,
+            registration_reviewed_at TEXT,
+            registration_reviewed_by INTEGER,
             registration_deadline_at TEXT,
             status TEXT NOT NULL DEFAULT 'active',
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -640,6 +643,15 @@ function ensureOrganizationEnhancements() {
     }
     if (!teamColumnNames.has("confirmed_at")) {
         db.prepare("ALTER TABLE teams ADD COLUMN confirmed_at TEXT").run();
+    }
+    if (!teamColumnNames.has("registration_review_comment")) {
+        db.prepare("ALTER TABLE teams ADD COLUMN registration_review_comment TEXT").run();
+    }
+    if (!teamColumnNames.has("registration_reviewed_at")) {
+        db.prepare("ALTER TABLE teams ADD COLUMN registration_reviewed_at TEXT").run();
+    }
+    if (!teamColumnNames.has("registration_reviewed_by")) {
+        db.prepare("ALTER TABLE teams ADD COLUMN registration_reviewed_by INTEGER").run();
     }
     if (!teamColumnNames.has("registration_deadline_at")) {
         db.prepare("ALTER TABLE teams ADD COLUMN registration_deadline_at TEXT").run();
@@ -1854,7 +1866,7 @@ function getUserById(userId) {
 
 function getTeamById(teamId) {
     return db
-        .prepare("SELECT id, name, organization_id, team_type, status, manager_user_id, season_id, registration_status, submitted_at, confirmed_at, registration_deadline_at FROM teams WHERE id = ?")
+        .prepare("SELECT id, name, organization_id, team_type, status, manager_user_id, season_id, registration_status, submitted_at, confirmed_at, registration_review_comment, registration_reviewed_at, registration_reviewed_by, registration_deadline_at FROM teams WHERE id = ?")
         .get(teamId);
 }
 
@@ -3076,7 +3088,7 @@ app.get("/api/teams", authRequired, requirePermission("teams.read"), (req, res) 
     const scope = getAccessibleTeamScope(req.user);
     let rows = db.prepare(
         `SELECT t.id, t.name, t.organization_id, o.name AS organization_name, t.team_type, t.nation, t.category, t.status, t.season_id, s.name AS season_name,
-                t.registration_status, t.submitted_at, t.confirmed_at, t.registration_deadline_at, t.created_at, u.username AS manager_username,
+                t.registration_status, t.submitted_at, t.confirmed_at, t.registration_review_comment, t.registration_reviewed_at, t.registration_reviewed_by, t.registration_deadline_at, t.created_at, u.username AS manager_username,
                 CASE
                     WHEN COALESCE(t.registration_deadline_at, s.registration_deadline_at) IS NOT NULL
                          AND datetime('now') > datetime(COALESCE(t.registration_deadline_at, s.registration_deadline_at))
@@ -3585,17 +3597,75 @@ app.post("/api/teams/:id/confirm-registration", authRequired, requirePermission(
         res.status(409).json({ error: "Team kann erst bestätigt werden, wenn alle Springer-Lizenzen bestätigt sind." });
         return;
     }
+    const reviewComment = req.body?.comment ? String(req.body.comment).trim() : null;
     db.prepare(
         `UPDATE teams
          SET registration_status = 'confirmed',
              submitted_at = COALESCE(submitted_at, CURRENT_TIMESTAMP),
              confirmed_at = CURRENT_TIMESTAMP,
+             registration_review_comment = ?,
+             registration_reviewed_at = CURRENT_TIMESTAMP,
+             registration_reviewed_by = ?,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`
-    ).run(id);
+    ).run(reviewComment, req.user?.sub || req.user?.id || null, id);
     const updated = db.prepare("SELECT * FROM teams WHERE id = ?").get(id);
-    logAudit(req.user, "CONFIRM_TEAM_REGISTRATION", "teams", id, `${team.name} confirmed for season ${season.name}`);
+    logAudit(req.user, "CONFIRM_TEAM_REGISTRATION", "teams", id, `${team.name} confirmed for season ${season.name}${reviewComment ? ` · ${reviewComment}` : ""}`);
     res.json(updated);
+});
+
+app.post("/api/teams/:id/request-revision", authRequired, requirePermission("team_portal.write"), (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Invalid team id" });
+        return;
+    }
+    const team = getTeamById(id);
+    if (!team || team.status === "inactive") {
+        res.status(404).json({ error: "Team not found" });
+        return;
+    }
+    if (!assertTeamAccess(res, req.user, team, "write")) return;
+    const comment = String(req.body?.comment || "").trim();
+    if (!comment) {
+        res.status(400).json({ error: "Ein Kommentar ist für eine Rückfrage erforderlich." });
+        return;
+    }
+    db.prepare(
+        `UPDATE teams
+         SET registration_status = 'revision_requested',
+             registration_review_comment = ?,
+             registration_reviewed_at = CURRENT_TIMESTAMP,
+             registration_reviewed_by = ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`
+    ).run(comment, req.user?.sub || req.user?.id || null, id);
+    const updated = db.prepare("SELECT * FROM teams WHERE id = ?").get(id);
+    logAudit(req.user, "REQUEST_TEAM_REVISION", "teams", id, `${team.name} revision requested · ${comment}`);
+    res.json(updated);
+});
+
+app.get("/api/teams/:id/history", authRequired, requirePermission("teams.read"), (req, res) => {
+    const teamId = parseId(req.params.id);
+    if (!teamId) {
+        res.status(400).json({ error: "Invalid team id" });
+        return;
+    }
+    const team = getTeamById(teamId);
+    if (!team || team.status === "inactive") {
+        res.status(404).json({ error: "Team not found" });
+        return;
+    }
+    if (!assertTeamAccess(res, req.user, team, "read")) return;
+    const rows = db.prepare(
+        `SELECT a.id, a.action, a.entity_type, a.entity_id, a.details, a.created_at, a.actor_username
+         FROM audit_logs a
+         WHERE (a.entity_type = 'teams' AND a.entity_id = ?)
+            OR (a.entity_type = 'team_members' AND a.entity_id IN (SELECT CAST(tm.id AS TEXT) FROM team_members tm WHERE tm.team_id = ?))
+         ORDER BY datetime(a.created_at) DESC, a.id DESC
+         LIMIT 100`
+    ).all(String(teamId), teamId);
+    res.json(rows);
 });
 
 app.get("/api/events", authRequired, requirePermission("events.read"), (_, res) => {

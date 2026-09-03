@@ -1021,6 +1021,62 @@ html, body {
     color: var(--gray-dark);
 }
 
+.workspace-team-warning-list {
+    display: grid;
+    gap: 8px;
+}
+
+.workspace-team-warning,
+.workspace-team-ok {
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+}
+
+.workspace-team-warning {
+    background: #fff5e6;
+    border: 1px solid #ffd79a;
+    color: #8a5a00;
+}
+
+.workspace-team-ok {
+    background: #ecf9f0;
+    border: 1px solid #bfe8cb;
+    color: #1f6b37;
+}
+
+.workspace-history-list {
+    display: grid;
+    gap: 10px;
+}
+
+.workspace-history-entry {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    background: var(--lighter);
+}
+
+.workspace-history-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+    font-size: 12px;
+}
+
+.workspace-review-modal textarea {
+    width: 100%;
+    resize: vertical;
+}
+
+.workspace-template-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
 .workspace-json-preview {
     margin-top: 10px;
     border: 1px solid var(--border);

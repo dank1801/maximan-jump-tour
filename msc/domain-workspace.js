@@ -421,13 +421,18 @@ function initDomainWorkspace(config) {
                         </form>
                         <form id="ws-team-admin-form" class="workspace-inline-form">
                             <h3>Team melden</h3>
+                            <div class="workspace-template-row">
+                                <button type="button" class="btn btn-secondary btn-small" data-team-template="A">A-Team Vorlage</button>
+                                <button type="button" class="btn btn-secondary btn-small" data-team-template="B">B-Team Vorlage</button>
+                                <button type="button" class="btn btn-secondary btn-small" data-team-template="C">C-Team Vorlage</button>
+                            </div>
                             <div class="grid-2">
                                 <div class="form-group"><label>Organisation *</label><select name="organizationId" required></select></div>
                                 <div class="form-group"><label>Teamtyp *</label><select name="teamType" required><option value="A">A-Team</option><option value="B">B-Team</option><option value="C">C-Team</option></select></div>
                                 <div class="form-group"><label>Name *</label><input type="text" name="name" required /></div>
                                 <div class="form-group"><label>Saison</label><select name="seasonId"></select></div>
                                 <div class="form-group"><label>Trainer/Manager ID</label><input type="number" name="managerUserId" min="1" /></div>
-                                <div class="form-group"><label>Meldestatus</label><select name="registrationStatus"><option value="draft">Entwurf</option><option value="submitted">Eingereicht</option><option value="confirmed">Bestätigt</option></select></div>
+                                <div class="form-group"><label>Meldestatus</label><select name="registrationStatus"><option value="draft">Entwurf</option><option value="submitted">Eingereicht</option><option value="revision_requested">Rückfrage</option><option value="confirmed">Bestätigt</option></select></div>
                             </div>
                             <div class="form-actions"><button type="submit" class="btn btn-primary btn-small">Team speichern</button></div>
                         </form>
@@ -1293,11 +1298,19 @@ function initDomainWorkspace(config) {
         const organizations = Array.isArray(state.organizations) ? state.organizations : [];
         const seasons = Array.isArray(state.seasons) ? state.seasons : [];
         const teams = Array.isArray(state.teams) ? state.teams : [];
+        const currentScope = state.scopeDomain?.name || "Team Portal";
         const resolvedDeadline = (team) => {
             const deadline = team.registration_deadline_at || seasons.find((season) => Number(season.id) === Number(team.season_id))?.registration_deadline_at || null;
             if (!deadline) return null;
             const date = new Date(deadline);
             return Number.isNaN(date.getTime()) ? null : date;
+        };
+        const teamReviewLabel = (team) => {
+            const status = String(team.registration_status || "draft").toLowerCase();
+            if (status === "confirmed") return "Bestätigt";
+            if (status === "revision_requested") return "Rückfrage";
+            if (status === "submitted") return "Eingereicht";
+            return "Entwurf";
         };
         const isLocked = (team) => {
             if (Number(team.registration_locked) === 1) return true;
@@ -1310,10 +1323,26 @@ function initDomainWorkspace(config) {
             .sort((a, b) => a.getTime() - b.getTime())[0] || null;
         const confirmedTeams = teams.filter((team) => String(team.registration_status || "").toLowerCase() === "confirmed");
         const lockedTeams = teams.filter((team) => isLocked(team));
+        const revisionTeams = teams.filter((team) => String(team.registration_status || "").toLowerCase() === "revision_requested");
         const deadlineLabel = nextDeadline
             ? `${formatDateTime(nextDeadline.toISOString())}${Date.now() > nextDeadline.getTime() ? " · abgelaufen" : ""}`
             : "Keine aktive Frist";
         const registrationQuota = `${teams.length}/3 Teams`;
+        const orgSummaries = organizations.map((org) => {
+            const orgTeams = teams.filter((team) => Number(team.organization_id) === Number(org.id));
+            const hasA = orgTeams.some((team) => String(team.team_type || "").trim().toUpperCase() === "A");
+            const warnings = [];
+            if (orgTeams.length > 3) warnings.push("mehr als 3 Teams");
+            if (orgTeams.length > 0 && !hasA) warnings.push("kein A-Team");
+            if (orgTeams.length > 0 && orgTeams[0] && String(orgTeams[0].team_type || "").trim().toUpperCase() !== "A") warnings.push("erstes Team ist nicht A");
+            const tone = warnings.length > 0 ? "warning" : (orgTeams.length > 0 ? "success" : "info");
+            return { org, orgTeams, warnings, tone };
+        });
+        const workflowWarnings = [
+            ...(orgSummaries.flatMap((entry) => entry.warnings.map((warning) => `${entry.org.name}: ${warning}`))),
+            ...(lockedTeams.length > 0 ? [`${lockedTeams.length} Teams nach Meldeschluss gesperrt`] : []),
+            ...(revisionTeams.length > 0 ? [`${revisionTeams.length} Teams in Rückfrage`] : [])
+        ];
 
         orgSelect.innerHTML = `<option value="">-- Organisation wählen --</option>${
             organizations.map((org) => `<option value="${escapeHtml(org.id)}">${escapeHtml(org.name)}${org.short_name ? ` (${escapeHtml(org.short_name)})` : ""}</option>`).join("")
@@ -1325,19 +1354,23 @@ function initDomainWorkspace(config) {
         const teamRows = teams.map((team) => {
             const org = organizations.find((entry) => Number(entry.id) === Number(team.organization_id));
             const confirmed = String(team.registration_status || "").toLowerCase() === "confirmed";
+            const reviewStatus = String(team.registration_status || "draft").toLowerCase();
             const locked = isLocked(team);
             return `
                 <tr>
                     <td><strong>${escapeHtml(team.name || "—")}</strong></td>
                     <td>${escapeHtml(org?.name || "—")}</td>
                     <td>${escapeHtml(String(team.team_type || "—"))}</td>
-                    <td>${statusBadge(confirmed ? "live" : (team.registration_status || "planned"))}</td>
+                    <td>${statusBadge(reviewStatus === "confirmed" ? "live" : reviewStatus === "revision_requested" ? "blocked" : reviewStatus === "submitted" ? "in_progress" : "planned")}</td>
                     <td>${escapeHtml(team.season_name || "—")}</td>
                     <td>${team.confirmed_at ? escapeHtml(formatDateTime(team.confirmed_at)) : "—"}</td>
+                    <td>${escapeHtml(team.registration_review_comment || "—")}</td>
                     <td>${locked ? statusBadge("blocked") : statusBadge("planned")}</td>
                     <td>
                         <div class="actions-inline">
                             <button type="button" class="btn btn-small btn-secondary" data-confirm-team="${team.id}">Bestätigen</button>
+                            <button type="button" class="btn btn-small btn-warning" data-reject-team="${team.id}">Rückfrage</button>
+                            <button type="button" class="btn btn-small btn-secondary" data-history-team="${team.id}">Historie</button>
                         </div>
                     </td>
                 </tr>
@@ -1352,23 +1385,31 @@ function initDomainWorkspace(config) {
                         <span>${escapeHtml(registrationQuota)}</span>
                         <span>${escapeHtml(`${confirmedTeams.length} bestätigt`)}</span>
                         <span>${escapeHtml(`${lockedTeams.length} gesperrt`)}</span>
+                        <span>${escapeHtml(`${revisionTeams.length} Rückfragen`)}</span>
                         <span>${escapeHtml(deadlineLabel)}</span>
+                        <span>${escapeHtml(currentScope)}</span>
                     </div>
                     <ol class="workspace-team-flow">
                         <li><strong>1. Organisation</strong><span>Vorsitz und Scope festlegen, damit Teams im richtigen Kontext landen.</span></li>
                         <li><strong>2. Teams melden</strong><span>A-Team zuerst, dann maximal zwei weitere Teams bis zur Dreierrenze.</span></li>
                         <li><strong>3. Springer zuweisen</strong><span>Springer nur mit Lizenzen, die vor der Freigabe bestätigt werden.</span></li>
-                        <li><strong>4. Meldung bestätigen</strong><span>Nach Prüfung wird das Team für die Saison fixiert und gesperrt.</span></li>
+                        <li><strong>4. Prüfung & Freigabe</strong><span>Bestätigen oder mit Kommentar zur Überarbeitung zurückgeben.</span></li>
                     </ol>
+                    <div class="workspace-team-warning-list">
+                        ${workflowWarnings.length > 0
+                            ? workflowWarnings.map((warning) => `<div class="workspace-team-warning">${escapeHtml(warning)}</div>`).join("")
+                            : "<div class='workspace-team-ok'>Keine aktiven Regelverstöße.</div>"}
+                    </div>
                 </div>
             </div>
             <div class="card">
                 <div class="card-header"><h3>Organisationen</h3></div>
                 <div class="card-body">
                     <div class="workspace-mini-pill-list">
-                        ${organizations.map((org) => {
-                            const count = teams.filter((team) => Number(team.organization_id) === Number(org.id)).length;
-                            return `<span>${escapeHtml(org.name)}${org.chair_username ? ` · Vorsitz: ${escapeHtml(org.chair_username)}` : ""} · ${count}/3</span>`;
+                        ${orgSummaries.map((entry) => {
+                            const count = entry.orgTeams.length;
+                            const label = `${entry.org.name}${entry.org.chair_username ? ` · Vorsitz: ${entry.org.chair_username}` : ""} · ${count}/3`;
+                            return `<span class="workspace-team-org-pill badge badge-${entry.tone}">${escapeHtml(label)}</span>`;
                         }).join("") || "<span>Keine Organisationen</span>"}
                     </div>
                 </div>
@@ -1377,8 +1418,8 @@ function initDomainWorkspace(config) {
                 <div class="card-header"><h3>Teams</h3></div>
                 <div class="card-body">
                     <table class="table">
-                        <thead><tr><th>Team</th><th>Organisation</th><th>Typ</th><th>Status</th><th>Saison</th><th>Bestätigt</th><th>Frist</th><th>Aktion</th></tr></thead>
-                        <tbody>${teamRows || "<tr><td colspan='8' class='table-empty'>Keine Teams vorhanden.</td></tr>"}</tbody>
+                        <thead><tr><th>Team</th><th>Organisation</th><th>Typ</th><th>Review</th><th>Saison</th><th>Bestätigt</th><th>Kommentar</th><th>Frist</th><th>Aktion</th></tr></thead>
+                        <tbody>${teamRows || "<tr><td colspan='9' class='table-empty'>Keine Teams vorhanden.</td></tr>"}</tbody>
                     </table>
                 </div>
             </div>
@@ -1390,17 +1431,92 @@ function initDomainWorkspace(config) {
                 button.classList.add("readonly-action");
                 return;
             }
-            button.addEventListener("click", async () => {
-                const teamId = Number(button.getAttribute("data-confirm-team"));
-                try {
-                    await api(`/teams/${teamId}/confirm-registration`, { method: "POST", body: JSON.stringify({}) });
-                    showToast("Teammeldung bestätigt.", "success");
-                    await refreshDomainWorkspacePage();
-                } catch (error) {
-                    showToast(error.message, "error");
-                }
-            });
+            const teamId = Number(button.getAttribute("data-confirm-team"));
+            button.addEventListener("click", () => openTeamReviewModal(teamId, "confirm"));
         });
+        grid.querySelectorAll("[data-reject-team]").forEach((button) => {
+            if (!state.canWrite) {
+                button.disabled = true;
+                button.classList.add("readonly-action");
+                return;
+            }
+            const teamId = Number(button.getAttribute("data-reject-team"));
+            button.addEventListener("click", () => openTeamReviewModal(teamId, "reject"));
+        });
+        grid.querySelectorAll("[data-history-team]").forEach((button) => {
+            if (!state.canWrite && !hasPermission("teams.read")) {
+                button.disabled = true;
+                button.classList.add("readonly-action");
+                return;
+            }
+            const teamId = Number(button.getAttribute("data-history-team"));
+            button.addEventListener("click", () => openTeamHistoryModal(teamId));
+        });
+    }
+
+    async function openTeamHistoryModal(teamId) {
+        const team = (Array.isArray(state.teams) ? state.teams : []).find((entry) => Number(entry.id) === Number(teamId));
+        if (!team) return;
+        try {
+            const history = await api(`/teams/${teamId}/history`);
+            const entries = Array.isArray(history) ? history : [];
+            const content = `
+                <div class="workspace-history-modal">
+                    <p><strong>${escapeHtml(team.name || "Team")}</strong></p>
+                    <div class="workspace-history-list">
+                        ${entries.length > 0 ? entries.map((entry) => `
+                            <div class="workspace-history-entry">
+                                <div class="workspace-history-head">
+                                    <strong>${escapeHtml(entry.action || "Aktion")}</strong>
+                                    <span>${escapeHtml(formatDateTime(entry.created_at))}</span>
+                                </div>
+                                <div>${escapeHtml(entry.actor_username || "system")}</div>
+                                <div class="workspace-muted">${escapeHtml(String(entry.details || "—"))}</div>
+                            </div>
+                        `).join("") : "<div class='workspace-muted'>Keine Historie vorhanden.</div>"}
+                    </div>
+                </div>
+            `;
+            showModal(`Historie · ${escapeHtml(team.name || "Team")}`, content, [{ id: "close", label: "Schließen", primary: true }]);
+        } catch (error) {
+            showToast(error.message, "error");
+        }
+    }
+
+    function openTeamReviewModal(teamId, mode) {
+        const team = (Array.isArray(state.teams) ? state.teams : []).find((entry) => Number(entry.id) === Number(teamId));
+        if (!team) return;
+        const title = mode === "confirm" ? "Teammeldung bestätigen" : "Rückfrage an Vorsitzende";
+        const content = `
+            <div class="workspace-review-modal">
+                <p><strong>${escapeHtml(team.name || "Team")}</strong> · ${escapeHtml(teamReviewLabel(team))}</p>
+                <div class="form-group">
+                    <label>Kommentar ${mode === "reject" ? "*" : "(optional)"}</label>
+                    <textarea id="ws-review-comment" rows="4" placeholder="${mode === "confirm" ? "Optionale Bemerkung zur Bestätigung" : "Bitte konkrete Rückfrage oder fehlende Punkte benennen"}"></textarea>
+                </div>
+            </div>
+        `;
+        showModal(title, content, [
+            { id: "cancel", label: "Abbrechen", primary: false, handler: () => {} },
+            {
+                id: "save",
+                label: mode === "confirm" ? "Bestätigen" : "Rückfrage senden",
+                primary: true,
+                handler: async () => {
+                    const comment = document.getElementById("ws-review-comment")?.value?.trim() || "";
+                    try {
+                        await api(mode === "confirm" ? `/teams/${teamId}/confirm-registration` : `/teams/${teamId}/request-revision`, {
+                            method: "POST",
+                            body: JSON.stringify({ comment })
+                        });
+                        showToast(mode === "confirm" ? "Teammeldung bestätigt." : "Rückfrage gesendet.", "success");
+                        await refreshDomainWorkspacePage();
+                    } catch (error) {
+                        showToast(error.message, "error");
+                    }
+                }
+            }
+        ]);
     }
 
     function bindTeamAdminPanel() {
@@ -1450,6 +1566,23 @@ function initDomainWorkspace(config) {
                 }
             });
         }
+        document.querySelectorAll("[data-team-template]").forEach((button) => {
+            if (button.dataset.bound === "1") return;
+            button.dataset.bound = "1";
+            button.addEventListener("click", () => {
+                const template = String(button.getAttribute("data-team-template") || "").toUpperCase();
+                if (!teamForm) return;
+                const teamTypeField = teamForm.elements.teamType;
+                const statusField = teamForm.elements.registrationStatus;
+                const nameField = teamForm.elements.name;
+                if (teamTypeField) teamTypeField.value = template;
+                if (statusField) statusField.value = "draft";
+                if (nameField && !String(nameField.value || "").trim()) {
+                    nameField.placeholder = `${template}-Team Name`;
+                }
+                showToast(`${template}-Team Vorlage geladen.`, "info", 1800);
+            });
+        });
     }
 
     function renderQuickActions() {
