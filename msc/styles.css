@@ -1164,6 +1164,33 @@ body.ux-minimal-mode #ws-problem-scanner-card {
     color: var(--primary-dark);
 }
 
+.workspace-scanner-issue-list {
+    margin-top: 14px;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+}
+
+.workspace-scanner-issue-list h4 {
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: var(--primary-dark);
+}
+
+.workspace-scanner-issue-list ul {
+    list-style: none;
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+}
+
+.workspace-scanner-issue-list li {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--lighter);
+    padding: 8px 10px;
+}
+
 .ux-mode-toggle {
     margin-right: 8px;
 }

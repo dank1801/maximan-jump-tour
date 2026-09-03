@@ -149,6 +149,7 @@ function initDomainWorkspace(config) {
         organizations: [],
         seasons: [],
         teams: [],
+        errorReport: null,
         canWrite: false
     };
     const draftKey = `msc_portal_domain_draft:${domainKey}`;
@@ -1352,6 +1353,7 @@ function initDomainWorkspace(config) {
         const orgs = Array.isArray(state.organizations) ? state.organizations : [];
         const teams = Array.isArray(state.teams) ? state.teams : [];
         const seasons = Array.isArray(state.seasons) ? state.seasons : [];
+        const backendIssues = Array.isArray(state.errorReport?.issues) ? state.errorReport.issues : [];
         const issues = [];
         const scanRecords = records.reduce((acc, record) => {
             const meta = extractMeta(record);
@@ -1395,6 +1397,13 @@ function initDomainWorkspace(config) {
             if (nextDeadline) {
                 issues.push({ label: `Nächste Frist: ${formatDateTime(nextDeadline.toISOString())}`, tone: Date.now() > nextDeadline.getTime() ? "danger" : "info" });
             }
+            const summary = state.errorReport?.summary || {};
+            if (Number(summary.critical || 0) > 0) {
+                issues.push({ label: `${summary.critical} kritische Logikfehler`, tone: "danger" });
+            }
+            if (Number(summary.high || 0) > 0) {
+                issues.push({ label: `${summary.high} hohe Risiken`, tone: "warning" });
+            }
         }
 
         let nextStep = "Alles wirkt aktuell ruhig.";
@@ -1415,6 +1424,9 @@ function initDomainWorkspace(config) {
         } else if (scanRecords.overdue > 0) {
             nextStep = "Nächster sinnvoller Schritt: Überfällige Punkte priorisieren.";
         }
+        if (domainKey === "team_portal" && backendIssues.length > 0) {
+            nextStep = "Nächster sinnvoller Schritt: Kritische Logikfehler sofort beheben.";
+        }
 
         node.innerHTML = `
             <div class="workspace-scanner-head">
@@ -1425,6 +1437,23 @@ function initDomainWorkspace(config) {
                 ${issues.length > 0 ? issues.slice(0, 6).map((issue) => `<span class="badge badge-${issue.tone}">${escapeHtml(issue.label)}</span>`).join("") : "<span class='workspace-team-ok'>Alles im grünen Bereich</span>"}
             </div>
             <div class="workspace-scanner-next">${escapeHtml(nextStep)}</div>
+            ${domainKey === "team_portal" ? `
+                <div class="workspace-scanner-issue-list">
+                    <h4>Fehler, die geändert werden müssen</h4>
+                    ${backendIssues.length > 0 ? `
+                        <ul>
+                            ${backendIssues.slice(0, 30).map((issue) => `
+                                <li>
+                                    <span class="badge badge-${String(issue.severity || "").toLowerCase() === "critical" ? "danger" : String(issue.severity || "").toLowerCase() === "high" ? "warning" : "info"}">${escapeHtml(String(issue.severity || "info").toUpperCase())}</span>
+                                    <strong>${escapeHtml(issue.title || "Logikfehler")}</strong>
+                                    <div class="workspace-muted">${escapeHtml(issue.detail || "Bitte prüfen.")}</div>
+                                    <div class="workspace-muted">Nächste Aktion: ${escapeHtml(issue.action || "Korrigieren")}</div>
+                                </li>
+                            `).join("")}
+                        </ul>
+                    ` : "<div class='workspace-team-ok'>Keine logischen Fehler erkannt.</div>"}
+                </div>
+            ` : ""}
         `;
     }
 
@@ -2192,10 +2221,11 @@ function initDomainWorkspace(config) {
                 api("/organizations"),
                 api("/seasons"),
                 api("/teams"),
-                    hasPermission("users.read") ? api("/users") : Promise.resolve([])
+                hasPermission("users.read") ? api("/users") : Promise.resolve([]),
+                api("/team-portal/error-report").catch(() => ({ summary: { total: 0 }, issues: [] }))
                 ]
-                : [Promise.resolve([]), Promise.resolve([]), Promise.resolve([]), Promise.resolve([])];
-        const [scope, records, logs, savedViews, notifications, models, organizations, seasons, teams, users] = await Promise.all([
+                : [Promise.resolve([]), Promise.resolve([]), Promise.resolve([]), Promise.resolve([]), Promise.resolve({ summary: { total: 0 }, issues: [] })];
+        const [scope, records, logs, savedViews, notifications, models, organizations, seasons, teams, users, errorReport] = await Promise.all([
                 api("/system-scope"),
                 api(`/domain-records?${recordsQuery.toString()}`),
                 api("/workflows/logs?limit=200&offset=0"),
@@ -2217,6 +2247,7 @@ function initDomainWorkspace(config) {
         state.seasons = Array.isArray(seasons) ? seasons : [];
         state.teams = Array.isArray(teams) ? teams : [];
         state.users = Array.isArray(users) ? users : [];
+        state.errorReport = errorReport && typeof errorReport === "object" ? errorReport : { summary: { total: 0 }, issues: [] };
 
         ensureEnhancedSections();
         updateHeader();

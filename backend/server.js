@@ -2235,6 +2235,631 @@ app.get("/api/health", (_, res) => {
     });
 });
 
+app.get("/api/team-portal/error-report", authRequired, requirePermission("team_portal.read"), (req, res) => {
+    const allowedRegistrationStatus = new Set(["draft", "submitted", "revision_requested", "confirmed"]);
+    const allowedLicenseStatus = new Set(["pending", "confirmed", "valid", "in_pruefung", "abgelaufen"]);
+    const toMs = (value) => {
+        if (!value) return null;
+        const ms = Date.parse(String(value));
+        return Number.isNaN(ms) ? null : ms;
+    };
+    const nowMs = Date.now();
+    const scope = getAccessibleTeamScope(req.user);
+    const organizationRows = db.prepare(
+        `SELECT o.id, o.name, o.short_name, o.status, o.chair_user_id, o.updated_at,
+                chair.username AS chair_username, chair.name AS chair_name, chair.status AS chair_status, chair.role AS chair_role
+         FROM organizations o
+         LEFT JOIN users chair ON chair.id = o.chair_user_id
+         ORDER BY o.id ASC`
+    ).all();
+    const teamRowsAll = db.prepare(
+        `SELECT t.id, t.name, t.organization_id, t.team_type, t.nation, t.category, t.manager_user_id, t.season_id,
+                t.registration_status, t.submitted_at, t.confirmed_at, t.registration_deadline_at, t.status, t.created_at, t.updated_at,
+                manager.username AS manager_username, manager.status AS manager_status, manager.role AS manager_role
+         FROM teams t
+         LEFT JOIN users manager ON manager.id = t.manager_user_id
+         ORDER BY t.id ASC`
+    ).all();
+    const teamRows = teamRowsAll.filter((team) => teamMatchesScope(team, scope));
+    const visibleOrgIds = new Set(teamRows.map((team) => Number(team.organization_id)).filter((id) => Number.isInteger(id) && id > 0));
+    if (scope.type === "organization" && scope.organizationId) {
+        visibleOrgIds.add(Number(scope.organizationId));
+    }
+    const organizationById = new Map(organizationRows.map((row) => [Number(row.id), row]));
+    if (scope.type === "team" && scope.teamId) {
+        const scopedTeam = teamRows.find((team) => Number(team.id) === Number(scope.teamId));
+        if (scopedTeam?.organization_id) visibleOrgIds.add(Number(scopedTeam.organization_id));
+    }
+    const organizations = scope.type === "all"
+        ? organizationRows
+        : organizationRows.filter((org) => visibleOrgIds.has(Number(org.id)));
+
+    const seasonRowsAll = db.prepare("SELECT * FROM seasons ORDER BY id ASC").all();
+    const visibleSeasonIds = new Set(teamRows.map((team) => Number(team.season_id)).filter((id) => Number.isInteger(id) && id > 0));
+    const seasons = scope.type === "all"
+        ? seasonRowsAll
+        : seasonRowsAll.filter((season) => visibleSeasonIds.has(Number(season.id)));
+    const seasonById = new Map(seasons.map((season) => [Number(season.id), season]));
+
+    const memberRowsAll = db.prepare("SELECT * FROM team_members ORDER BY id ASC").all();
+    const visibleTeamIds = new Set(teamRows.map((team) => Number(team.id)));
+    const memberRows = memberRowsAll.filter((member) => visibleTeamIds.has(Number(member.team_id)));
+
+    const eventRowsAll = db.prepare("SELECT * FROM events ORDER BY id ASC").all();
+    const eventRows = scope.type === "all"
+        ? eventRowsAll
+        : eventRowsAll.filter((event) => visibleSeasonIds.has(Number(event.season_id)));
+
+    const transferRowsAll = db.prepare("SELECT * FROM transfers ORDER BY id ASC").all();
+    const transferRows = transferRowsAll.filter((transfer) => (
+        visibleTeamIds.has(Number(transfer.from_team_id)) || visibleTeamIds.has(Number(transfer.to_team_id))
+    ));
+
+    const scopeRows = db.prepare("SELECT user_id, organization_id, team_id, event_id FROM user_scope_assignments").all();
+    const scopeByUserId = new Map(scopeRows.map((row) => [Number(row.user_id), row]));
+
+    const issues = [];
+    const pushIssue = ({ severity = "warning", code, title, detail, entityType, entityId, action }) => {
+        issues.push({
+            severity,
+            code,
+            title,
+            detail,
+            entityType,
+            entityId: entityId !== undefined && entityId !== null ? String(entityId) : null,
+            action: action || "Bitte prüfen und korrigieren."
+        });
+    };
+
+    const teamCountsByManager = new Map();
+    for (const team of teamRows) {
+        if (!team.manager_user_id) continue;
+        const key = Number(team.manager_user_id);
+        teamCountsByManager.set(key, (teamCountsByManager.get(key) || 0) + 1);
+    }
+
+    for (const org of organizations) {
+        const orgId = Number(org.id);
+        const orgTeams = teamRows.filter((team) => Number(team.organization_id) === orgId && String(team.status || "").toLowerCase() !== "inactive");
+        const hasA = orgTeams.some((team) => String(team.team_type || "").trim().toUpperCase() === "A");
+        if (!org.chair_user_id) {
+            pushIssue({
+                severity: "critical",
+                code: "org_missing_chair",
+                title: `Organisation ohne Vorsitz`,
+                detail: `${org.name} hat keinen zugewiesenen Vorsitzenden.`,
+                entityType: "organization",
+                entityId: org.id,
+                action: "Vorsitzenden zuweisen."
+            });
+        } else {
+            if (!org.chair_username) {
+                pushIssue({
+                    severity: "critical",
+                    code: "org_chair_missing_user",
+                    title: "Vorsitzender existiert nicht",
+                    detail: `Organisation ${org.name} verweist auf einen nicht vorhandenen Benutzer.`,
+                    entityType: "organization",
+                    entityId: org.id,
+                    action: "Vorsitzenden neu zuweisen."
+                });
+            } else if (String(org.chair_status || "").toLowerCase() !== "active") {
+                pushIssue({
+                    severity: "high",
+                    code: "org_chair_inactive",
+                    title: "Vorsitzender inaktiv",
+                    detail: `Der Vorsitz von ${org.name} (${org.chair_username}) ist inaktiv.`,
+                    entityType: "organization",
+                    entityId: org.id,
+                    action: "Aktiven Vorsitzenden festlegen."
+                });
+            }
+            const chairScope = scopeByUserId.get(Number(org.chair_user_id));
+            if (!chairScope || Number(chairScope.organization_id) !== orgId) {
+                pushIssue({
+                    severity: "medium",
+                    code: "org_chair_scope_mismatch",
+                    title: "Vorsitz-Scope inkonsistent",
+                    detail: `Der Scope von ${org.chair_username || "Vorsitz"} passt nicht zu ${org.name}.`,
+                    entityType: "organization",
+                    entityId: org.id,
+                    action: "Vorsitz erneut zuweisen, damit Scope aktualisiert wird."
+                });
+            }
+        }
+        if (orgTeams.length > 3) {
+            pushIssue({
+                severity: "critical",
+                code: "org_too_many_teams",
+                title: "Zu viele Teams",
+                detail: `${org.name} hat ${orgTeams.length} aktive Teams (maximal 3 erlaubt).`,
+                entityType: "organization",
+                entityId: org.id,
+                action: "Teamanzahl auf maximal 3 reduzieren."
+            });
+        }
+        if (orgTeams.length > 0 && !hasA) {
+            pushIssue({
+                severity: "high",
+                code: "org_missing_a_team",
+                title: "A-Team fehlt",
+                detail: `${org.name} hat aktive Teams, aber kein A-Team.`,
+                entityType: "organization",
+                entityId: org.id,
+                action: "A-Team anlegen oder Teamtyp korrigieren."
+            });
+        }
+        const seasonTypeSet = new Set();
+        for (const team of orgTeams) {
+            const seasonKey = team.season_id ? String(team.season_id) : "none";
+            const typeKey = `${seasonKey}:${String(team.team_type || "").trim().toUpperCase()}`;
+            if (seasonTypeSet.has(typeKey)) {
+                pushIssue({
+                    severity: "high",
+                    code: "org_duplicate_team_type",
+                    title: "Teamtyp doppelt in Saison",
+                    detail: `${org.name} hat denselben Teamtyp mehrfach in einer Saison.`,
+                    entityType: "team",
+                    entityId: team.id,
+                    action: "Teamtyp oder Saisonzuordnung prüfen."
+                });
+            } else {
+                seasonTypeSet.add(typeKey);
+            }
+        }
+    }
+
+    for (const team of teamRows) {
+        const teamId = Number(team.id);
+        const teamName = String(team.name || `Team ${teamId}`);
+        const status = String(team.registration_status || "draft").trim().toLowerCase();
+        const teamType = String(team.team_type || "").trim().toUpperCase();
+        const org = team.organization_id ? organizationById.get(Number(team.organization_id)) : null;
+        const season = team.season_id ? seasonById.get(Number(team.season_id)) : null;
+
+        if (!allowedRegistrationStatus.has(status)) {
+            pushIssue({
+                severity: "critical",
+                code: "team_invalid_registration_status",
+                title: "Ungültiger Meldestatus",
+                detail: `${teamName} hat den unbekannten Meldestatus "${team.registration_status}".`,
+                entityType: "team",
+                entityId: team.id,
+                action: "Status auf Entwurf/Eingereicht/Rückfrage/Bestätigt korrigieren."
+            });
+        }
+        if (!team.organization_id) {
+            pushIssue({
+                severity: "critical",
+                code: "team_missing_org",
+                title: "Team ohne Organisation",
+                detail: `${teamName} ist keiner Organisation zugewiesen.`,
+                entityType: "team",
+                entityId: team.id,
+                action: "Organisation zuweisen."
+            });
+        } else if (!org || String(org.status || "").toLowerCase() === "inactive") {
+            pushIssue({
+                severity: "high",
+                code: "team_org_inactive_or_missing",
+                title: "Organisation ungültig",
+                detail: `${teamName} verweist auf eine fehlende oder inaktive Organisation.`,
+                entityType: "team",
+                entityId: team.id,
+                action: "Team auf aktive Organisation verschieben."
+            });
+        }
+        if (!["A", "B", "C"].includes(teamType)) {
+            pushIssue({
+                severity: "high",
+                code: "team_invalid_type",
+                title: "Ungültiger Teamtyp",
+                detail: `${teamName} hat den Teamtyp "${team.team_type || "leer"}".`,
+                entityType: "team",
+                entityId: team.id,
+                action: "Teamtyp auf A, B oder C setzen."
+            });
+        }
+        if (!team.season_id) {
+            pushIssue({
+                severity: "medium",
+                code: "team_missing_season",
+                title: "Team ohne Saison",
+                detail: `${teamName} hat keine Saisonzuordnung.`,
+                entityType: "team",
+                entityId: team.id,
+                action: "Saison zuweisen."
+            });
+        } else if (!season || String(season.status || "").toLowerCase() === "inactive") {
+            pushIssue({
+                severity: "high",
+                code: "team_invalid_season",
+                title: "Saison ungültig",
+                detail: `${teamName} verweist auf eine fehlende oder inaktive Saison.`,
+                entityType: "team",
+                entityId: team.id,
+                action: "Gültige Saison zuweisen."
+            });
+        }
+        if ((status === "submitted" || status === "confirmed") && !team.season_id) {
+            pushIssue({
+                severity: "critical",
+                code: "team_flow_without_season",
+                title: "Meldeablauf ohne Saison",
+                detail: `${teamName} ist ${status === "confirmed" ? "bestätigt" : "eingereicht"}, aber ohne Saison.`,
+                entityType: "team",
+                entityId: team.id,
+                action: "Saison setzen und Meldeablauf prüfen."
+            });
+        }
+        if (status === "submitted" && !team.submitted_at) {
+            pushIssue({
+                severity: "medium",
+                code: "team_submitted_without_timestamp",
+                title: "Einreichung ohne Zeitstempel",
+                detail: `${teamName} ist eingereicht, aber ohne submitted_at.`,
+                entityType: "team",
+                entityId: team.id,
+                action: "Einreichung erneut auslösen."
+            });
+        }
+        if (status === "confirmed") {
+            if (!team.submitted_at) {
+                pushIssue({
+                    severity: "high",
+                    code: "team_confirmed_without_submitted_at",
+                    title: "Bestätigt ohne Einreichung",
+                    detail: `${teamName} ist bestätigt, aber ohne submitted_at.`,
+                    entityType: "team",
+                    entityId: team.id,
+                    action: "Meldehistorie korrigieren."
+                });
+            }
+            if (!team.confirmed_at) {
+                pushIssue({
+                    severity: "high",
+                    code: "team_confirmed_without_timestamp",
+                    title: "Bestätigt ohne Zeitstempel",
+                    detail: `${teamName} ist bestätigt, aber ohne confirmed_at.`,
+                    entityType: "team",
+                    entityId: team.id,
+                    action: "Bestätigung erneut durchführen."
+                });
+            }
+        }
+        const deadlineMs = toMs(team.registration_deadline_at) || toMs(season?.registration_deadline_at);
+        if ((status === "draft" || status === "revision_requested") && deadlineMs && nowMs > deadlineMs) {
+            pushIssue({
+                severity: "high",
+                code: "team_deadline_passed_unsubmitted",
+                title: "Meldeschluss verpasst",
+                detail: `${teamName} ist noch nicht eingereicht, obwohl die Meldefrist abgelaufen ist.`,
+                entityType: "team",
+                entityId: team.id,
+                action: "Teamstatus sofort prüfen und entscheiden."
+            });
+        }
+        if (team.manager_user_id) {
+            if (!team.manager_username) {
+                pushIssue({
+                    severity: "high",
+                    code: "team_manager_missing",
+                    title: "Manager fehlt",
+                    detail: `${teamName} verweist auf einen nicht vorhandenen Manager.`,
+                    entityType: "team",
+                    entityId: team.id,
+                    action: "Manager neu zuweisen."
+                });
+            } else {
+                const managerRole = String(team.manager_role || "").trim().toLowerCase();
+                if (!["teammanager", "trainer"].includes(managerRole)) {
+                    pushIssue({
+                        severity: "high",
+                        code: "team_manager_invalid_role",
+                        title: "Managerrolle ungültig",
+                        detail: `${teamName} hat mit ${team.manager_username} eine unpassende Rolle (${team.manager_role || "leer"}).`,
+                        entityType: "team",
+                        entityId: team.id,
+                        action: "Rolle auf Teammanager/Trainer setzen oder Manager tauschen."
+                    });
+                }
+                if (String(team.manager_status || "").toLowerCase() !== "active") {
+                    pushIssue({
+                        severity: "high",
+                        code: "team_manager_inactive",
+                        title: "Manager inaktiv",
+                        detail: `${teamName} hat einen inaktiven Manager (${team.manager_username}).`,
+                        entityType: "team",
+                        entityId: team.id,
+                        action: "Aktiven Manager zuweisen."
+                    });
+                }
+                if ((teamCountsByManager.get(Number(team.manager_user_id)) || 0) > 1) {
+                    pushIssue({
+                        severity: "medium",
+                        code: "manager_multi_team",
+                        title: "Manager mehrfach zugewiesen",
+                        detail: `${team.manager_username} verwaltet mehrere Teams parallel.`,
+                        entityType: "user",
+                        entityId: team.manager_user_id,
+                        action: "Prüfen, ob Mehrfachzuweisung gewünscht ist."
+                    });
+                }
+            }
+        }
+
+        const members = memberRows.filter((member) => Number(member.team_id) === teamId && String(member.status || "").toLowerCase() !== "inactive");
+        if ((status === "submitted" || status === "confirmed") && members.length === 0) {
+            pushIssue({
+                severity: "high",
+                code: "team_submitted_without_members",
+                title: "Team ohne Mitglieder eingereicht",
+                detail: `${teamName} ist ${status === "confirmed" ? "bestätigt" : "eingereicht"}, hat aber keine aktiven Mitglieder.`,
+                entityType: "team",
+                entityId: team.id,
+                action: "Mitglieder ergänzen oder Status korrigieren."
+            });
+        }
+        for (const member of members) {
+            if (Number(member.is_springer) === 1 && String(member.license_status || "").toLowerCase() !== "confirmed") {
+                pushIssue({
+                    severity: "critical",
+                    code: "springer_license_unconfirmed",
+                    title: "Springer ohne bestätigte Lizenz",
+                    detail: `${member.name} in ${teamName} ist Springer ohne bestätigte Lizenz.`,
+                    entityType: "team_member",
+                    entityId: member.id,
+                    action: "Lizenz prüfen und bestätigen."
+                });
+            }
+            const licenseStatus = String(member.license_status || "").trim().toLowerCase();
+            if (licenseStatus && !allowedLicenseStatus.has(licenseStatus)) {
+                pushIssue({
+                    severity: "medium",
+                    code: "member_unknown_license_status",
+                    title: "Unbekannter Lizenzstatus",
+                    detail: `${member.name} hat den unbekannten Lizenzstatus "${member.license_status}".`,
+                    entityType: "team_member",
+                    entityId: member.id,
+                    action: "Lizenzstatus auf gültigen Wert setzen."
+                });
+            }
+            const validUntilMs = toMs(member.license_valid_until);
+            if (validUntilMs && validUntilMs < nowMs && licenseStatus !== "abgelaufen") {
+                pushIssue({
+                    severity: "high",
+                    code: "member_license_expired_status_mismatch",
+                    title: "Lizenz abgelaufen, Status passt nicht",
+                    detail: `${member.name} hat ein abgelaufenes Lizenzdatum, aber keinen passenden Status.`,
+                    entityType: "team_member",
+                    entityId: member.id,
+                    action: "Lizenzstatus und Gültigkeit abgleichen."
+                });
+            }
+        }
+    }
+
+    for (const season of seasons) {
+        const seasonLabel = String(season.name || `Saison ${season.id}`);
+        const startMs = toMs(season.start_date);
+        const endMs = toMs(season.end_date);
+        const regMs = toMs(season.registration_deadline_at);
+        const transferOpenMs = toMs(season.transfer_window_open_at);
+        const transferCloseMs = toMs(season.transfer_window_close_at);
+
+        if (season.start_date && startMs === null) {
+            pushIssue({
+                severity: "high",
+                code: "season_invalid_start_date",
+                title: "Saison-Startdatum ungültig",
+                detail: `${seasonLabel} hat ein ungültiges Startdatum.`,
+                entityType: "season",
+                entityId: season.id,
+                action: "Startdatum korrigieren."
+            });
+        }
+        if (season.end_date && endMs === null) {
+            pushIssue({
+                severity: "high",
+                code: "season_invalid_end_date",
+                title: "Saison-Enddatum ungültig",
+                detail: `${seasonLabel} hat ein ungültiges Enddatum.`,
+                entityType: "season",
+                entityId: season.id,
+                action: "Enddatum korrigieren."
+            });
+        }
+        if (startMs !== null && endMs !== null && startMs > endMs) {
+            pushIssue({
+                severity: "critical",
+                code: "season_date_range_invalid",
+                title: "Saisonzeitraum ungültig",
+                detail: `${seasonLabel} hat ein Startdatum nach dem Enddatum.`,
+                entityType: "season",
+                entityId: season.id,
+                action: "Start/Ende korrekt setzen."
+            });
+        }
+        if (regMs !== null && startMs !== null && regMs > startMs) {
+            pushIssue({
+                severity: "high",
+                code: "season_registration_deadline_after_start",
+                title: "Meldeschluss liegt nach Saisonstart",
+                detail: `${seasonLabel} hat eine Meldefrist nach dem Saisonstart.`,
+                entityType: "season",
+                entityId: season.id,
+                action: "Meldeschluss vor den Saisonstart ziehen."
+            });
+        }
+        if ((season.transfer_window_open_at && transferOpenMs === null) || (season.transfer_window_close_at && transferCloseMs === null)) {
+            pushIssue({
+                severity: "high",
+                code: "season_transfer_window_invalid_date",
+                title: "Transferfenster mit ungültigem Datum",
+                detail: `${seasonLabel} enthält ein ungültiges Transferfenster-Datum.`,
+                entityType: "season",
+                entityId: season.id,
+                action: "Transferfenster-Daten korrigieren."
+            });
+        }
+        if (transferOpenMs !== null && transferCloseMs !== null && transferOpenMs > transferCloseMs) {
+            pushIssue({
+                severity: "critical",
+                code: "season_transfer_window_order_invalid",
+                title: "Transferfenster-Reihenfolge ungültig",
+                detail: `${seasonLabel} hat ein Öffnungsdatum nach dem Schließdatum.`,
+                entityType: "season",
+                entityId: season.id,
+                action: "Öffnen/Schließen korrekt setzen."
+            });
+        }
+    }
+
+    for (const eventEntry of eventRows) {
+        const eventLabel = String(eventEntry.name || `Event ${eventEntry.id}`);
+        const eventDateMs = toMs(eventEntry.event_date);
+        const season = eventEntry.season_id ? seasonById.get(Number(eventEntry.season_id)) : null;
+        if (eventEntry.event_date && eventDateMs === null) {
+            pushIssue({
+                severity: "high",
+                code: "event_invalid_date",
+                title: "Eventdatum ungültig",
+                detail: `${eventLabel} hat ein ungültiges Datum.`,
+                entityType: "event",
+                entityId: eventEntry.id,
+                action: "Eventdatum korrigieren."
+            });
+        }
+        if (!eventEntry.season_id) {
+            pushIssue({
+                severity: "medium",
+                code: "event_missing_season",
+                title: "Event ohne Saison",
+                detail: `${eventLabel} ist keiner Saison zugeordnet.`,
+                entityType: "event",
+                entityId: eventEntry.id,
+                action: "Saison zuweisen."
+            });
+        } else if (!season) {
+            pushIssue({
+                severity: "high",
+                code: "event_season_missing",
+                title: "Event-Saison fehlt",
+                detail: `${eventLabel} verweist auf eine fehlende oder nicht sichtbare Saison.`,
+                entityType: "event",
+                entityId: eventEntry.id,
+                action: "Saisonzuordnung korrigieren."
+            });
+        } else {
+            const startMs = toMs(season.start_date);
+            const endMs = toMs(season.end_date);
+            if (eventDateMs !== null && startMs !== null && endMs !== null && (eventDateMs < startMs || eventDateMs > endMs)) {
+                pushIssue({
+                    severity: "high",
+                    code: "event_outside_season_window",
+                    title: "Event außerhalb Saisonfenster",
+                    detail: `${eventLabel} liegt außerhalb des Saisonzeitraums ${season.name}.`,
+                    entityType: "event",
+                    entityId: eventEntry.id,
+                    action: "Eventdatum oder Saisonzeitraum anpassen."
+                });
+            }
+        }
+    }
+
+    const teamById = new Map(teamRows.map((team) => [Number(team.id), team]));
+    for (const transfer of transferRows) {
+        const transferLabel = String(transfer.athlete_name || `Transfer ${transfer.id}`);
+        const fromTeam = transfer.from_team_id ? teamById.get(Number(transfer.from_team_id)) : null;
+        const toTeam = transfer.to_team_id ? teamById.get(Number(transfer.to_team_id)) : null;
+        if (transfer.from_team_id && transfer.to_team_id && Number(transfer.from_team_id) === Number(transfer.to_team_id)) {
+            pushIssue({
+                severity: "critical",
+                code: "transfer_same_from_to",
+                title: "Transfer mit gleichem Von/Nach-Team",
+                detail: `${transferLabel} hat identisches Quell- und Zielteam.`,
+                entityType: "transfer",
+                entityId: transfer.id,
+                action: "Transferziel oder Quelle korrigieren."
+            });
+        }
+        if (transfer.from_team_id && !fromTeam) {
+            pushIssue({
+                severity: "high",
+                code: "transfer_missing_from_team",
+                title: "Transfer mit ungültigem Quellteam",
+                detail: `${transferLabel} verweist auf ein fehlendes Quellteam.`,
+                entityType: "transfer",
+                entityId: transfer.id,
+                action: "Quellteam korrigieren."
+            });
+        }
+        if (transfer.to_team_id && !toTeam) {
+            pushIssue({
+                severity: "high",
+                code: "transfer_missing_to_team",
+                title: "Transfer mit ungültigem Zielteam",
+                detail: `${transferLabel} verweist auf ein fehlendes Zielteam.`,
+                entityType: "transfer",
+                entityId: transfer.id,
+                action: "Zielteam korrigieren."
+            });
+        }
+        const lockMs = toMs(transfer.lock_until);
+        if (transfer.lock_until && lockMs === null) {
+            pushIssue({
+                severity: "medium",
+                code: "transfer_invalid_lock_until",
+                title: "Ungültiges Transfer-Sperrdatum",
+                detail: `${transferLabel} hat ein ungültiges lock_until Datum.`,
+                entityType: "transfer",
+                entityId: transfer.id,
+                action: "Sperrdatum korrigieren."
+            });
+        }
+        const relatedSeasonId = Number(toTeam?.season_id || fromTeam?.season_id || 0);
+        const relatedSeason = relatedSeasonId > 0 ? seasonById.get(relatedSeasonId) : null;
+        if (!Number(transfer.is_emergency) && relatedSeason) {
+            const createdMs = toMs(transfer.created_at);
+            const openMs = toMs(relatedSeason.transfer_window_open_at);
+            const closeMs = toMs(relatedSeason.transfer_window_close_at);
+            if (createdMs !== null && openMs !== null && closeMs !== null && (createdMs < openMs || createdMs > closeMs)) {
+                pushIssue({
+                    severity: "high",
+                    code: "transfer_outside_window",
+                    title: "Transfer außerhalb Transferfenster",
+                    detail: `${transferLabel} wurde außerhalb des Transferfensters von ${relatedSeason.name} erstellt.`,
+                    entityType: "transfer",
+                    entityId: transfer.id,
+                    action: "Transfer prüfen oder als Notfall markieren."
+                });
+            }
+        }
+    }
+
+    const severityOrder = ["critical", "high", "medium", "warning", "info"];
+    issues.sort((a, b) => {
+        const sa = severityOrder.indexOf(String(a.severity || "warning"));
+        const sb = severityOrder.indexOf(String(b.severity || "warning"));
+        if (sa !== sb) return sa - sb;
+        return String(a.title || "").localeCompare(String(b.title || ""), "de");
+    });
+
+    const summary = issues.reduce((acc, issue) => {
+        const key = String(issue.severity || "warning");
+        acc.total += 1;
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+    }, { total: 0, critical: 0, high: 0, medium: 0, warning: 0, info: 0 });
+
+    res.json({
+        generatedAt: new Date().toISOString(),
+        scope,
+        summary,
+        issues
+    });
+});
+
 app.get("/api/auth/bootstrap-status", (_, res) => {
     const row = db.prepare("SELECT COUNT(*) AS count FROM users").get();
     res.json({ requiresBootstrap: row.count === 0 });
