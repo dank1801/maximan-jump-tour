@@ -15,6 +15,13 @@ let liveReconnectTimer = null;
 let liveSyncListenersBound = false;
 let currentPermissionSet = new Set();
 let currentPageReadOnly = false;
+const DOMAIN_WORKSPACE_PAGES = [
+    "msc-admin.html",
+    "loc-dashboard.html",
+    "team-portal.html",
+    "athlete-app.html",
+    "public-site.html"
+];
 
 const PAGE_PERMISSION_RULES = {
     "dashboard.html": { readAny: ["dashboard.read"], writeAny: [] },
@@ -49,6 +56,11 @@ const PAGE_PERMISSION_RULES = {
         ],
         writeAny: ["dashboard.read", "msc_admin.write", "loc.write", "team_portal.write", "athlete_app.write", "public_site.write"]
     },
+    "msc-admin.html": { readAny: ["dashboard.read", "msc_admin.read", "msc_admin.write"], writeAny: ["dashboard.read", "msc_admin.write"] },
+    "loc-dashboard.html": { readAny: ["dashboard.read", "loc.read", "loc.write"], writeAny: ["dashboard.read", "loc.write"] },
+    "team-portal.html": { readAny: ["dashboard.read", "team_portal.read", "team_portal.write"], writeAny: ["dashboard.read", "team_portal.write"] },
+    "athlete-app.html": { readAny: ["dashboard.read", "athlete_app.read", "athlete_app.write"], writeAny: ["dashboard.read", "athlete_app.write"] },
+    "public-site.html": { readAny: ["dashboard.read", "public_site.read", "public_site.write"], writeAny: ["dashboard.read", "public_site.write"] },
     "settings.html": { readAny: ["settings.read", "settings.write"], writeAny: ["settings.write"] }
 };
 
@@ -61,6 +73,11 @@ const PAGE_WRITE_FORM_SELECTORS = {
     "reporting.html": ["#create-publication-form"],
     "operations.html": ["#module-record-form", "#workflow-execution-form", "#domain-record-form"],
     "domain.html": ["#domain-studio-form"],
+    "msc-admin.html": ["#ws-record-form", "#ws-workflow-form"],
+    "loc-dashboard.html": ["#ws-record-form", "#ws-workflow-form"],
+    "team-portal.html": ["#ws-record-form", "#ws-workflow-form"],
+    "athlete-app.html": ["#ws-record-form", "#ws-workflow-form"],
+    "public-site.html": ["#ws-record-form", "#ws-workflow-form"],
     "settings.html": ["#system-config-form", "#security-config-form", "#email-config-form"]
 };
 
@@ -73,6 +90,11 @@ const PAGE_READONLY_ACTION_SELECTORS = {
     "reporting.html": ["#audit-log-tbody + .form-actions .btn", "#publications-list .btn"],
     "operations.html": ["#module-records-body .btn", "#workflow-logs-body .btn", "#domain-records-body .btn"],
     "domain.html": ["#domain-studio-records .btn", "#domain-studio-switch .btn"],
+    "msc-admin.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-run-workflow]", "[data-quick-action]"],
+    "loc-dashboard.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-run-workflow]", "[data-quick-action]"],
+    "team-portal.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-run-workflow]", "[data-quick-action]"],
+    "athlete-app.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-run-workflow]", "[data-quick-action]"],
+    "public-site.html": ["[data-edit-record]", "[data-delete-record]", "[data-mark-live]", "[data-run-workflow]", "[data-quick-action]"],
 };
 
 // ============ HELPERS ============
@@ -378,6 +400,10 @@ function scheduleLiveRefresh() {
                 if (typeof window.refreshOperationsPage === "function") {
                     await window.refreshOperationsPage();
                 }
+            } else if (isDomainWorkspacePage(page)) {
+                if (typeof window.refreshDomainWorkspacePage === "function") {
+                    await window.refreshDomainWorkspacePage();
+                }
             }
         } catch (error) {
             // Keep UI stable even if one refresh request fails.
@@ -513,6 +539,10 @@ function hasAnyPermission(permissions = []) {
     return (Array.isArray(permissions) ? permissions : []).some((permission) => hasPermission(permission));
 }
 
+function isDomainWorkspacePage(page = pageName()) {
+    return DOMAIN_WORKSPACE_PAGES.includes(String(page || "").toLowerCase());
+}
+
 function getPagePermissionState() {
     const page = pageName();
     const rule = PAGE_PERMISSION_RULES[page] || { readAny: [], writeAny: [] };
@@ -531,6 +561,11 @@ function applyNavPermissionVisibility() {
         "transfers.html": ["transfers.read", "transfers.write"],
         "reporting.html": ["audit.read", "publications.read", "public_api.read", "event_scores.read", "publications.write"],
         "operations.html": ["dashboard.read", "workflows.execute"],
+        "msc-admin.html": ["dashboard.read", "msc_admin.read", "msc_admin.write"],
+        "loc-dashboard.html": ["dashboard.read", "loc.read", "loc.write"],
+        "team-portal.html": ["dashboard.read", "team_portal.read", "team_portal.write"],
+        "athlete-app.html": ["dashboard.read", "athlete_app.read", "athlete_app.write"],
+        "public-site.html": ["dashboard.read", "public_site.read", "public_site.write"],
         "domain.html": [
             "dashboard.read",
             "msc_admin.read", "msc_admin.write",
@@ -552,6 +587,41 @@ function applyNavPermissionVisibility() {
         } else {
             link.classList.toggle("hidden", !visible);
         }
+    });
+}
+
+function ensureDomainNavLinks() {
+    const nav = document.querySelector(".portal-nav");
+    if (!nav) return;
+    const domainLinks = [
+        { href: "msc-admin.html", label: "MSC Admin" },
+        { href: "loc-dashboard.html", label: "LOC Dashboard" },
+        { href: "team-portal.html", label: "Team Portal" },
+        { href: "athlete-app.html", label: "Athlete App" },
+        { href: "public-site.html", label: "Public Site" }
+    ];
+    const operationsItem = Array.from(nav.querySelectorAll("a"))
+        .find((link) => (link.getAttribute("href") || "").toLowerCase() === "operations.html")
+        ?.closest("li");
+    const insertionParent = operationsItem?.parentElement || nav;
+    let insertAfter = operationsItem;
+    domainLinks.forEach((entry) => {
+        const exists = nav.querySelector(`a[href="${entry.href}"]`);
+        if (exists) {
+            insertAfter = exists.closest("li");
+            return;
+        }
+        const li = document.createElement("li");
+        const link = document.createElement("a");
+        link.href = entry.href;
+        link.textContent = entry.label;
+        li.appendChild(link);
+        if (insertAfter && insertAfter.parentElement === insertionParent) {
+            insertAfter.insertAdjacentElement("afterend", li);
+        } else {
+            insertionParent.appendChild(li);
+        }
+        insertAfter = li;
     });
 }
 
@@ -760,6 +830,11 @@ function statusBadge(status) {
         active: "success",
         inactive: "danger",
         pending: "warning",
+        planned: "info",
+        in_progress: "warning",
+        live: "success",
+        blocked: "danger",
+        completed: "success",
         in_pruefung: "info",
         gueltig: "success",
         abgelaufen: "danger",
@@ -1995,6 +2070,10 @@ async function rerenderCurrentPageForTimezone() {
         if (typeof window.refreshOperationsPage === "function") {
             await window.refreshOperationsPage();
         }
+    } else if (isDomainWorkspacePage(page)) {
+        if (typeof window.refreshDomainWorkspacePage === "function") {
+            await window.refreshDomainWorkspacePage();
+        }
     } else if (page === "domain.html") {
         if (typeof window.refreshDomainStudioPage === "function") {
             await window.refreshDomainStudioPage();
@@ -2016,6 +2095,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const user = await requireAuth();
         if (user) {
             wireLogout();
+            ensureDomainNavLinks();
             applyNavPermissionVisibility();
             activateNav();
             const permissionState = getPagePermissionState();
@@ -2048,6 +2128,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             } else if (page === "operations.html") {
                 if (typeof window.refreshOperationsPage === "function") {
                     await window.refreshOperationsPage();
+                }
+            } else if (isDomainWorkspacePage(page)) {
+                if (typeof window.refreshDomainWorkspacePage === "function") {
+                    await window.refreshDomainWorkspacePage();
                 }
             } else if (page === "domain.html") {
                 if (typeof window.refreshDomainStudioPage === "function") {

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MSC Portal - LOC Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <div class="portal-container">
+        <div class="portal-sidebar">
+            <div class="portal-logo">MSC Portal</div>
+            <ul class="portal-nav">
+                <li><a href="dashboard.html">Dashboard</a></li>
+                <li><a href="users.html">Benutzer & Rollen</a></li>
+                <li><a href="teams.html">Teams & Lizenzen</a></li>
+                <li><a href="events.html">Wettkämpfe</a></li>
+                <li><a href="points.html">Punkte & Wertungen</a></li>
+                <li><a href="transfers.html">Transfers & Verträge</a></li>
+                <li><a href="reporting.html">Reporting & Audit</a></li>
+                <li><a href="operations.html">Operations Hub</a></li>
+                <li><a href="settings.html">Einstellungen</a></li>
+            </ul>
+        </div>
+
+        <div class="portal-main">
+            <div class="portal-header">
+                <h1>LOC Dashboard</h1>
+                <div class="portal-user-info">
+                    <div><div class="user-badge" data-session-user>Admin</div><div data-session-role>Admin</div></div>
+                    <button id="logout-button" class="btn btn-secondary btn-small">Abmelden</button>
+                </div>
+            </div>
+            <div class="portal-content">
+                <div class="card"><div class="card-header"><h2 id="ws-domain-title">LOC Dashboard</h2></div><div class="card-body"><p id="ws-domain-description" class="help-text">Schanzenfreigabe, Windmonitoring, Gate Panel und Notfallprotokolle.</p><div class="kpi-grid"><div class="kpi-card"><div class="kpi-label">Einträge</div><div class="kpi-value" id="ws-kpi-total">0</div></div><div class="kpi-card"><div class="kpi-label">Live</div><div class="kpi-value" id="ws-kpi-live">0</div></div><div class="kpi-card"><div class="kpi-label">Blockiert</div><div class="kpi-value" id="ws-kpi-blocked">0</div></div><div class="kpi-card"><div class="kpi-label">Letztes Update</div><div class="kpi-value" id="ws-kpi-updated">—</div></div></div><div class="form-actions"><button type="button" class="btn btn-secondary btn-small" id="ws-refresh-all">Aktualisieren</button></div></div></div>
+                <div class="card"><div class="card-header"><h2>Capabilities</h2></div><div class="card-body"><div class="kpi-grid" id="ws-capability-cards"></div></div></div>
+                <div class="card"><div class="card-header"><h2>Operations-Eintrag</h2></div><form id="ws-record-form"><input type="hidden" name="recordId" /><div class="grid-3"><div class="form-group"><label>Funktion *</label><select name="capabilityKey" required></select></div><div class="form-group"><label>Titel *</label><input type="text" name="title" required /></div><div class="form-group"><label>Status *</label><select name="status" required><option value="planned">Geplant</option><option value="in_progress">In Bearbeitung</option><option value="live">Live</option><option value="blocked">Blockiert</option><option value="completed">Abgeschlossen</option></select></div><div class="form-group"><label>Owner Rolle</label><input type="text" name="ownerRole" /></div><div class="form-group"><label>Event-ID</label><input type="number" name="eventId" min="1" /></div></div><div class="form-group"><label>Notiz</label><textarea name="notes"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary" id="ws-record-submit">Eintrag speichern</button><button type="button" class="btn btn-secondary hidden" id="ws-record-cancel">Bearbeitung abbrechen</button></div></form></div>
+                <div class="card"><div class="card-header"><h2>Notfall-/Ablauf-Workflows</h2></div><form id="ws-workflow-form" class="card-body"><div class="grid-3"><div class="form-group"><label>Workflow *</label><select name="workflowKey" required></select></div><div class="form-group"><label>Event-ID</label><input type="number" name="eventId" min="1" /></div><div class="form-group"><label>Kommentar</label><input type="text" name="note" /></div><div class="form-group"><label>Medical Clearance</label><select name="clearance"><option value="true">Freigegeben</option><option value="false">Nicht freigegeben</option></select></div></div><div class="form-actions"><button type="submit" class="btn btn-primary">Workflow ausführen</button></div></form></div>
+                <div class="card"><div class="card-header"><h2>Operations-Feed</h2></div><div class="card-body"><table class="table"><thead><tr><th>Zeit</th><th>Funktion</th><th>Titel</th><th>Status</th><th>Owner</th><th>Notiz</th><th>Aktion</th></tr></thead><tbody id="ws-records-body"></tbody></table></div></div>
+                <div class="card"><div class="card-header"><h2>Workflow-Log</h2></div><div class="card-body"><table class="table"><thead><tr><th>Zeit</th><th>Workflow</th><th>Status</th><th>Ergebnis</th></tr></thead><tbody id="ws-workflow-body"></tbody></table></div></div>
+            </div>
+        </div>
+    </div>
+    <script src="portal.js"></script>
+    <script src="domain-workspace.js"></script>
+    <script>
+        if (!isLoginPage()) {
+            initDomainWorkspace({
+                domainKey: "loc",
+                title: "LOC Dashboard",
+                writePermission: "loc.write",
+                workflowKeys: ["loc_emergency_activation", "event_setup", "jury_intervention"]
+            });
+        }
+    </script>
+</body>
+</html>
