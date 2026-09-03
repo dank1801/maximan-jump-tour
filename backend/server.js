@@ -10,6 +10,7 @@ const { rateLimit } = require("express-rate-limit");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const Database = require("better-sqlite3");
+const { Pool } = require("pg");
 const { WebSocketServer } = require("ws");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
@@ -27,9 +28,17 @@ function parseEnvBoolean(value, fallback = false) {
     if (["false", "0", "no", "off", "nein"].includes(raw)) return false;
     return fallback;
 }
-const REQUIRE_PERSISTENT_DB = parseEnvBoolean(process.env.REQUIRE_PERSISTENT_DB, IS_PRODUCTION);
+const REQUIRE_PERSISTENT_DB = parseEnvBoolean(
+    process.env.REQUIRE_PERSISTENT_DB,
+    IS_PRODUCTION && !ENABLE_ONLINE_SNAPSHOT
+);
 const BASE_URL = process.env.BASE_URL || (IS_PRODUCTION ? "https://maximan-jump-tour.onrender.com" : "http://localhost:3000");
 const INVITATION_TOKEN_EXPIRES_HOURS = 48;
+const DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
+const ENABLE_ONLINE_SNAPSHOT = parseEnvBoolean(
+    process.env.ENABLE_ONLINE_SNAPSHOT,
+    Boolean(DATABASE_URL)
+);
 
 let emailTransporter = null;
 
@@ -43,6 +52,81 @@ const PERSISTENT_DIR_CANDIDATES = [
 function ensureWritableDirectory(directory) {
     fs.mkdirSync(directory, { recursive: true });
     fs.accessSync(directory, fs.constants.W_OK);
+}
+
+async function initOnlineSnapshotStore() {
+    if (!ENABLE_ONLINE_SNAPSHOT || !DATABASE_URL) {
+        return false;
+    }
+    snapshotPool = new Pool({
+        connectionString: DATABASE_URL,
+        ssl: IS_PRODUCTION ? { rejectUnauthorized: false } : false
+    });
+    await snapshotPool.query(`
+        CREATE TABLE IF NOT EXISTS app_db_snapshots (
+            name TEXT PRIMARY KEY,
+            db_blob BYTEA NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `);
+    snapshotReady = true;
+    return true;
+}
+
+async function restoreDbFromOnlineSnapshot() {
+    if (!snapshotReady || !snapshotPool) {
+        return false;
+    }
+    const result = await snapshotPool.query(
+        "SELECT db_blob, updated_at FROM app_db_snapshots WHERE name = $1 LIMIT 1",
+        ["msc-portal"]
+    );
+    const row = result.rows[0];
+    if (!row || !row.db_blob) {
+        return false;
+    }
+    ensureWritableDirectory(path.dirname(DB_PATH));
+    fs.writeFileSync(DB_PATH, Buffer.from(row.db_blob));
+    lastSnapshotAt = row.updated_at || null;
+    return true;
+}
+
+async function persistDbSnapshot(reason = "manual") {
+    if (!snapshotReady || !snapshotPool || !db) {
+        return false;
+    }
+    if (!fs.existsSync(DB_PATH)) {
+        return false;
+    }
+    const dbBlob = fs.readFileSync(DB_PATH);
+    if (!dbBlob || dbBlob.length === 0) {
+        return false;
+    }
+    await snapshotPool.query(
+        `INSERT INTO app_db_snapshots (name, db_blob, updated_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT(name) DO UPDATE SET
+           db_blob = EXCLUDED.db_blob,
+           updated_at = NOW()`,
+        ["msc-portal", dbBlob]
+    );
+    lastSnapshotAt = new Date().toISOString();
+    return true;
+}
+
+function scheduleSnapshotPersist(reason = "write") {
+    if (!snapshotReady || !snapshotPool) {
+        return;
+    }
+    if (snapshotWriteTimer) {
+        clearTimeout(snapshotWriteTimer);
+    }
+    snapshotWriteTimer = setTimeout(() => {
+        persistDbSnapshot(reason).catch((error) => {
+            // eslint-disable-next-line no-console
+            console.error("Online snapshot persist failed:", error.message);
+        });
+    }, 1500);
 }
 
 let DB_DIR = DEFAULT_RUNTIME_DIR;
@@ -87,9 +171,12 @@ if (IS_PRODUCTION && !JWT_SECRET) {
 }
 const EFFECTIVE_JWT_SECRET = JWT_SECRET || "dev-insecure-secret";
 
-const db = new Database(DB_PATH);
-db.pragma("foreign_keys = ON");
+let db = null;
 const wsClients = new Map();
+let snapshotPool = null;
+let snapshotReady = false;
+let snapshotWriteTimer = null;
+let lastSnapshotAt = null;
 
 function initDb() {
     db.exec(`
@@ -1291,13 +1378,24 @@ app.use(rateLimit({
     legacyHeaders: false
 }));
 app.use(express.json({ limit: "1mb" }));
-
-initDb();
-migrateUsersEmailConstraint();
-dropUsersEmailUniqueIndexes();
-ensureRolesRequiredAssignmentsColumn();
-ensureInvitationsTable();
-seedDefaultRoles();
+app.use((req, res, next) => {
+    if (!snapshotReady || !snapshotPool) {
+        next();
+        return;
+    }
+    const method = String(req.method || "").toUpperCase();
+    const shouldPersist = ["POST", "PUT", "PATCH", "DELETE"].includes(method) && req.path.startsWith("/api/");
+    if (!shouldPersist) {
+        next();
+        return;
+    }
+    res.on("finish", () => {
+        if (res.statusCode >= 200 && res.statusCode < 400) {
+            scheduleSnapshotPersist(method);
+        }
+    });
+    next();
+});
 
 const ADMIN_ROLES = ["msc admin", "admin", "root-admin"];
 const TEAM_WRITE_ROLES = [...ADMIN_ROLES, "teammanager"];
@@ -1308,7 +1406,12 @@ app.get("/api/health", (_, res) => {
     res.json({
         status: "ok",
         dbPath: DB_PATH,
-        persistentStorage: usingPersistentStorage
+        persistentStorage: usingPersistentStorage,
+        onlineSnapshot: {
+            enabled: ENABLE_ONLINE_SNAPSHOT,
+            ready: snapshotReady,
+            lastSnapshotAt
+        }
     });
 });
 
@@ -2981,12 +3084,64 @@ const server = http.createServer(app);
 registerWebSocketServer(server);
 
 async function startServer() {
+    if (ENABLE_ONLINE_SNAPSHOT) {
+        try {
+            await initOnlineSnapshotStore();
+            await restoreDbFromOnlineSnapshot();
+        } catch (error) {
+            if (IS_PRODUCTION) {
+                throw new Error(`Online-Snapshot konnte nicht initialisiert werden: ${error.message}`);
+            }
+            // eslint-disable-next-line no-console
+            console.warn("Online-Snapshot nicht verfügbar:", error.message);
+        }
+    }
+    db = new Database(DB_PATH);
+    db.pragma("foreign_keys = ON");
+    initDb();
+    migrateUsersEmailConstraint();
+    dropUsersEmailUniqueIndexes();
+    ensureRolesRequiredAssignmentsColumn();
+    ensureInvitationsTable();
+    seedDefaultRoles();
     await initializeEmailTransporter();
+    if (snapshotReady) {
+        await persistDbSnapshot("startup");
+    }
     server.listen(PORT, HOST, () => {
         // eslint-disable-next-line no-console
         console.log(`MSC backend running on http://${HOST}:${PORT} (DB: ${DB_PATH})`);
     });
 }
+
+async function flushAndShutdown(signal) {
+    try {
+        if (snapshotWriteTimer) {
+            clearTimeout(snapshotWriteTimer);
+            snapshotWriteTimer = null;
+        }
+        await persistDbSnapshot(signal || "shutdown");
+    } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error("Snapshot flush on shutdown failed:", error.message);
+    } finally {
+        try {
+            if (db) db.close();
+        } catch (error) {
+            // noop
+        }
+        if (snapshotPool) {
+            await snapshotPool.end().catch(() => {});
+        }
+    }
+}
+
+process.on("SIGTERM", () => {
+    flushAndShutdown("SIGTERM").finally(() => process.exit(0));
+});
+process.on("SIGINT", () => {
+    flushAndShutdown("SIGINT").finally(() => process.exit(0));
+});
 
 startServer().catch(err => {
     console.error("Fehler beim Starten des Servers:", err);
