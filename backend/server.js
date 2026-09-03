@@ -209,6 +209,7 @@ function initDb() {
 
         CREATE TABLE IF NOT EXISTS user_scope_assignments (
             user_id INTEGER PRIMARY KEY,
+            organization_id INTEGER,
             team_id INTEGER,
             event_id INTEGER,
             venue_code TEXT,
@@ -222,12 +223,20 @@ function initDb() {
         CREATE TABLE IF NOT EXISTS teams (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL UNIQUE,
+            organization_id INTEGER,
+            team_type TEXT,
             nation TEXT,
             category TEXT,
             manager_user_id INTEGER,
+            season_id INTEGER,
+            registration_status TEXT NOT NULL DEFAULT 'draft',
+            submitted_at TEXT,
+            confirmed_at TEXT,
+            registration_deadline_at TEXT,
             status TEXT NOT NULL DEFAULT 'active',
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (season_id) REFERENCES seasons(id) ON DELETE SET NULL,
             FOREIGN KEY (manager_user_id) REFERENCES users(id) ON DELETE SET NULL
         );
 
@@ -236,12 +245,25 @@ function initDb() {
             team_id INTEGER NOT NULL,
             name TEXT NOT NULL,
             member_role TEXT NOT NULL,
+            is_springer INTEGER NOT NULL DEFAULT 0,
             license_type TEXT,
             license_valid_until TEXT,
             license_status TEXT,
+            license_confirmed_at TEXT,
             status TEXT NOT NULL DEFAULT 'active',
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS organizations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            short_name TEXT,
+            chair_user_id INTEGER,
+            status TEXT NOT NULL DEFAULT 'active',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (chair_user_id) REFERENCES users(id) ON DELETE SET NULL
         );
 
         CREATE TABLE IF NOT EXISTS seasons (
@@ -249,6 +271,9 @@ function initDb() {
             name TEXT NOT NULL UNIQUE,
             start_date TEXT,
             end_date TEXT,
+            registration_deadline_at TEXT,
+            transfer_window_open_at TEXT,
+            transfer_window_close_at TEXT,
             points_rules TEXT,
             status TEXT NOT NULL DEFAULT 'planned',
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -582,6 +607,80 @@ function ensureDomainRecordEnhancements() {
     `);
 }
 
+function ensureOrganizationEnhancements() {
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS organizations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            short_name TEXT,
+            chair_user_id INTEGER,
+            status TEXT NOT NULL DEFAULT 'active',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (chair_user_id) REFERENCES users(id) ON DELETE SET NULL
+        );
+    `);
+
+    const teamColumns = db.prepare("PRAGMA table_info(teams)").all();
+    const teamColumnNames = new Set(teamColumns.map((column) => String(column.name || "")));
+    if (!teamColumnNames.has("organization_id")) {
+        db.prepare("ALTER TABLE teams ADD COLUMN organization_id INTEGER").run();
+    }
+    if (!teamColumnNames.has("team_type")) {
+        db.prepare("ALTER TABLE teams ADD COLUMN team_type TEXT").run();
+    }
+    if (!teamColumnNames.has("season_id")) {
+        db.prepare("ALTER TABLE teams ADD COLUMN season_id INTEGER").run();
+    }
+    if (!teamColumnNames.has("registration_status")) {
+        db.prepare("ALTER TABLE teams ADD COLUMN registration_status TEXT NOT NULL DEFAULT 'draft'").run();
+    }
+    if (!teamColumnNames.has("submitted_at")) {
+        db.prepare("ALTER TABLE teams ADD COLUMN submitted_at TEXT").run();
+    }
+    if (!teamColumnNames.has("confirmed_at")) {
+        db.prepare("ALTER TABLE teams ADD COLUMN confirmed_at TEXT").run();
+    }
+    if (!teamColumnNames.has("registration_deadline_at")) {
+        db.prepare("ALTER TABLE teams ADD COLUMN registration_deadline_at TEXT").run();
+    }
+
+    const memberColumns = db.prepare("PRAGMA table_info(team_members)").all();
+    const memberColumnNames = new Set(memberColumns.map((column) => String(column.name || "")));
+    if (!memberColumnNames.has("is_springer")) {
+        db.prepare("ALTER TABLE team_members ADD COLUMN is_springer INTEGER NOT NULL DEFAULT 0").run();
+    }
+    if (!memberColumnNames.has("license_confirmed_at")) {
+        db.prepare("ALTER TABLE team_members ADD COLUMN license_confirmed_at TEXT").run();
+    }
+
+    const seasonColumns = db.prepare("PRAGMA table_info(seasons)").all();
+    const seasonColumnNames = new Set(seasonColumns.map((column) => String(column.name || "")));
+    if (!seasonColumnNames.has("registration_deadline_at")) {
+        db.prepare("ALTER TABLE seasons ADD COLUMN registration_deadline_at TEXT").run();
+    }
+    if (!seasonColumnNames.has("transfer_window_open_at")) {
+        db.prepare("ALTER TABLE seasons ADD COLUMN transfer_window_open_at TEXT").run();
+    }
+    if (!seasonColumnNames.has("transfer_window_close_at")) {
+        db.prepare("ALTER TABLE seasons ADD COLUMN transfer_window_close_at TEXT").run();
+    }
+
+    const scopeColumns = db.prepare("PRAGMA table_info(user_scope_assignments)").all();
+    const scopeColumnNames = new Set(scopeColumns.map((column) => String(column.name || "")));
+    if (!scopeColumnNames.has("organization_id")) {
+        db.prepare("ALTER TABLE user_scope_assignments ADD COLUMN organization_id INTEGER").run();
+    }
+
+    db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_organizations_chair ON organizations(chair_user_id);
+        CREATE INDEX IF NOT EXISTS idx_teams_organization ON teams(organization_id);
+        CREATE INDEX IF NOT EXISTS idx_teams_team_type ON teams(team_type);
+        CREATE INDEX IF NOT EXISTS idx_teams_season ON teams(season_id);
+        CREATE INDEX IF NOT EXISTS idx_team_members_springer ON team_members(is_springer);
+    `);
+}
+
 async function initializeEmailTransporter() {
     const emailConfig = getEmailConfig();
     const hasSmtpConfig = Boolean(emailConfig.host && emailConfig.user && emailConfig.pass);
@@ -672,6 +771,8 @@ function getEmailConfig() {
 const ALL_PERMISSIONS = [
     "dashboard.read",
     "audit.read",
+    "organizations.read",
+    "organizations.write",
     "users.read",
     "users.write",
     "roles.read",
@@ -747,6 +848,41 @@ const DEFAULT_ROLE_DEFINITIONS = [
             "event_scores.read",
             "transfers.read",
             "contracts.read",
+            "team_portal.read",
+            "team_portal.write",
+            "athlete_app.read"
+        ]
+    },
+    {
+        name: "Vorsitzender",
+        description: "Verwaltet eine Organisation mit mehreren Teams und Saisonmeldungen.",
+        requiredAssignments: ["organization"],
+        permissions: [
+            "dashboard.read",
+            "organizations.read",
+            "organizations.write",
+            "teams.read",
+            "teams.write",
+            "team_members.read",
+            "team_members.write",
+            "seasons.read",
+            "transfers.read",
+            "team_portal.read",
+            "team_portal.write"
+        ]
+    },
+    {
+        name: "Trainer",
+        description: "Pflegt ein einzelnes Team inklusive Springer und Lizenzen.",
+        requiredAssignments: ["team"],
+        permissions: [
+            "dashboard.read",
+            "teams.read",
+            "teams.write",
+            "team_members.read",
+            "team_members.write",
+            "seasons.read",
+            "transfers.read",
             "team_portal.read",
             "team_portal.write",
             "athlete_app.read"
@@ -879,7 +1015,7 @@ const BONUS_TRIGGER_OPTIONS = [
     "finalissimo_double"
 ];
 
-const ROLE_ASSIGNMENT_TARGETS = ["team", "venue", "event", "other"];
+const ROLE_ASSIGNMENT_TARGETS = ["organization", "team", "venue", "event", "other"];
 
 const SYSTEM_SCOPE_MODULES = [
     { key: "identity_access", name: "Identity & Access", priority: "critical", category: "governance" },
@@ -1703,6 +1839,14 @@ function isTeamManagerRole(roleName) {
     return normalizeRole(roleName) === "teammanager";
 }
 
+function isOrganizationChairRole(roleName) {
+    return ["vorsitzender", "organisationchair", "orgchair"].includes(normalizeRole(roleName));
+}
+
+function isTrainerRole(roleName) {
+    return normalizeRole(roleName) === "trainer";
+}
+
 function getUserById(userId) {
     return db
         .prepare("SELECT id, username, role, status FROM users WHERE id = ?")
@@ -1711,8 +1855,115 @@ function getUserById(userId) {
 
 function getTeamById(teamId) {
     return db
-        .prepare("SELECT id, name, status, manager_user_id FROM teams WHERE id = ?")
+        .prepare("SELECT id, name, organization_id, team_type, status, manager_user_id, season_id, registration_status, submitted_at, confirmed_at, registration_deadline_at FROM teams WHERE id = ?")
         .get(teamId);
+}
+
+function getOrganizationById(organizationId) {
+    return db
+        .prepare("SELECT id, name, short_name, chair_user_id, status FROM organizations WHERE id = ?")
+        .get(organizationId);
+}
+
+function findOrganizationChairedByUser(userId, exceptOrganizationId = null) {
+    if (!userId) return null;
+    if (exceptOrganizationId) {
+        return db
+            .prepare("SELECT id, name FROM organizations WHERE chair_user_id = ? AND id != ? AND status != 'inactive' LIMIT 1")
+            .get(userId, exceptOrganizationId);
+    }
+    return db
+        .prepare("SELECT id, name FROM organizations WHERE chair_user_id = ? AND status != 'inactive' LIMIT 1")
+        .get(userId);
+}
+
+function getSeasonById(seasonId) {
+    return db
+        .prepare("SELECT id, name, status, registration_deadline_at, transfer_window_open_at, transfer_window_close_at FROM seasons WHERE id = ?")
+        .get(seasonId);
+}
+
+function getAccessibleTeamScope(user) {
+    const assignments = getUserScopeAssignments(user?.id || user?.sub);
+    const role = normalizeRole(user?.role);
+    if (ADMIN_ROLES.includes(role)) {
+        return { type: "all" };
+    }
+    if (isOrganizationChairRole(role) && assignments.organizationId) {
+        return { type: "organization", organizationId: assignments.organizationId };
+    }
+    if ((isTrainerRole(role) || isTeamManagerRole(role)) && assignments.teamId) {
+        return { type: "team", teamId: assignments.teamId };
+    }
+    return { type: "all" };
+}
+
+function teamMatchesScope(team, scope) {
+    if (!scope || scope.type === "all") return true;
+    if (scope.type === "team") return Number(team.id) === Number(scope.teamId);
+    if (scope.type === "organization") return Number(team.organization_id || 0) === Number(scope.organizationId);
+    return true;
+}
+
+function assertTeamAccess(res, user, team, permissionType = "read") {
+    const scope = getAccessibleTeamScope(user);
+    const permission = permissionType === "write" ? "teams.write" : "teams.read";
+    if (scope.type === "all") {
+        if (hasPermissionValue(user, permission) || ADMIN_ROLES.includes(normalizeRole(user?.role))) return true;
+    }
+    if (teamMatchesScope(team, scope)) return true;
+    res.status(403).json({ error: "Nicht genügend Rechte für dieses Team" });
+    return false;
+}
+
+function getTeamSpringerRows(teamId) {
+    return db
+        .prepare("SELECT * FROM team_members WHERE team_id = ? ORDER BY id DESC")
+        .all(teamId);
+}
+
+function teamHasConfirmedSpringers(teamId) {
+    return getTeamSpringerRows(teamId).every((member) => !Number(member.is_springer) || String(member.license_status || "").toLowerCase() === "confirmed");
+}
+
+function organizationTeamSummary(organizationId) {
+    const rows = db.prepare("SELECT id, team_type FROM teams WHERE organization_id = ? AND status != 'inactive'").all(organizationId);
+    const summary = {
+        count: rows.length,
+        types: rows.map((row) => String(row.team_type || "").trim().toUpperCase()).filter(Boolean)
+    };
+    summary.hasA = summary.types.includes("A");
+    return summary;
+}
+
+function validateOrganizationTeamComposition({ organizationId, teamId = null, teamType = null }) {
+    if (!organizationId) {
+        return { ok: true };
+    }
+    const org = getOrganizationById(organizationId);
+    if (!org || org.status === "inactive") {
+        return { ok: false, error: "Ausgewählte Organisation wurde nicht gefunden." };
+    }
+    const rows = db.prepare("SELECT id, team_type FROM teams WHERE organization_id = ? AND status != 'inactive'").all(organizationId);
+    const otherRows = teamId ? rows.filter((row) => Number(row.id) !== Number(teamId)) : rows;
+    if (otherRows.length >= 3 && !teamId) {
+        return { ok: false, error: "Eine Organisation kann maximal drei Teams melden." };
+    }
+    const hasA = otherRows.some((row) => String(row.team_type || "").trim().toUpperCase() === "A");
+    const nextType = String(teamType || "").trim().toUpperCase();
+    if (!otherRows.length && nextType !== "A") {
+        return { ok: false, error: "Das erste Team einer Organisation muss ein A-Team sein." };
+    }
+    if (nextType === "A" && otherRows.some((row) => String(row.team_type || "").trim().toUpperCase() === "A")) {
+        return { ok: false, error: "Eine Organisation kann nur ein A-Team haben." };
+    }
+    if (otherRows.length > 0 && !hasA && nextType !== "A") {
+        return { ok: false, error: "Eine Organisation braucht mindestens ein A-Team." };
+    }
+    if (otherRows.length >= 3 && teamId && !rows.some((row) => Number(row.id) === Number(teamId))) {
+        return { ok: false, error: "Eine Organisation kann maximal drei Teams melden." };
+    }
+    return { ok: true };
 }
 
 function findTeamManagedByUser(userId, exceptTeamId = null) {
@@ -1744,16 +1995,19 @@ function getEventById(eventId) {
         .get(eventId);
 }
 
-function normalizeUserAssignments(input, fallbackTeamId = undefined) {
+function normalizeUserAssignments(input, fallbackTeamId = undefined, fallbackOrganizationId = undefined) {
     const source = input && typeof input === "object" ? input : {};
+    const hasOrganizationId = Object.prototype.hasOwnProperty.call(source, "organizationId");
     const hasTeamId = Object.prototype.hasOwnProperty.call(source, "teamId");
     const hasEventId = Object.prototype.hasOwnProperty.call(source, "eventId");
     const hasVenueCode = Object.prototype.hasOwnProperty.call(source, "venueCode");
     const hasOtherScope = Object.prototype.hasOwnProperty.call(source, "otherScope");
+    const rawOrganizationId = hasOrganizationId ? source.organizationId : fallbackOrganizationId;
     const rawTeamId = hasTeamId ? source.teamId : fallbackTeamId;
+    const organizationResult = parseOptionalIdStrict(rawOrganizationId);
     const teamResult = parseOptionalIdStrict(rawTeamId);
     const eventResult = parseOptionalIdStrict(source.eventId);
-    if (!teamResult.valid || !eventResult.valid) {
+    if (!organizationResult.valid || !teamResult.valid || !eventResult.valid) {
         return { valid: false, assignments: null };
     }
     const venueCode = String(source.venueCode || "").trim();
@@ -1761,12 +2015,14 @@ function normalizeUserAssignments(input, fallbackTeamId = undefined) {
     return {
         valid: true,
         assignments: {
+            organizationId: organizationResult.value,
             teamId: teamResult.value,
             eventId: eventResult.value,
             venueCode,
             otherScope
         },
         provided: {
+            organizationId: hasOrganizationId || fallbackOrganizationId !== undefined,
             teamId: hasTeamId || fallbackTeamId !== undefined,
             eventId: hasEventId,
             venueCode: hasVenueCode,
@@ -1778,10 +2034,15 @@ function normalizeUserAssignments(input, fallbackTeamId = undefined) {
 function validateUserAssignments(assignments, requiredAssignments) {
     if (!assignments || typeof assignments !== "object") return "Ungültige Zuordnungsdaten.";
     const required = parseRoleRequiredAssignments(requiredAssignments || []);
+    if (required.includes("organization") && !assignments.organizationId) return "Für diese Rolle ist eine Organisation verpflichtend.";
     if (required.includes("team") && !assignments.teamId) return "Für diese Rolle ist ein Team verpflichtend.";
     if (required.includes("event") && !assignments.eventId) return "Für diese Rolle ist ein Wettbewerb verpflichtend.";
     if (required.includes("venue") && !assignments.venueCode) return "Für diese Rolle ist eine Schanze verpflichtend.";
     if (required.includes("other") && !assignments.otherScope) return "Für diese Rolle ist eine zusätzliche Zuordnung verpflichtend.";
+    if (assignments.organizationId) {
+        const organization = getOrganizationById(assignments.organizationId);
+        if (!organization || organization.status === "inactive") return "Ausgewählte Organisation wurde nicht gefunden.";
+    }
     if (assignments.teamId) {
         const team = getTeamById(assignments.teamId);
         if (!team || team.status === "inactive") return "Ausgewähltes Team wurde nicht gefunden.";
@@ -1795,9 +2056,10 @@ function validateUserAssignments(assignments, requiredAssignments) {
 
 function upsertUserScopeAssignments(userId, assignments) {
     db.prepare(
-        `INSERT INTO user_scope_assignments (user_id, team_id, event_id, venue_code, other_scope, updated_at)
-         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `INSERT INTO user_scope_assignments (user_id, organization_id, team_id, event_id, venue_code, other_scope, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
          ON CONFLICT(user_id) DO UPDATE SET
+           organization_id = excluded.organization_id,
            team_id = excluded.team_id,
            event_id = excluded.event_id,
            venue_code = excluded.venue_code,
@@ -1805,6 +2067,7 @@ function upsertUserScopeAssignments(userId, assignments) {
            updated_at = CURRENT_TIMESTAMP`
     ).run(
         userId,
+        assignments.organizationId || null,
         assignments.teamId || null,
         assignments.eventId || null,
         assignments.venueCode || null,
@@ -1816,8 +2079,11 @@ function getUserScopeAssignments(userId) {
     const row = db
         .prepare(
             `SELECT usa.user_id, usa.team_id, usa.event_id, usa.venue_code, usa.other_scope,
+                    usa.organization_id,
+                    o.name AS organization_name,
                     t.name AS team_name, e.name AS event_name
              FROM user_scope_assignments usa
+             LEFT JOIN organizations o ON o.id = usa.organization_id
              LEFT JOIN teams t ON t.id = usa.team_id
              LEFT JOIN events e ON e.id = usa.event_id
              WHERE usa.user_id = ?`
@@ -1825,6 +2091,8 @@ function getUserScopeAssignments(userId) {
         .get(userId);
     if (!row) {
         return {
+            organizationId: null,
+            organizationName: null,
             teamId: null,
             teamName: null,
             eventId: null,
@@ -1834,6 +2102,8 @@ function getUserScopeAssignments(userId) {
         };
     }
     return {
+        organizationId: row.organization_id || null,
+        organizationName: row.organization_name || null,
         teamId: row.team_id || null,
         teamName: row.team_name || null,
         eventId: row.event_id || null,
@@ -2222,6 +2492,8 @@ app.get("/api/audit-logs", authRequired, requirePermission("audit.read"), (req, 
 app.get("/api/users", authRequired, requirePermission("users.read"), (req, res) => {
     const rows = db.prepare(
         `SELECT u.id, u.username, u.name, u.email, u.role, u.status, u.last_login_at, u.created_at,
+                usa.organization_id AS assignment_organization_id,
+                org.name AS assignment_organization_name,
                 usa.team_id AS assignment_team_id,
                 team.name AS assignment_team_name,
                 usa.event_id AS assignment_event_id,
@@ -2229,9 +2501,12 @@ app.get("/api/users", authRequired, requirePermission("users.read"), (req, res) 
                 usa.venue_code AS assignment_venue_code,
                 usa.other_scope AS assignment_other_scope,
                 (SELECT t.id FROM teams t WHERE t.manager_user_id = u.id AND t.status != 'inactive' ORDER BY t.id ASC LIMIT 1) AS managed_team_id,
-                (SELECT t.name FROM teams t WHERE t.manager_user_id = u.id AND t.status != 'inactive' ORDER BY t.id ASC LIMIT 1) AS managed_team_name
+                (SELECT t.name FROM teams t WHERE t.manager_user_id = u.id AND t.status != 'inactive' ORDER BY t.id ASC LIMIT 1) AS managed_team_name,
+                (SELECT o.id FROM organizations o WHERE o.chair_user_id = u.id AND o.status != 'inactive' ORDER BY o.id ASC LIMIT 1) AS managed_organization_id,
+                (SELECT o.name FROM organizations o WHERE o.chair_user_id = u.id AND o.status != 'inactive' ORDER BY o.id ASC LIMIT 1) AS managed_organization_name
          FROM users u
          LEFT JOIN user_scope_assignments usa ON usa.user_id = u.id
+         LEFT JOIN organizations org ON org.id = usa.organization_id
          LEFT JOIN teams team ON team.id = usa.team_id
          LEFT JOIN events event ON event.id = usa.event_id
          ORDER BY u.id DESC`
@@ -2255,7 +2530,11 @@ app.post("/api/users", authRequired, requirePermission("users.write"), async (re
         res.status(400).json({ error: "Unknown or inactive role" });
         return;
     }
-    const normalizedAssignments = normalizeUserAssignments(req.body?.assignments, managedTeamId);
+    const normalizedAssignments = normalizeUserAssignments(
+        req.body?.assignments,
+        managedTeamId,
+        req.body?.managedOrganizationId
+    );
     if (!normalizedAssignments.valid) {
         res.status(400).json({ error: "Ungültige Zuordnungsdaten." });
         return;
@@ -2270,6 +2549,10 @@ app.post("/api/users", authRequired, requirePermission("users.write"), async (re
         res.status(400).json({ error: "Teammanager muss einem Team zugeordnet sein." });
         return;
     }
+    if (isOrganizationChairRole(resolvedRole) && !normalizedAssignments.assignments.organizationId) {
+        res.status(400).json({ error: "Vorsitzende müssen einer Organisation zugeordnet sein." });
+        return;
+    }
     if (normalizedAssignments.assignments.teamId) {
         const targetTeam = getTeamById(normalizedAssignments.assignments.teamId);
         if (!targetTeam || targetTeam.status === "inactive") {
@@ -2278,6 +2561,17 @@ app.post("/api/users", authRequired, requirePermission("users.write"), async (re
         }
         if (isTeamManagerRole(resolvedRole) && targetTeam.manager_user_id) {
             res.status(409).json({ error: "Dieses Team hat bereits einen Teammanager." });
+            return;
+        }
+    }
+    if (normalizedAssignments.assignments.organizationId) {
+        const targetOrganization = getOrganizationById(normalizedAssignments.assignments.organizationId);
+        if (!targetOrganization || targetOrganization.status === "inactive") {
+            res.status(404).json({ error: "Ausgewählte Organisation wurde nicht gefunden." });
+            return;
+        }
+        if (isOrganizationChairRole(resolvedRole) && targetOrganization.chair_user_id) {
+            res.status(409).json({ error: "Diese Organisation hat bereits einen Vorsitzenden." });
             return;
         }
     }
@@ -2313,6 +2607,10 @@ app.post("/api/users", authRequired, requirePermission("users.write"), async (re
             db.prepare("UPDATE teams SET manager_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
                 .run(result.lastInsertRowid, normalizedAssignments.assignments.teamId);
         }
+        if (normalizedAssignments.assignments.organizationId && isOrganizationChairRole(resolvedRole)) {
+            db.prepare("UPDATE organizations SET chair_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+                .run(result.lastInsertRowid, normalizedAssignments.assignments.organizationId);
+        }
         upsertUserScopeAssignments(result.lastInsertRowid, normalizedAssignments.assignments);
     });
     
@@ -2330,7 +2628,9 @@ app.post("/api/users", authRequired, requirePermission("users.write"), async (re
     const created = db.prepare(
         `SELECT u.id, u.username, u.name, u.email, u.role, u.status, u.created_at,
                 (SELECT t.id FROM teams t WHERE t.manager_user_id = u.id AND t.status != 'inactive' ORDER BY t.id ASC LIMIT 1) AS managed_team_id,
-                (SELECT t.name FROM teams t WHERE t.manager_user_id = u.id AND t.status != 'inactive' ORDER BY t.id ASC LIMIT 1) AS managed_team_name
+                (SELECT t.name FROM teams t WHERE t.manager_user_id = u.id AND t.status != 'inactive' ORDER BY t.id ASC LIMIT 1) AS managed_team_name,
+                (SELECT o.id FROM organizations o WHERE o.chair_user_id = u.id AND o.status != 'inactive' ORDER BY o.id ASC LIMIT 1) AS managed_organization_id,
+                (SELECT o.name FROM organizations o WHERE o.chair_user_id = u.id AND o.status != 'inactive' ORDER BY o.id ASC LIMIT 1) AS managed_organization_name
          FROM users u
          WHERE u.id = ?`
     ).get(result.lastInsertRowid);
@@ -2356,6 +2656,8 @@ app.post("/api/users", authRequired, requirePermission("users.write"), async (re
             invitation_token: invitationToken,
             assignment_team_id: assignment.teamId,
             assignment_team_name: assignment.teamName,
+            assignment_organization_id: assignment.organizationId,
+            assignment_organization_name: assignment.organizationName,
             assignment_event_id: assignment.eventId,
             assignment_event_name: assignment.eventName,
             assignment_venue_code: assignment.venueCode,
@@ -2367,6 +2669,8 @@ app.post("/api/users", authRequired, requirePermission("users.write"), async (re
             ...created,
             assignment_team_id: assignment.teamId,
             assignment_team_name: assignment.teamName,
+            assignment_organization_id: assignment.organizationId,
+            assignment_organization_name: assignment.organizationName,
             assignment_event_id: assignment.eventId,
             assignment_event_name: assignment.eventName,
             assignment_venue_code: assignment.venueCode,
@@ -2418,16 +2722,19 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
         return;
     }
     const currentManagedTeam = findTeamManagedByUser(id);
+    const currentManagedOrganization = findOrganizationChairedByUser(id);
     const currentAssignments = getUserScopeAssignments(id);
     const normalizedAssignments = normalizeUserAssignments(
         req.body?.assignments,
-        req.body?.managedTeamId !== undefined ? req.body.managedTeamId : currentAssignments.teamId
+        req.body?.managedTeamId !== undefined ? req.body.managedTeamId : currentAssignments.teamId,
+        req.body?.managedOrganizationId !== undefined ? req.body.managedOrganizationId : currentAssignments.organizationId
     );
     if (!normalizedAssignments.valid) {
         res.status(400).json({ error: "Ungültige Zuordnungsdaten." });
         return;
     }
     const finalAssignments = {
+        organizationId: normalizedAssignments.assignments.organizationId,
         teamId: normalizedAssignments.assignments.teamId,
         eventId: normalizedAssignments.provided.eventId
             ? normalizedAssignments.assignments.eventId
@@ -2461,12 +2768,28 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
             return;
         }
     }
+    if (isOrganizationChairRole(nextRole)) {
+        if (!finalAssignments.organizationId) {
+            res.status(400).json({ error: "Vorsitzende müssen einer Organisation zugeordnet sein." });
+            return;
+        }
+        const targetOrganization = getOrganizationById(finalAssignments.organizationId);
+        if (!targetOrganization || targetOrganization.status === "inactive") {
+            res.status(404).json({ error: "Ausgewählte Organisation wurde nicht gefunden." });
+            return;
+        }
+        if (targetOrganization.chair_user_id && targetOrganization.chair_user_id !== id) {
+            res.status(409).json({ error: "Diese Organisation hat bereits einen anderen Vorsitzenden." });
+            return;
+        }
+    }
 
     if (req.body.password) {
         updates.push("password_hash = ?");
         values.push(bcrypt.hashSync(String(req.body.password), 12));
     }
     const hasAssignmentChange =
+        finalAssignments.organizationId !== currentAssignments.organizationId ||
         finalAssignments.teamId !== currentAssignments.teamId ||
         finalAssignments.eventId !== currentAssignments.eventId ||
         finalAssignments.venueCode !== currentAssignments.venueCode ||
@@ -2485,6 +2808,17 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
             db.prepare(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`).run(...values);
         }
         upsertUserScopeAssignments(id, finalAssignments);
+        if (currentManagedOrganization && currentManagedOrganization.id !== finalAssignments.organizationId) {
+            db.prepare("UPDATE organizations SET chair_user_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+                .run(currentManagedOrganization.id);
+        }
+        if (isOrganizationChairRole(nextRole)) {
+            db.prepare("UPDATE organizations SET chair_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+                .run(id, finalAssignments.organizationId);
+        } else if (currentManagedOrganization) {
+            db.prepare("UPDATE organizations SET chair_user_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE chair_user_id = ?")
+                .run(id);
+        }
         if (isTeamManagerRole(nextRole)) {
             if (currentManagedTeam && currentManagedTeam.id !== finalAssignments.teamId) {
                 db.prepare("UPDATE teams SET manager_user_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
@@ -2510,7 +2844,9 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
     const updated = db.prepare(
         `SELECT u.id, u.username, u.name, u.email, u.role, u.status, u.last_login_at,
                 (SELECT t.id FROM teams t WHERE t.manager_user_id = u.id AND t.status != 'inactive' ORDER BY t.id ASC LIMIT 1) AS managed_team_id,
-                (SELECT t.name FROM teams t WHERE t.manager_user_id = u.id AND t.status != 'inactive' ORDER BY t.id ASC LIMIT 1) AS managed_team_name
+                (SELECT t.name FROM teams t WHERE t.manager_user_id = u.id AND t.status != 'inactive' ORDER BY t.id ASC LIMIT 1) AS managed_team_name,
+                (SELECT o.id FROM organizations o WHERE o.chair_user_id = u.id AND o.status != 'inactive' ORDER BY o.id ASC LIMIT 1) AS managed_organization_id,
+                (SELECT o.name FROM organizations o WHERE o.chair_user_id = u.id AND o.status != 'inactive' ORDER BY o.id ASC LIMIT 1) AS managed_organization_name
          FROM users u
          WHERE u.id = ?`
     ).get(id);
@@ -2520,6 +2856,8 @@ app.patch("/api/users/:id", authRequired, requirePermission("users.write"), (req
         ...updated,
         assignment_team_id: assignment.teamId,
         assignment_team_name: assignment.teamName,
+        assignment_organization_id: assignment.organizationId,
+        assignment_organization_name: assignment.organizationName,
         assignment_event_id: assignment.eventId,
         assignment_event_name: assignment.eventName,
         assignment_venue_code: assignment.venueCode,
@@ -2546,19 +2884,204 @@ app.delete("/api/users/:id", authRequired, requirePermission("users.write"), (re
     res.status(204).send();
 });
 
-app.get("/api/teams", authRequired, requirePermission("teams.read"), (_, res) => {
-    const rows = db.prepare(
-        `SELECT t.id, t.name, t.nation, t.category, t.status, t.created_at, u.username AS manager_username
+app.get("/api/organizations", authRequired, requirePermission("organizations.read"), (req, res) => {
+    const scope = getAccessibleTeamScope(req.user);
+    let rows = db.prepare(
+        `SELECT o.id, o.name, o.short_name, o.status, o.chair_user_id,
+                chair.username AS chair_username,
+                o.created_at, o.updated_at
+         FROM organizations o
+         LEFT JOIN users chair ON chair.id = o.chair_user_id
+         ORDER BY o.id DESC`
+    ).all();
+    if (scope.type === "organization") {
+        rows = rows.filter((row) => Number(row.id) === Number(scope.organizationId));
+    }
+    res.json(rows);
+});
+
+app.post("/api/organizations", authRequired, requirePermission("organizations.write"), (req, res) => {
+    const { name, shortName, chairUserId, status } = req.body || {};
+    if (!requireFields(res, req.body || {}, ["name"])) return;
+    const chairId = chairUserId ? parseId(chairUserId) : null;
+    if (chairUserId && !chairId) {
+        res.status(400).json({ error: "Ungültige Vorsitzenden-ID." });
+        return;
+    }
+    if (chairId) {
+        const chair = getUserById(chairId);
+        if (!chair || chair.status !== "active") {
+            res.status(404).json({ error: "Vorsitzender wurde nicht gefunden oder ist inaktiv." });
+            return;
+        }
+        if (!isOrganizationChairRole(chair.role)) {
+            res.status(400).json({ error: "Ausgewählter Benutzer hat nicht die Rolle Vorsitzender." });
+            return;
+        }
+        const existingOrg = findOrganizationChairedByUser(chairId);
+        if (existingOrg) {
+            res.status(409).json({ error: `Vorsitzender ist bereits mit Organisation "${existingOrg.name}" verknüpft.` });
+            return;
+        }
+    }
+    const result = db.prepare(
+        `INSERT INTO organizations (name, short_name, chair_user_id, status)
+         VALUES (?, ?, ?, ?)`
+    ).run(
+        name.trim(),
+        shortName ? String(shortName).trim() : null,
+        chairId,
+        status === "inactive" ? "inactive" : "active"
+    );
+    const created = db.prepare("SELECT * FROM organizations WHERE id = ?").get(result.lastInsertRowid);
+    if (chairId) {
+        db.prepare(
+            `INSERT INTO user_scope_assignments (user_id, organization_id, updated_at)
+             VALUES (?, ?, CURRENT_TIMESTAMP)
+             ON CONFLICT(user_id) DO UPDATE SET
+               organization_id = excluded.organization_id,
+               updated_at = CURRENT_TIMESTAMP`
+        ).run(chairId, created.id);
+    }
+    logAudit(req.user, "CREATE_ORGANIZATION", "organizations", created.id, created.name);
+    res.status(201).json(created);
+});
+
+app.patch("/api/organizations/:id", authRequired, requirePermission("organizations.write"), (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Invalid organization id" });
+        return;
+    }
+    const existing = db.prepare("SELECT * FROM organizations WHERE id = ?").get(id);
+    if (!existing) {
+        res.status(404).json({ error: "Organization not found" });
+        return;
+    }
+    const updates = [];
+    const values = [];
+    if (req.body?.name !== undefined) {
+        updates.push("name = ?");
+        values.push(String(req.body.name).trim());
+    }
+    if (req.body?.shortName !== undefined) {
+        updates.push("short_name = ?");
+        values.push(req.body.shortName ? String(req.body.shortName).trim() : null);
+    }
+    if (req.body?.status !== undefined) {
+        updates.push("status = ?");
+        values.push(req.body.status === "inactive" ? "inactive" : "active");
+    }
+    if (req.body?.chairUserId !== undefined) {
+        const chairId = req.body.chairUserId ? parseId(req.body.chairUserId) : null;
+        if (req.body.chairUserId && !chairId) {
+            res.status(400).json({ error: "Ungültige Vorsitzenden-ID." });
+            return;
+        }
+        if (chairId) {
+            const chair = getUserById(chairId);
+            if (!chair || chair.status !== "active") {
+                res.status(404).json({ error: "Vorsitzender wurde nicht gefunden oder ist inaktiv." });
+                return;
+            }
+            if (!isOrganizationChairRole(chair.role)) {
+                res.status(400).json({ error: "Ausgewählter Benutzer hat nicht die Rolle Vorsitzender." });
+                return;
+            }
+            const existingOrg = findOrganizationChairedByUser(chairId, id);
+            if (existingOrg) {
+                res.status(409).json({ error: `Vorsitzender ist bereits mit Organisation "${existingOrg.name}" verknüpft.` });
+                return;
+            }
+        }
+        updates.push("chair_user_id = ?");
+        values.push(chairId);
+    }
+    if (updates.length === 0) {
+        res.status(400).json({ error: "No updatable fields provided" });
+        return;
+    }
+    updates.push("updated_at = CURRENT_TIMESTAMP");
+    values.push(id);
+    db.prepare(`UPDATE organizations SET ${updates.join(", ")} WHERE id = ?`).run(...values);
+    if (req.body?.chairUserId !== undefined) {
+        const chairId = req.body.chairUserId ? parseId(req.body.chairUserId) : null;
+        if (existing.chair_user_id && existing.chair_user_id !== chairId) {
+            db.prepare(
+                `INSERT INTO user_scope_assignments (user_id, organization_id, updated_at)
+                 VALUES (?, NULL, CURRENT_TIMESTAMP)
+                 ON CONFLICT(user_id) DO UPDATE SET
+                   organization_id = NULL,
+                   updated_at = CURRENT_TIMESTAMP`
+            ).run(existing.chair_user_id);
+        }
+        if (chairId) {
+            db.prepare(
+                `INSERT INTO user_scope_assignments (user_id, organization_id, updated_at)
+                 VALUES (?, ?, CURRENT_TIMESTAMP)
+                 ON CONFLICT(user_id) DO UPDATE SET
+                   organization_id = excluded.organization_id,
+                   updated_at = CURRENT_TIMESTAMP`
+            ).run(chairId, id);
+        }
+    }
+    const updated = db.prepare("SELECT * FROM organizations WHERE id = ?").get(id);
+    logAudit(req.user, "UPDATE_ORGANIZATION", "organizations", id, JSON.stringify(req.body));
+    res.json(updated);
+});
+
+app.delete("/api/organizations/:id", authRequired, requirePermission("organizations.write"), (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Invalid organization id" });
+        return;
+    }
+    const result = db.prepare("UPDATE organizations SET status = 'inactive', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
+    if (result.changes === 0) {
+        res.status(404).json({ error: "Organization not found" });
+        return;
+    }
+    logAudit(req.user, "DEACTIVATE_ORGANIZATION", "organizations", id, "Soft-deactivated organization");
+    res.status(204).send();
+});
+
+app.get("/api/teams", authRequired, requirePermission("teams.read"), (req, res) => {
+    const scope = getAccessibleTeamScope(req.user);
+    let rows = db.prepare(
+        `SELECT t.id, t.name, t.organization_id, o.name AS organization_name, t.team_type, t.nation, t.category, t.status, t.season_id, s.name AS season_name,
+                t.registration_status, t.submitted_at, t.confirmed_at, t.registration_deadline_at, t.created_at, u.username AS manager_username
          FROM teams t
          LEFT JOIN users u ON u.id = t.manager_user_id
+         LEFT JOIN organizations o ON o.id = t.organization_id
+         LEFT JOIN seasons s ON s.id = t.season_id
          ORDER BY t.id DESC`
     ).all();
+    rows = rows.filter((row) => teamMatchesScope(row, scope));
     res.json(rows);
 });
 
 app.post("/api/teams", authRequired, requirePermission("teams.write"), (req, res) => {
-    const { name, nation, category, managerUserId } = req.body || {};
-    if (!requireFields(res, req.body || {}, ["name"])) return;
+    const { name, organizationId, teamType, nation, category, managerUserId, seasonId, registrationStatus } = req.body || {};
+    if (!requireFields(res, req.body || {}, ["name", "organizationId", "teamType"])) return;
+    const scope = getAccessibleTeamScope(req.user);
+    const orgId = parseId(organizationId);
+    if (!orgId) {
+        res.status(400).json({ error: "Ungültige Organisations-ID." });
+        return;
+    }
+    if (scope.type === "organization" && Number(scope.organizationId) !== orgId && !ADMIN_ROLES.includes(normalizeRole(req.user?.role))) {
+        res.status(403).json({ error: "Diese Organisation liegt außerhalb deines Bearbeitungsschemas." });
+        return;
+    }
+    if (scope.type === "team" && !ADMIN_ROLES.includes(normalizeRole(req.user?.role))) {
+        res.status(403).json({ error: "Trainer können keine neuen Teams anlegen." });
+        return;
+    }
+    const validation = validateOrganizationTeamComposition({ organizationId: orgId, teamType });
+    if (!validation.ok) {
+        res.status(400).json({ error: validation.error });
+        return;
+    }
     const parsedManager = parseOptionalIdStrict(managerUserId);
     if (!parsedManager.valid) {
         res.status(400).json({ error: "Ungültige Teammanager-ID." });
@@ -2571,8 +3094,8 @@ app.post("/api/teams", authRequired, requirePermission("teams.write"), (req, res
             res.status(404).json({ error: "Teammanager nicht gefunden oder inaktiv." });
             return;
         }
-        if (!isTeamManagerRole(managerUser.role)) {
-            res.status(400).json({ error: "Ausgewählter Benutzer hat nicht die Rolle Teammanager." });
+        if (!isTeamManagerRole(managerUser.role) && !isTrainerRole(managerUser.role)) {
+            res.status(400).json({ error: "Ausgewählter Benutzer hat nicht die Rolle Teammanager/Trainer." });
             return;
         }
         const managedTeam = findTeamManagedByUser(managerId);
@@ -2581,12 +3104,35 @@ app.post("/api/teams", authRequired, requirePermission("teams.write"), (req, res
             return;
         }
     }
+    const parsedSeasonId = seasonId ? parseId(seasonId) : null;
+    if (seasonId && !parsedSeasonId) {
+        res.status(400).json({ error: "Ungültige Saison-ID." });
+        return;
+    }
+    if (parsedSeasonId) {
+        const season = getSeasonById(parsedSeasonId);
+        if (!season || season.status === "inactive") {
+            res.status(404).json({ error: "Saison wurde nicht gefunden oder ist inaktiv." });
+            return;
+        }
+    }
+    const seasonDeadline = parsedSeasonId ? getSeasonById(parsedSeasonId)?.registration_deadline_at || null : null;
     const result = db
         .prepare(
-            `INSERT INTO teams (name, nation, category, manager_user_id, status)
-             VALUES (?, ?, ?, ?, 'active')`
+            `INSERT INTO teams (name, organization_id, team_type, nation, category, manager_user_id, season_id, registration_status, registration_deadline_at, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`
         )
-        .run(name.trim(), nation ? String(nation).trim() : null, category ? String(category).trim() : null, managerId);
+        .run(
+            name.trim(),
+            orgId,
+            String(teamType).trim().toUpperCase(),
+            nation ? String(nation).trim() : null,
+            category ? String(category).trim() : null,
+            managerId,
+            parsedSeasonId,
+            registrationStatus ? String(registrationStatus).trim().toLowerCase() : "draft",
+            req.body?.registrationDeadlineAt ? String(req.body.registrationDeadlineAt).trim() : seasonDeadline
+        );
     const created = db.prepare("SELECT * FROM teams WHERE id = ?").get(result.lastInsertRowid);
     logAudit(req.user, "CREATE_TEAM", "teams", created.id, created.name);
     res.status(201).json(created);
@@ -2598,18 +3144,22 @@ app.patch("/api/teams/:id", authRequired, requirePermission("teams.write"), (req
         res.status(400).json({ error: "Invalid team id" });
         return;
     }
-    const existing = db.prepare("SELECT id FROM teams WHERE id = ?").get(id);
+    const existing = db.prepare("SELECT * FROM teams WHERE id = ?").get(id);
     if (!existing) {
         res.status(404).json({ error: "Team not found" });
         return;
     }
-    const allowed = ["name", "nation", "category", "status", "manager_user_id"];
+    const scope = getAccessibleTeamScope(req.user);
+    if (!assertTeamAccess(res, req.user, existing, "write")) return;
+    const allowed = ["name", "organization_id", "team_type", "nation", "category", "status", "manager_user_id", "season_id", "registration_status", "submitted_at", "confirmed_at", "registration_deadline_at"];
     const updates = [];
     const values = [];
     let managerValidationError = null;
     let managerValidationStatus = 400;
+    let nextOrgId = existing.organization_id;
+    let nextTeamType = existing.team_type;
     allowed.forEach((field) => {
-        const requestKey = field === "manager_user_id" ? "managerUserId" : field;
+        const requestKey = field === "manager_user_id" ? "managerUserId" : (field === "organization_id" ? "organizationId" : (field === "team_type" ? "teamType" : (field === "season_id" ? "seasonId" : field)));
         if (req.body[requestKey] !== undefined) {
             if (field === "manager_user_id") {
                 const parsedManager = parseOptionalIdStrict(req.body[requestKey]);
@@ -2623,8 +3173,8 @@ app.patch("/api/teams/:id", authRequired, requirePermission("teams.write"), (req
                         managerValidationError = "Teammanager nicht gefunden oder inaktiv.";
                         return;
                     }
-                    if (!isTeamManagerRole(managerUser.role)) {
-                        managerValidationError = "Ausgewählter Benutzer hat nicht die Rolle Teammanager.";
+                    if (!isTeamManagerRole(managerUser.role) && !isTrainerRole(managerUser.role)) {
+                        managerValidationError = "Ausgewählter Benutzer hat nicht die Rolle Teammanager/Trainer.";
                         return;
                     }
                     const managedTeam = findTeamManagedByUser(parsedManager.value, id);
@@ -2638,6 +3188,38 @@ app.patch("/api/teams/:id", authRequired, requirePermission("teams.write"), (req
                 values.push(parsedManager.value);
                 return;
             }
+            if (field === "organization_id") {
+                const parsedOrg = parseId(req.body[requestKey]);
+                if (!parsedOrg) {
+                    managerValidationError = "Ungültige Organisations-ID.";
+                    return;
+                }
+                nextOrgId = parsedOrg;
+                updates.push(`${field} = ?`);
+                values.push(parsedOrg);
+                return;
+            }
+            if (field === "team_type") {
+                const nextType = String(req.body[requestKey] || "").trim().toUpperCase();
+                if (!["A", "B", "C"].includes(nextType)) {
+                    managerValidationError = "teamType muss A, B oder C sein.";
+                    return;
+                }
+                nextTeamType = nextType;
+                updates.push(`${field} = ?`);
+                values.push(nextType);
+                return;
+            }
+            if (field === "season_id") {
+                const parsedSeason = req.body[requestKey] ? parseId(req.body[requestKey]) : null;
+                if (req.body[requestKey] && !parsedSeason) {
+                    managerValidationError = "Ungültige Saison-ID.";
+                    return;
+                }
+                updates.push(`${field} = ?`);
+                values.push(parsedSeason);
+                return;
+            }
             updates.push(`${field} = ?`);
             values.push(String(req.body[requestKey]).trim());
         }
@@ -2645,6 +3227,17 @@ app.patch("/api/teams/:id", authRequired, requirePermission("teams.write"), (req
     if (managerValidationError) {
         res.status(managerValidationStatus).json({ error: managerValidationError });
         return;
+    }
+    if (nextOrgId !== existing.organization_id && scope.type !== "all") {
+        res.status(403).json({ error: "Organisationen dürfen nur im eigenen Scope geändert werden." });
+        return;
+    }
+    if (nextOrgId !== existing.organization_id || nextTeamType !== existing.team_type) {
+        const validation = validateOrganizationTeamComposition({ organizationId: nextOrgId, teamId: id, teamType: nextTeamType });
+        if (!validation.ok) {
+            res.status(400).json({ error: validation.error });
+            return;
+        }
     }
     if (updates.length === 0) {
         res.status(400).json({ error: "No updatable fields provided" });
@@ -2664,6 +3257,12 @@ app.delete("/api/teams/:id", authRequired, requirePermission("teams.write"), (re
         res.status(400).json({ error: "Invalid team id" });
         return;
     }
+    const existing = db.prepare("SELECT * FROM teams WHERE id = ?").get(id);
+    if (!existing) {
+        res.status(404).json({ error: "Team not found" });
+        return;
+    }
+    if (!assertTeamAccess(res, req.user, existing, "write")) return;
     const result = db.prepare("UPDATE teams SET status = 'inactive', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
     if (result.changes === 0) {
         res.status(404).json({ error: "Team not found" });
@@ -2679,6 +3278,12 @@ app.get("/api/teams/:id/members", authRequired, requirePermission("team_members.
         res.status(400).json({ error: "Invalid team id" });
         return;
     }
+    const team = getTeamById(teamId);
+    if (!team || team.status === "inactive") {
+        res.status(404).json({ error: "Team not found" });
+        return;
+    }
+    if (!assertTeamAccess(res, req.user, team, "read")) return;
     const rows = db.prepare("SELECT * FROM team_members WHERE team_id = ? ORDER BY id DESC").all(teamId);
     res.json(rows);
 });
@@ -2689,14 +3294,29 @@ app.post("/api/teams/:id/members", authRequired, requirePermission("team_members
         res.status(400).json({ error: "Invalid team id" });
         return;
     }
-    const { name, memberRole, licenseType, licenseValidUntil, licenseStatus } = req.body || {};
+    const team = getTeamById(teamId);
+    if (!team || team.status === "inactive") {
+        res.status(404).json({ error: "Team not found" });
+        return;
+    }
+    if (!assertTeamAccess(res, req.user, team, "write")) return;
+    const { name, memberRole, licenseType, licenseValidUntil, licenseStatus, isSpringer } = req.body || {};
     if (!requireFields(res, req.body || {}, ["name", "memberRole"])) return;
     const result = db
         .prepare(
-            `INSERT INTO team_members (team_id, name, member_role, license_type, license_valid_until, license_status, status)
-             VALUES (?, ?, ?, ?, ?, ?, 'active')`
+            `INSERT INTO team_members (team_id, name, member_role, is_springer, license_type, license_valid_until, license_status, license_confirmed_at, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')`
         )
-        .run(teamId, name.trim(), memberRole.trim(), licenseType ? String(licenseType).trim() : null, licenseValidUntil || null, licenseStatus || null);
+        .run(
+            teamId,
+            name.trim(),
+            memberRole.trim(),
+            parseEnvBoolean(isSpringer, false) ? 1 : 0,
+            licenseType ? String(licenseType).trim() : null,
+            licenseValidUntil || null,
+            licenseStatus ? String(licenseStatus).trim().toLowerCase() : null,
+            String(licenseStatus || "").trim().toLowerCase() === "confirmed" ? new Date().toISOString() : null
+        );
     const created = db.prepare("SELECT * FROM team_members WHERE id = ?").get(result.lastInsertRowid);
     logAudit(req.user, "CREATE_TEAM_MEMBER", "team_members", created.id, created.name);
     res.status(201).json(created);
@@ -2708,9 +3328,21 @@ app.patch("/api/team-members/:id", authRequired, requirePermission("team_members
         res.status(400).json({ error: "Invalid member id" });
         return;
     }
+    const existing = db.prepare("SELECT * FROM team_members WHERE id = ?").get(id);
+    if (!existing) {
+        res.status(404).json({ error: "Team member not found" });
+        return;
+    }
+    const team = getTeamById(existing.team_id);
+    if (!team || team.status === "inactive") {
+        res.status(404).json({ error: "Team not found" });
+        return;
+    }
+    if (!assertTeamAccess(res, req.user, team, "write")) return;
     const allowedMap = {
         name: "name",
         memberRole: "member_role",
+        isSpringer: "is_springer",
         licenseType: "license_type",
         licenseValidUntil: "license_valid_until",
         licenseStatus: "license_status",
@@ -2720,10 +3352,18 @@ app.patch("/api/team-members/:id", authRequired, requirePermission("team_members
     const values = [];
     Object.entries(allowedMap).forEach(([requestKey, dbField]) => {
         if (req.body[requestKey] !== undefined) {
+            if (dbField === "is_springer") {
+                updates.push(`${dbField} = ?`);
+                values.push(parseEnvBoolean(req.body[requestKey], false) ? 1 : 0);
+                return;
+            }
             updates.push(`${dbField} = ?`);
             values.push(String(req.body[requestKey]).trim());
         }
     });
+    if (req.body.licenseStatus !== undefined && String(req.body.licenseStatus).trim().toLowerCase() === "confirmed") {
+        updates.push("license_confirmed_at = CURRENT_TIMESTAMP");
+    }
     if (updates.length === 0) {
         res.status(400).json({ error: "No updatable fields provided" });
         return;
@@ -2745,6 +3385,17 @@ app.delete("/api/team-members/:id", authRequired, requirePermission("team_member
         res.status(400).json({ error: "Invalid member id" });
         return;
     }
+    const existing = db.prepare("SELECT * FROM team_members WHERE id = ?").get(id);
+    if (!existing) {
+        res.status(404).json({ error: "Team member not found" });
+        return;
+    }
+    const team = getTeamById(existing.team_id);
+    if (!team || team.status === "inactive") {
+        res.status(404).json({ error: "Team not found" });
+        return;
+    }
+    if (!assertTeamAccess(res, req.user, team, "write")) return;
     const result = db.prepare("DELETE FROM team_members WHERE id = ?").run(id);
     if (result.changes === 0) {
         res.status(404).json({ error: "Team member not found" });
@@ -2759,17 +3410,66 @@ app.get("/api/seasons", authRequired, requirePermission("seasons.read"), (_, res
 });
 
 app.post("/api/seasons", authRequired, requirePermission("seasons.write"), (req, res) => {
-    const { name, startDate, endDate, pointsRules, status } = req.body || {};
+    const { name, startDate, endDate, registrationDeadlineAt, transferWindowOpenAt, transferWindowCloseAt, pointsRules, status } = req.body || {};
     if (!requireFields(res, req.body || {}, ["name"])) return;
     const result = db
         .prepare(
-            `INSERT INTO seasons (name, start_date, end_date, points_rules, status)
-             VALUES (?, ?, ?, ?, ?)`
+            `INSERT INTO seasons (name, start_date, end_date, registration_deadline_at, transfer_window_open_at, transfer_window_close_at, points_rules, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
         )
-        .run(name.trim(), startDate || null, endDate || null, pointsRules || null, status || "planned");
+        .run(
+            name.trim(),
+            startDate || null,
+            endDate || null,
+            registrationDeadlineAt || null,
+            transferWindowOpenAt || null,
+            transferWindowCloseAt || null,
+            pointsRules || null,
+            status || "planned"
+        );
     const created = db.prepare("SELECT * FROM seasons WHERE id = ?").get(result.lastInsertRowid);
     logAudit(req.user, "CREATE_SEASON", "seasons", created.id, created.name);
     res.status(201).json(created);
+});
+
+app.patch("/api/seasons/:id", authRequired, requirePermission("seasons.write"), (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Invalid season id" });
+        return;
+    }
+    const existing = db.prepare("SELECT * FROM seasons WHERE id = ?").get(id);
+    if (!existing) {
+        res.status(404).json({ error: "Season not found" });
+        return;
+    }
+    const map = {
+        name: "name",
+        startDate: "start_date",
+        endDate: "end_date",
+        registrationDeadlineAt: "registration_deadline_at",
+        transferWindowOpenAt: "transfer_window_open_at",
+        transferWindowCloseAt: "transfer_window_close_at",
+        pointsRules: "points_rules",
+        status: "status"
+    };
+    const updates = [];
+    const values = [];
+    Object.entries(map).forEach(([requestKey, dbField]) => {
+        if (req.body[requestKey] !== undefined) {
+            updates.push(`${dbField} = ?`);
+            values.push(req.body[requestKey] ? String(req.body[requestKey]).trim() : null);
+        }
+    });
+    if (updates.length === 0) {
+        res.status(400).json({ error: "No updatable fields provided" });
+        return;
+    }
+    values.push(id);
+    db.prepare(`UPDATE seasons SET ${updates.join(", ")} WHERE id = ?`).run(...values);
+    const updated = db.prepare("SELECT * FROM seasons WHERE id = ?").get(id);
+    logAudit(req.user, "UPDATE_SEASON", "seasons", id, JSON.stringify(req.body));
+    res.json(updated);
 });
 
 app.delete("/api/seasons/:id", authRequired, requirePermission("seasons.write"), (req, res) => {
@@ -2785,6 +3485,53 @@ app.delete("/api/seasons/:id", authRequired, requirePermission("seasons.write"),
     }
     logAudit(req.user, "DELETE_SEASON", "seasons", id, "Season removed");
     res.status(204).send();
+});
+
+app.post("/api/teams/:id/confirm-registration", authRequired, requirePermission("team_portal.write"), (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Invalid team id" });
+        return;
+    }
+    const team = getTeamById(id);
+    if (!team || team.status === "inactive") {
+        res.status(404).json({ error: "Team not found" });
+        return;
+    }
+    if (!assertTeamAccess(res, req.user, team, "write")) return;
+    if (!team.season_id) {
+        res.status(400).json({ error: "Team hat keine zugewiesene Saison." });
+        return;
+    }
+    const season = getSeasonById(team.season_id);
+    if (!season || season.status === "inactive") {
+        res.status(404).json({ error: "Saison wurde nicht gefunden oder ist inaktiv." });
+        return;
+    }
+    if (season.registration_deadline_at) {
+        const deadline = new Date(season.registration_deadline_at);
+        if (!Number.isNaN(deadline.getTime()) && Date.now() > deadline.getTime() && !ADMIN_ROLES.includes(normalizeRole(req.user?.role))) {
+            res.status(409).json({ error: "Die Meldungsfrist ist abgelaufen." });
+            return;
+        }
+    }
+    const springerRows = getTeamSpringerRows(team.id);
+    const missingSpringerLicenses = springerRows.filter((member) => Number(member.is_springer) === 1 && String(member.license_status || "").toLowerCase() !== "confirmed");
+    if (missingSpringerLicenses.length > 0) {
+        res.status(409).json({ error: "Nicht alle Springer haben eine bestätigte Lizenz." });
+        return;
+    }
+    db.prepare(
+        `UPDATE teams
+         SET registration_status = 'confirmed',
+             submitted_at = COALESCE(submitted_at, CURRENT_TIMESTAMP),
+             confirmed_at = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`
+    ).run(id);
+    const updated = db.prepare("SELECT * FROM teams WHERE id = ?").get(id);
+    logAudit(req.user, "CONFIRM_TEAM_REGISTRATION", "teams", id, `${team.name} confirmed for season ${season.name}`);
+    res.json(updated);
 });
 
 app.get("/api/events", authRequired, requirePermission("events.read"), (_, res) => {
@@ -4310,6 +5057,7 @@ async function startServer() {
     ensureRolesRequiredAssignmentsColumn();
     ensureInvitationsTable();
     ensureDomainRecordEnhancements();
+    ensureOrganizationEnhancements();
     seedDefaultRoles();
     await initializeEmailTransporter();
     if (snapshotReady) {
