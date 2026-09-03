@@ -671,6 +671,7 @@ function ensureOrganizationEnhancements() {
     if (!teamColumnNames.has("organization_id")) {
         db.prepare("ALTER TABLE teams ADD COLUMN organization_id INTEGER").run();
     }
+
     if (!teamColumnNames.has("team_type")) {
         db.prepare("ALTER TABLE teams ADD COLUMN team_type TEXT").run();
     }
@@ -741,6 +742,11 @@ function ensureOrganizationEnhancements() {
         CREATE INDEX IF NOT EXISTS idx_teams_season ON teams(season_id);
         CREATE INDEX IF NOT EXISTS idx_team_members_springer ON team_members(is_springer);
     `);
+}
+
+function ensureTeamPortalSchemaReady() {
+    // Defensive self-healing for legacy/live DBs before team-portal endpoints run.
+    ensureOrganizationEnhancements();
 }
 
 async function initializeEmailTransporter() {
@@ -2448,6 +2454,7 @@ app.get("/api/health", (_, res) => {
 });
 
 app.get("/api/team-portal/error-report", authRequired, requirePermission("team_portal.read"), (req, res) => {
+    ensureTeamPortalSchemaReady();
     const allowedRegistrationStatus = new Set(["draft", "submitted", "revision_requested", "confirmed"]);
     const allowedLicenseStatus = new Set(["pending", "confirmed", "valid", "in_pruefung", "abgelaufen"]);
     const toMs = (value) => {
@@ -4179,6 +4186,7 @@ app.delete("/api/organizations/:id", authRequired, requirePermission("organizati
 });
 
 app.get("/api/teams", authRequired, requirePermission("teams.read"), (req, res) => {
+    ensureTeamPortalSchemaReady();
     const scope = getAccessibleTeamScope(req.user);
     const includeInactive = String(req.query.includeInactive || "").trim() === "1" || String(req.query.includeInactive || "").trim().toLowerCase() === "true";
     let rows = db.prepare(
@@ -4203,6 +4211,7 @@ app.get("/api/teams", authRequired, requirePermission("teams.read"), (req, res) 
 });
 
 app.post("/api/teams", authRequired, requireAnyPermission(["teams.write", "team_portal.write"]), (req, res) => {
+    ensureTeamPortalSchemaReady();
     const { name, organizationId, teamType, nation, category, managerUserId, seasonId } = req.body || {};
     if (!requireFields(res, req.body || {}, ["name", "organizationId", "teamType"])) return;
     const scope = getAccessibleTeamScope(req.user);
@@ -4285,6 +4294,7 @@ app.post("/api/teams", authRequired, requireAnyPermission(["teams.write", "team_
 });
 
 app.patch("/api/teams/:id", authRequired, requireAnyPermission(["teams.write", "team_portal.write"]), (req, res) => {
+    ensureTeamPortalSchemaReady();
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid team id" });
@@ -4506,6 +4516,7 @@ app.post("/api/teams/:id/submit-registration", authRequired, requirePermission("
 });
 
 app.delete("/api/teams/:id", authRequired, requireAnyPermission(["teams.write", "team_portal.write"]), (req, res) => {
+    ensureTeamPortalSchemaReady();
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid team id" });
@@ -4532,6 +4543,7 @@ app.delete("/api/teams/:id", authRequired, requireAnyPermission(["teams.write", 
 });
 
 app.post("/api/teams/bulk-update", authRequired, requireAnyPermission(["teams.write", "team_portal.write"]), (req, res) => {
+    ensureTeamPortalSchemaReady();
     if (!assertAdminUser(res, req.user)) return;
     const idsRaw = Array.isArray(req.body?.teamIds) ? req.body.teamIds : [];
     const teamIds = [...new Set(idsRaw.map((value) => parseId(value)).filter(Boolean))];
