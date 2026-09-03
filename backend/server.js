@@ -2938,7 +2938,7 @@ app.get("/api/organizations", authRequired, requirePermission("organizations.rea
 
 app.post("/api/organizations", authRequired, requirePermission("organizations.write"), (req, res) => {
     if (!assertAdminUser(res, req.user)) return;
-    const { name, shortName, chairUserId, status } = req.body || {};
+    const { name, shortName, chairUserId, chairUser, status } = req.body || {};
     if (!requireFields(res, req.body || {}, ["name"])) return;
     const chairId = chairUserId ? parseId(chairUserId) : null;
     if (chairUserId && !chairId) {
@@ -2951,37 +2951,103 @@ app.post("/api/organizations", authRequired, requirePermission("organizations.wr
             res.status(404).json({ error: "Vorsitzender wurde nicht gefunden oder ist inaktiv." });
             return;
         }
-        if (!isOrganizationChairRole(chair.role)) {
-            res.status(400).json({ error: "Ausgewählter Benutzer hat nicht die Rolle Vorsitzender." });
-            return;
-        }
         const existingOrg = findOrganizationChairedByUser(chairId);
         if (existingOrg) {
             res.status(409).json({ error: `Vorsitzender ist bereits mit Organisation "${existingOrg.name}" verknüpft.` });
             return;
         }
     }
-    const result = db.prepare(
-        `INSERT INTO organizations (name, short_name, chair_user_id, status)
-         VALUES (?, ?, ?, ?)`
-    ).run(
-        name.trim(),
-        shortName ? String(shortName).trim() : null,
-        chairId,
-        status === "inactive" ? "inactive" : "active"
-    );
-    const created = db.prepare("SELECT * FROM organizations WHERE id = ?").get(result.lastInsertRowid);
-    if (chairId) {
-        db.prepare(
-            `INSERT INTO user_scope_assignments (user_id, organization_id, updated_at)
-             VALUES (?, ?, CURRENT_TIMESTAMP)
-             ON CONFLICT(user_id) DO UPDATE SET
-               organization_id = excluded.organization_id,
-               updated_at = CURRENT_TIMESTAMP`
-        ).run(chairId, created.id);
+    const normalizedChairUser = chairUser && typeof chairUser === "object" ? chairUser : null;
+    if (normalizedChairUser) {
+        if (chairId) {
+            res.status(400).json({ error: "Entweder bestehender Vorsitzender oder neuer Vorsitzender, nicht beides." });
+            return;
+        }
+        if (!requireFields(res, normalizedChairUser, ["username", "name", "email"])) return;
     }
-    logAudit(req.user, "CREATE_ORGANIZATION", "organizations", created.id, created.name);
-    res.status(201).json(created);
+    const result = db.transaction(() => {
+        const orgResult = db.prepare(
+            `INSERT INTO organizations (name, short_name, chair_user_id, status)
+             VALUES (?, ?, ?, ?)`
+        ).run(
+            name.trim(),
+            shortName ? String(shortName).trim() : null,
+            chairId,
+            status === "inactive" ? "inactive" : "active"
+        );
+        const org = db.prepare("SELECT * FROM organizations WHERE id = ?").get(orgResult.lastInsertRowid);
+        if (normalizedChairUser) {
+            const chairRole = resolveActiveRoleName("Vorsitzender");
+            const chairUsername = String(normalizedChairUser.username || "").trim();
+            const chairName = String(normalizedChairUser.name || "").trim();
+            const chairEmail = String(normalizedChairUser.email || "").trim().toLowerCase();
+            if (!chairRole) {
+                throw new Error("Vorsitzender-Rolle ist nicht aktiv.");
+            }
+            if (!isDuplicateEmailAllowed() && findUserByEmail(chairEmail)) {
+                throw new Error("Diese E-Mail-Adresse ist bereits vergeben.");
+            }
+            if (db.prepare("SELECT 1 FROM users WHERE username = ? LIMIT 1").get(chairUsername)) {
+                throw new Error("Dieser Benutzername ist bereits vergeben.");
+            }
+            const chairPassword = String(normalizedChairUser.password || "").trim();
+            const sendInvitation = normalizedChairUser.sendInvitation !== false;
+            const passwordHash = chairPassword
+                ? bcrypt.hashSync(chairPassword, 12)
+                : bcrypt.hashSync(crypto.randomBytes(32).toString("hex"), 12);
+            const userResult = db.prepare(
+                `INSERT INTO users (username, name, email, role, password_hash, status)
+                 VALUES (?, ?, ?, ?, ?, ?)`
+            ).run(
+                chairUsername,
+                chairName,
+                chairEmail,
+                chairRole,
+                passwordHash,
+                sendInvitation ? "inactive" : "active"
+            );
+            db.prepare(
+                `INSERT INTO user_scope_assignments (user_id, organization_id, updated_at)
+                 VALUES (?, ?, CURRENT_TIMESTAMP)
+                 ON CONFLICT(user_id) DO UPDATE SET
+                   organization_id = excluded.organization_id,
+                   updated_at = CURRENT_TIMESTAMP`
+            ).run(userResult.lastInsertRowid, org.id);
+            db.prepare("UPDATE organizations SET chair_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+                .run(userResult.lastInsertRowid, org.id);
+            if (sendInvitation) {
+                const invitationToken = crypto.randomBytes(32).toString("hex");
+                const expiresAt = new Date(Date.now() + INVITATION_TOKEN_EXPIRES_HOURS * 60 * 60 * 1000).toISOString();
+                db.prepare(
+                    `INSERT INTO invitations (token, user_id, email, status, expires_at)
+                     VALUES (?, ?, ?, ?, ?)`
+                ).run(invitationToken, userResult.lastInsertRowid, chairEmail, "pending", expiresAt);
+                sendInvitationEmail(chairEmail, invitationToken).catch((error) => {
+                    console.error("Fehler beim Versand der Vorsitzenden-Einladung:", error.message);
+                });
+            }
+        } else if (chairId) {
+            const chairRole = resolveActiveRoleName("Vorsitzender") || "Vorsitzender";
+            db.prepare("UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+                .run(chairRole, chairId);
+            db.prepare("UPDATE organizations SET chair_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+                .run(chairId, org.id);
+            db.prepare(
+                `INSERT INTO user_scope_assignments (user_id, organization_id, updated_at)
+                 VALUES (?, ?, CURRENT_TIMESTAMP)
+                 ON CONFLICT(user_id) DO UPDATE SET
+                   organization_id = excluded.organization_id,
+                   updated_at = CURRENT_TIMESTAMP`
+            ).run(chairId, org.id);
+        }
+        return org;
+    })();
+    if (!result) {
+        res.status(500).json({ error: "Organisation konnte nicht erstellt werden." });
+        return;
+    }
+    logAudit(req.user, "CREATE_ORGANIZATION", "organizations", result.id, result.name);
+    res.status(201).json(result);
 });
 
 app.patch("/api/organizations/:id", authRequired, requirePermission("organizations.write"), (req, res) => {
@@ -3022,10 +3088,6 @@ app.patch("/api/organizations/:id", authRequired, requirePermission("organizatio
                 res.status(404).json({ error: "Vorsitzender wurde nicht gefunden oder ist inaktiv." });
                 return;
             }
-            if (!isOrganizationChairRole(chair.role)) {
-                res.status(400).json({ error: "Ausgewählter Benutzer hat nicht die Rolle Vorsitzender." });
-                return;
-            }
             const existingOrg = findOrganizationChairedByUser(chairId, id);
             if (existingOrg) {
                 res.status(409).json({ error: `Vorsitzender ist bereits mit Organisation "${existingOrg.name}" verknüpft.` });
@@ -3054,6 +3116,9 @@ app.patch("/api/organizations/:id", authRequired, requirePermission("organizatio
             ).run(existing.chair_user_id);
         }
         if (chairId) {
+            const chairRole = resolveActiveRoleName("Vorsitzender") || "Vorsitzender";
+            db.prepare("UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+                .run(chairRole, chairId);
             db.prepare(
                 `INSERT INTO user_scope_assignments (user_id, organization_id, updated_at)
                  VALUES (?, ?, CURRENT_TIMESTAMP)

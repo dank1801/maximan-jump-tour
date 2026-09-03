@@ -145,6 +145,7 @@ function initDomainWorkspace(config) {
         savedViews: [],
         notifications: [],
         models: [],
+        users: [],
         organizations: [],
         seasons: [],
         teams: [],
@@ -415,7 +416,22 @@ function initDomainWorkspace(config) {
                             <div class="grid-2">
                                 <div class="form-group"><label>Name *</label><input type="text" name="name" required /></div>
                                 <div class="form-group"><label>Kurzname</label><input type="text" name="shortName" /></div>
-                                <div class="form-group"><label>Vorsitzenden-ID</label><input type="number" name="chairUserId" min="1" /></div>
+                                <div class="form-group">
+                                    <label>Bestehenden Vorsitzenden verknüpfen</label>
+                                    <select name="chairUserId">
+                                        <option value="">-- bestehenden Account wählen --</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Oder neuen Vorsitzenden anlegen</label>
+                                    <input type="text" name="newChairUsername" placeholder="Benutzername" />
+                                </div>
+                                <div class="form-group"><label>Neuer Vorsitzender: Name</label><input type="text" name="newChairName" placeholder="Vorname Nachname" /></div>
+                                <div class="form-group"><label>Neuer Vorsitzender: E-Mail</label><input type="email" name="newChairEmail" placeholder="name@example.com" /></div>
+                                <div class="form-group"><label>Neuer Vorsitzender: Passwort optional</label><input type="password" name="newChairPassword" placeholder="leer lassen für Einladung" /></div>
+                                <div class="form-group">
+                                    <label><input type="checkbox" name="newChairSendInvitation" checked /> Einladung per E-Mail senden</label>
+                                </div>
                             </div>
                             <div class="form-actions"><button type="submit" class="btn btn-primary btn-small">Organisation speichern</button></div>
                         </form>
@@ -1298,6 +1314,7 @@ function initDomainWorkspace(config) {
         const organizations = Array.isArray(state.organizations) ? state.organizations : [];
         const seasons = Array.isArray(state.seasons) ? state.seasons : [];
         const teams = Array.isArray(state.teams) ? state.teams : [];
+        const users = Array.isArray(state.users) ? state.users : [];
         const currentScope = state.scopeDomain?.name || "Team Portal";
         const resolvedDeadline = (team) => {
             const deadline = team.registration_deadline_at || seasons.find((season) => Number(season.id) === Number(team.season_id))?.registration_deadline_at || null;
@@ -1350,6 +1367,15 @@ function initDomainWorkspace(config) {
         seasonSelect.innerHTML = `<option value="">-- Saison optional --</option>${
             seasons.map((season) => `<option value="${escapeHtml(season.id)}">${escapeHtml(season.name)}</option>`).join("")
         }`;
+        const chairSelect = document.querySelector("#ws-organization-form select[name='chairUserId']");
+        if (chairSelect) {
+            chairSelect.innerHTML = `<option value="">-- bestehenden Account wählen --</option>${
+                users
+                    .filter((user) => String(user.status || "").toLowerCase() === "active")
+                    .map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.username)} · ${escapeHtml(user.name)} · ${escapeHtml(user.role)}</option>`)
+                    .join("")
+            }`;
+        }
 
         const teamRows = teams.map((team) => {
             const org = organizations.find((entry) => Number(entry.id) === Number(team.organization_id));
@@ -1528,13 +1554,30 @@ function initDomainWorkspace(config) {
             orgForm.addEventListener("submit", async (event) => {
                 event.preventDefault();
                 const data = getFormData(orgForm);
+                const newChairFilled = Boolean(String(data.newChairUsername || "").trim() || String(data.newChairName || "").trim() || String(data.newChairEmail || "").trim());
+                const chairUser = newChairFilled
+                    ? {
+                        username: data.newChairUsername || "",
+                        name: data.newChairName || "",
+                        email: data.newChairEmail || "",
+                        password: data.newChairPassword || "",
+                        sendInvitation: data.newChairSendInvitation === "on"
+                    }
+                    : null;
                 try {
                     await api("/organizations", {
                         method: "POST",
-                        body: JSON.stringify(data)
+                        body: JSON.stringify({
+                            name: data.name,
+                            shortName: data.shortName || null,
+                            chairUserId: chairUser ? null : (data.chairUserId || null),
+                            chairUser,
+                            status: "active"
+                        })
                     });
                     showToast("Organisation gespeichert.", "success");
                     orgForm.reset();
+                    orgForm.querySelector("[name='newChairSendInvitation']")?.setAttribute("checked", "checked");
                     await refreshDomainWorkspacePage();
                 } catch (error) {
                     showToast(error.message, "error");
@@ -1766,17 +1809,18 @@ function initDomainWorkspace(config) {
             ? [
                 api("/organizations"),
                 api("/seasons"),
-                api("/teams")
-            ]
-            : [Promise.resolve([]), Promise.resolve([]), Promise.resolve([])];
-        const [scope, records, logs, savedViews, notifications, models, organizations, seasons, teams] = await Promise.all([
-            api("/system-scope"),
-            api(`/domain-records?${recordsQuery.toString()}`),
-            api("/workflows/logs?limit=200&offset=0"),
-            api(`/domain-views?domainKey=${encodeURIComponent(domainKey)}`),
-            api("/notifications?limit=50&offset=0"),
-            api("/domain-models"),
-            ...extras
+                api("/teams"),
+                api("/users")
+                ]
+                : [Promise.resolve([]), Promise.resolve([]), Promise.resolve([]), Promise.resolve([])];
+        const [scope, records, logs, savedViews, notifications, models, organizations, seasons, teams, users] = await Promise.all([
+                api("/system-scope"),
+                api(`/domain-records?${recordsQuery.toString()}`),
+                api("/workflows/logs?limit=200&offset=0"),
+                api(`/domain-views?domainKey=${encodeURIComponent(domainKey)}`),
+                api("/notifications?limit=50&offset=0"),
+                api("/domain-models"),
+                ...extras
         ]);
         const domains = Array.isArray(scope?.domains) ? scope.domains : [];
         const workflows = Array.isArray(scope?.workflows) ? scope.workflows : [];
@@ -1790,6 +1834,7 @@ function initDomainWorkspace(config) {
         state.organizations = Array.isArray(organizations) ? organizations : [];
         state.seasons = Array.isArray(seasons) ? seasons : [];
         state.teams = Array.isArray(teams) ? teams : [];
+        state.users = Array.isArray(users) ? users : [];
 
         ensureEnhancedSections();
         updateHeader();
