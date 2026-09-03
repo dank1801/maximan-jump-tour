@@ -1439,6 +1439,9 @@ function initDomainWorkspace(config) {
         const seasons = Array.isArray(state.seasons) ? state.seasons : [];
         const teams = Array.isArray(state.teams) ? state.teams : [];
         const users = Array.isArray(state.users) ? state.users : [];
+        const canOrganizationsWrite = hasPermission("organizations.write");
+        const canTeamsWrite = hasPermission("teams.write");
+        const canTeamPortalWrite = hasPermission("team_portal.write");
         const currentScope = state.scopeDomain?.name || "Team Portal";
         const resolvedDeadline = (team) => {
             const deadline = team.registration_deadline_at || seasons.find((season) => Number(season.id) === Number(team.season_id))?.registration_deadline_at || null;
@@ -1510,9 +1513,9 @@ function initDomainWorkspace(config) {
             const org = organizations.find((entry) => Number(entry.id) === Number(team.organization_id));
             const reviewStatus = String(team.registration_status || "draft").toLowerCase();
             const locked = isLocked(team);
-            const canReview = hasPermission("organizations.write");
+            const canReview = canOrganizationsWrite && canTeamPortalWrite;
             const canSubmit = reviewStatus === "draft" || reviewStatus === "revision_requested";
-            const canManageTeam = hasPermission("teams.write");
+            const canManageTeam = canTeamsWrite;
             return `
                 <tr>
                     <td><strong>${escapeHtml(team.name || "—")}</strong></td>
@@ -1581,7 +1584,7 @@ function initDomainWorkspace(config) {
                                     <td>${escapeHtml(org.short_name || "—")}</td>
                                     <td>${escapeHtml(org.chair_username || org.chair_name || "—")}</td>
                                     <td>${statusBadge(org.status || "active")}</td>
-                                    <td>${hasPermission("organizations.write")
+                                    <td>${canOrganizationsWrite
                                         ? `<button type="button" class="btn btn-small btn-secondary" data-edit-organization="${org.id}">Bearbeiten</button>`
                                         : `<span class="badge badge-info">Leseansicht</span>`}
                                     </td>
@@ -1603,7 +1606,7 @@ function initDomainWorkspace(config) {
         `;
 
         grid.querySelectorAll("[data-confirm-team]").forEach((button) => {
-            if (!state.canWrite || !hasPermission("organizations.write")) {
+            if (!canOrganizationsWrite || !canTeamPortalWrite) {
                 button.disabled = true;
                 button.classList.add("readonly-action");
                 return;
@@ -1612,7 +1615,7 @@ function initDomainWorkspace(config) {
             button.addEventListener("click", () => openTeamReviewModal(teamId, "confirm"));
         });
         grid.querySelectorAll("[data-reject-team]").forEach((button) => {
-            if (!state.canWrite || !hasPermission("organizations.write")) {
+            if (!canOrganizationsWrite || !canTeamPortalWrite) {
                 button.disabled = true;
                 button.classList.add("readonly-action");
                 return;
@@ -1621,7 +1624,7 @@ function initDomainWorkspace(config) {
             button.addEventListener("click", () => openTeamReviewModal(teamId, "reject"));
         });
         grid.querySelectorAll("[data-submit-team]").forEach((button) => {
-            if (!state.canWrite) {
+            if (!canTeamPortalWrite) {
                 button.disabled = true;
                 button.classList.add("readonly-action");
                 return;
@@ -1638,7 +1641,7 @@ function initDomainWorkspace(config) {
             });
         });
         grid.querySelectorAll("[data-edit-team]").forEach((button) => {
-            if (!state.canWrite || !hasPermission("teams.write")) {
+            if (!canTeamsWrite) {
                 button.disabled = true;
                 button.classList.add("readonly-action");
                 return;
@@ -1647,7 +1650,7 @@ function initDomainWorkspace(config) {
             button.addEventListener("click", () => openTeamManageModal(teamId));
         });
         grid.querySelectorAll("[data-delete-team]").forEach((button) => {
-            if (!state.canWrite || !hasPermission("teams.write")) {
+            if (!canTeamsWrite) {
                 button.disabled = true;
                 button.classList.add("readonly-action");
                 return;
@@ -1668,7 +1671,7 @@ function initDomainWorkspace(config) {
             });
         });
         grid.querySelectorAll("[data-edit-organization]").forEach((button) => {
-            if (!state.canWrite || !hasPermission("organizations.write")) {
+            if (!canOrganizationsWrite) {
                 button.disabled = true;
                 button.classList.add("readonly-action");
                 return;
@@ -2322,8 +2325,6 @@ function initDomainWorkspace(config) {
         if (!state.canWrite) {
             applyReadOnlyUi("#ws-record-form");
             applyReadOnlyUi("#ws-workflow-form");
-            applyReadOnlyUi("#ws-organization-form");
-            applyReadOnlyUi("#ws-team-admin-form");
         }
 
         await refreshDomainWorkspacePage();
