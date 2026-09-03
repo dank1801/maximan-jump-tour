@@ -3094,8 +3094,8 @@ app.get(
 
         const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
         let rows = db
-            .prepare(`SELECT * FROM domain_records ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`)
-            .all(...params, limit, offset);
+            .prepare(`SELECT * FROM domain_records ${whereSql} ORDER BY id DESC`)
+            .all(...params);
 
         if (requestedSeverity || dueState) {
             rows = rows.filter((row) => {
@@ -3113,9 +3113,10 @@ app.get(
                 return true;
             });
         }
-        const totalRow = db.prepare(`SELECT COUNT(*) AS total FROM domain_records ${whereSql}`).get(...params);
-        res.set("X-Total-Count", String(totalRow?.total || 0));
-        res.json(rows.map((row) => mapDomainRecordRow(row)));
+        const total = rows.length;
+        const pagedRows = rows.slice(offset, offset + limit);
+        res.set("X-Total-Count", String(total));
+        res.json(pagedRows.map((row) => mapDomainRecordRow(row)));
     }
 );
 
@@ -3614,7 +3615,7 @@ app.get(
         params.push(status);
     }
     const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
-    const rows = db.prepare(`SELECT * FROM workflow_runs ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
+    const rows = db.prepare(`SELECT * FROM workflow_runs ${whereSql} ORDER BY id DESC`).all(...params);
     const filteredRows = rows.filter((row) => {
         if (hasPermissionValue(req.user, "dashboard.read") || hasPermissionValue(req.user, "workflows.execute")) return true;
         if (row.workflow_key.startsWith("loc_")) return hasPermissionValue(req.user, "loc.read") || hasPermissionValue(req.user, "loc.write");
@@ -3625,12 +3626,13 @@ app.get(
         }
         return true;
     });
-    const mapped = filteredRows.map((row) => ({
+    const total = filteredRows.length;
+    const pagedRows = filteredRows.slice(offset, offset + limit);
+    const mapped = pagedRows.map((row) => ({
         ...row,
         payload: parseConfigJsonSafely(row.payload_json)
     }));
-    const totalRow = db.prepare(`SELECT COUNT(*) AS total FROM workflow_runs ${whereSql}`).get(...params);
-    res.set("X-Total-Count", String(totalRow?.total || 0));
+    res.set("X-Total-Count", String(total));
     res.json(mapped);
 });
 
