@@ -33,9 +33,10 @@ const ENABLE_ONLINE_SNAPSHOT = parseEnvBoolean(
     process.env.ENABLE_ONLINE_SNAPSHOT,
     Boolean(DATABASE_URL)
 );
+const ONLINE_SNAPSHOT_CONFIGURED = ENABLE_ONLINE_SNAPSHOT && Boolean(DATABASE_URL);
 const REQUIRE_PERSISTENT_DB = parseEnvBoolean(
     process.env.REQUIRE_PERSISTENT_DB,
-    IS_PRODUCTION && !ENABLE_ONLINE_SNAPSHOT
+    IS_PRODUCTION && !ONLINE_SNAPSHOT_CONFIGURED
 );
 const BASE_URL = process.env.BASE_URL || (IS_PRODUCTION ? "https://maximan-jump-tour.onrender.com" : "http://localhost:3000");
 const INVITATION_TOKEN_EXPIRES_HOURS = 48;
@@ -55,7 +56,7 @@ function ensureWritableDirectory(directory) {
 }
 
 async function initOnlineSnapshotStore() {
-    if (!ENABLE_ONLINE_SNAPSHOT || !DATABASE_URL) {
+    if (!ONLINE_SNAPSHOT_CONFIGURED) {
         return false;
     }
     snapshotPool = new Pool({
@@ -132,7 +133,7 @@ function scheduleSnapshotPersist(reason = "write") {
 let DB_DIR = DEFAULT_RUNTIME_DIR;
 let usingPersistentStorage = false;
 let lastPersistentError = null;
-const USE_DISK_PERSISTENCE = !ENABLE_ONLINE_SNAPSHOT;
+const USE_DISK_PERSISTENCE = !ONLINE_SNAPSHOT_CONFIGURED;
 
 if (IS_PRODUCTION && USE_DISK_PERSISTENCE) {
     for (const candidate of PERSISTENT_DIR_CANDIDATES) {
@@ -1427,6 +1428,8 @@ app.get("/api/health", (_, res) => {
         persistentStorage: usingPersistentStorage,
         onlineSnapshot: {
             enabled: ENABLE_ONLINE_SNAPSHOT,
+            configured: ONLINE_SNAPSHOT_CONFIGURED,
+            databaseUrlPresent: Boolean(DATABASE_URL),
             ready: snapshotReady,
             lastSnapshotAt
         }
@@ -3108,7 +3111,7 @@ const server = http.createServer(app);
 registerWebSocketServer(server);
 
 async function startServer() {
-    if (ENABLE_ONLINE_SNAPSHOT) {
+    if (ONLINE_SNAPSHOT_CONFIGURED) {
         try {
             await initOnlineSnapshotStore();
             await restoreDbFromOnlineSnapshot();
@@ -3119,6 +3122,9 @@ async function startServer() {
             // eslint-disable-next-line no-console
             console.warn("Online-Snapshot nicht verfügbar:", error.message);
         }
+    } else if (IS_PRODUCTION && ENABLE_ONLINE_SNAPSHOT) {
+        // eslint-disable-next-line no-console
+        console.warn("Online-Snapshot aktiviert, aber DATABASE_URL fehlt. Es wird kein Online-Restore/Persist ausgeführt.");
     }
     db = new Database(DB_PATH);
     db.pragma("foreign_keys = ON");
@@ -3134,7 +3140,9 @@ async function startServer() {
     }
     server.listen(PORT, HOST, () => {
         // eslint-disable-next-line no-console
-        console.log(`MSC backend running on http://${HOST}:${PORT} (DB: ${DB_PATH})`);
+        console.log(
+            `MSC backend running on http://${HOST}:${PORT} (DB: ${DB_PATH}, onlineSnapshotConfigured=${ONLINE_SNAPSHOT_CONFIGURED}, onlineSnapshotReady=${snapshotReady})`
+        );
     });
 }
 
