@@ -229,6 +229,52 @@
                     </div>
                 </div>
 
+                <div class="card">
+                    <div class="card-header">
+                        <h2>E-Mail-Einstellungen (Einladungen)</h2>
+                    </div>
+                    <form id="email-config-form">
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label>SMTP Host</label>
+                                <input type="text" name="smtp_host" placeholder="z. B. smtp.sendgrid.net" />
+                            </div>
+                            <div class="form-group">
+                                <label>SMTP Port</label>
+                                <input type="number" name="smtp_port" placeholder="587" value="587" />
+                            </div>
+                            <div class="form-group">
+                                <label>SMTP Benutzer</label>
+                                <input type="text" name="smtp_user" placeholder="z. B. apikey" />
+                            </div>
+                            <div class="form-group">
+                                <label>SMTP Passwort / API Key</label>
+                                <input type="password" name="smtp_pass" placeholder="••••••••" />
+                            </div>
+                            <div class="form-group">
+                                <label>Absender-Adresse</label>
+                                <input type="email" name="smtp_from" placeholder="z. B. noreply@deine-domain.de" />
+                            </div>
+                            <div class="form-group">
+                                <label>Öffentliche Basis-URL</label>
+                                <input type="url" name="base_url" placeholder="https://maximan-jump-tour.onrender.com" />
+                                <div class="help-text">Wird für den Aktivierungslink in Einladungs-E-Mails verwendet.</div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="checkbox-group">
+                                <div class="checkbox-item">
+                                    <input type="checkbox" name="smtp_secure" value="true" />
+                                    <label>SMTP Secure/TLS erzwingen</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">E-Mail-Einstellungen speichern</button>
+                        </div>
+                    </form>
+                </div>
+
                 <!-- Danger Zone -->
                 <div class="card">
                     <div class="card-header" >
@@ -251,6 +297,7 @@
         if (!isLoginPage()) {
             const systemConfigForm = document.getElementById("system-config-form");
             const securityConfigForm = document.getElementById("security-config-form");
+            const emailConfigForm = document.getElementById("email-config-form");
             const defaultSeasonSelect = systemConfigForm?.querySelector("select[name='default_season']");
             const defaultPointsSchemaSelect = systemConfigForm?.querySelector("select[name='default_points_schema']");
             const allowDuplicateEmailsCheckbox = securityConfigForm?.querySelector("input[name='allow_duplicate_emails']");
@@ -332,6 +379,7 @@
                     const map = Object.fromEntries((settings || []).map((entry) => [entry.key, entry.value]));
                     applyValuesToForm(systemConfigForm, map.system_config || {});
                     applyValuesToForm(securityConfigForm, map.security_config || {});
+                    applyValuesToForm(emailConfigForm, map.email_config || {});
                     if (allowDuplicateEmailsCheckbox) {
                         allowDuplicateEmailsCheckbox.checked = toBoolean(map.allow_duplicate_emails);
                     }
@@ -363,6 +411,23 @@
                     const checkbox = securityConfigForm.querySelector(`input[name='${name}']`);
                     if (checkbox) {
                         data[name] = checkbox.checked ? "true" : "false";
+                    }
+                });
+
+                emailConfigForm?.addEventListener("submit", async (e) => {
+                    e.preventDefault();
+                    const data = getFormData(emailConfigForm);
+                    const secureCheckbox = emailConfigForm.querySelector("input[name='smtp_secure']");
+                    data.smtp_secure = secureCheckbox?.checked ? "true" : "false";
+                    try {
+                        await api("/settings", {
+                            method: "POST",
+                            body: JSON.stringify({ key: "email_config", value: data })
+                        });
+                        await hydrateSettingsForms();
+                        showToast("E-Mail-Einstellungen gespeichert.", "success");
+                    } catch (error) {
+                        showToast(error.message, "error");
                     }
                 });
                 try {

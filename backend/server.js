@@ -444,14 +444,16 @@ function ensureInvitationsTable() {
 }
 
 async function initializeEmailTransporter() {
-    if (IS_PRODUCTION && process.env.SMTP_HOST) {
+    const emailConfig = getEmailConfig();
+    const hasSmtpConfig = Boolean(emailConfig.host && emailConfig.user && emailConfig.pass);
+    if (hasSmtpConfig) {
         emailTransporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: parseInt(process.env.SMTP_PORT || "587"),
-            secure: process.env.SMTP_SECURE === "true",
+            host: emailConfig.host,
+            port: Number(emailConfig.port) || 587,
+            secure: emailConfig.secure,
             auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASS
+                user: emailConfig.user,
+                pass: emailConfig.pass
             }
         });
     } else if (IS_PRODUCTION) {
@@ -484,9 +486,10 @@ async function sendInvitationEmail(email, token) {
         return false;
     }
 
-    const acceptUrl = `${BASE_URL}/accept-invitation.html?token=${encodeURIComponent(token)}`;
+    const emailConfig = getEmailConfig();
+    const acceptUrl = `${emailConfig.baseUrl}/accept-invitation.html?token=${encodeURIComponent(token)}`;
     const mailOptions = {
-        from: process.env.SMTP_FROM || "noreply@maximan-jump-tour.local",
+        from: emailConfig.from,
         to: email,
         subject: "Willkommen! MSC Portal Account aktivieren",
         html: `
@@ -510,6 +513,20 @@ async function sendInvitationEmail(email, token) {
         console.error(`Fehler beim Versand von Invitation-Email an ${email}:`, err.message);
         return false;
     }
+}
+
+function getEmailConfig() {
+    const saved = getSettingValue("email_config");
+    const savedConfig = (saved && typeof saved === "object") ? saved : {};
+    return {
+        host: String(savedConfig.smtp_host || process.env.SMTP_HOST || "").trim(),
+        port: Number(savedConfig.smtp_port || process.env.SMTP_PORT || 587),
+        secure: parseEnvBoolean(savedConfig.smtp_secure ?? process.env.SMTP_SECURE, false),
+        user: String(savedConfig.smtp_user || process.env.SMTP_USER || "").trim(),
+        pass: String(savedConfig.smtp_pass || process.env.SMTP_PASS || "").trim(),
+        from: String(savedConfig.smtp_from || process.env.SMTP_FROM || "noreply@maximan-jump-tour.local").trim(),
+        baseUrl: String(savedConfig.base_url || BASE_URL).trim().replace(/\/+$/, "")
+    };
 }
 
 
@@ -2889,7 +2906,7 @@ app.get("/api/settings", authRequired, requirePermission("settings.read"), (_, r
     res.json(mapped);
 });
 
-app.post("/api/settings", authRequired, requirePermission("settings.write"), (req, res) => {
+app.post("/api/settings", authRequired, requirePermission("settings.write"), async (req, res) => {
     const key = String(req.body?.key || "").trim();
     if (!key) {
         res.status(400).json({ error: "Missing setting key" });
@@ -2903,11 +2920,14 @@ app.post("/api/settings", authRequired, requirePermission("settings.write"), (re
            value_json = excluded.value_json,
            updated_at = CURRENT_TIMESTAMP`
     ).run(key, valueJson);
+    if (key === "email_config") {
+        await initializeEmailTransporter();
+    }
     logAudit(req.user, "UPSERT_SETTING", "settings", key, valueJson);
     res.json({ key, value: req.body?.value ?? null });
 });
 
-app.put("/api/settings/:key", authRequired, requirePermission("settings.write"), (req, res) => {
+app.put("/api/settings/:key", authRequired, requirePermission("settings.write"), async (req, res) => {
     const key = String(req.params.key || "").trim();
     if (!key) {
         res.status(400).json({ error: "Missing setting key" });
@@ -2921,6 +2941,9 @@ app.put("/api/settings/:key", authRequired, requirePermission("settings.write"),
            value_json = excluded.value_json,
            updated_at = CURRENT_TIMESTAMP`
     ).run(key, valueJson);
+    if (key === "email_config") {
+        await initializeEmailTransporter();
+    }
     logAudit(req.user, "UPSERT_SETTING", "settings", key, valueJson);
     res.json({ key, value: req.body?.value ?? null });
 });
