@@ -449,7 +449,7 @@ function initDomainWorkspace(config) {
             teamCard.className = "card";
             teamCard.id = "ws-team-management-card";
             teamCard.innerHTML = `
-                <div class="card-header"><h2>Organisationen, Teams & Saison</h2></div>
+                <div class="card-header"><h2>Organisationen & Teams</h2></div>
                 <div class="card-body">
                     <div class="grid-2">
                         <form id="ws-organization-form" class="workspace-inline-form">
@@ -489,7 +489,11 @@ function initDomainWorkspace(config) {
                                 <div class="form-group"><label>Teamtyp *</label><select name="teamType" required><option value="A">A-Team</option><option value="B">B-Team</option><option value="C">C-Team</option></select></div>
                                 <div class="form-group"><label>Name *</label><input type="text" name="name" required /></div>
                                 <div class="form-group"><label>Saison</label><select name="seasonId"></select></div>
-                                <div class="form-group"><label>Trainer/Manager ID</label><input type="number" name="managerUserId" min="1" /></div>
+                                <div class="form-group">
+                                    <label>Trainer/Manager suchen</label>
+                                    <input type="search" name="managerUserLookup" list="ws-manager-user-options" placeholder="Username, Name, E-Mail oder ID" />
+                                    <datalist id="ws-manager-user-options"></datalist>
+                                </div>
                                 <div class="form-group"><label>Meldestatus</label><input type="text" value="Entwurf (automatisch)" disabled /></div>
                             </div>
                             <div class="form-actions"><button type="submit" class="btn btn-primary btn-small">Team speichern</button></div>
@@ -499,6 +503,38 @@ function initDomainWorkspace(config) {
                 </div>
             `;
             document.getElementById("ws-inbox-card")?.insertAdjacentElement("afterend", teamCard);
+        }
+
+        if (domainKey === "msc_admin" && !document.getElementById("ws-season-admin-card")) {
+            const seasonCard = document.createElement("div");
+            seasonCard.className = "card";
+            seasonCard.id = "ws-season-admin-card";
+            seasonCard.innerHTML = `
+                <div class="card-header"><h2>Saisonverwaltung (Admin)</h2></div>
+                <div class="card-body">
+                    <form id="ws-season-form" class="workspace-inline-form">
+                        <input type="hidden" name="seasonId" />
+                        <div class="grid-3">
+                            <div class="form-group"><label>Name *</label><input type="text" name="name" required /></div>
+                            <div class="form-group"><label>Startdatum</label><input type="date" name="startDate" /></div>
+                            <div class="form-group"><label>Enddatum</label><input type="date" name="endDate" /></div>
+                            <div class="form-group"><label>Meldungsfrist</label><input type="datetime-local" name="registrationDeadlineAt" /></div>
+                            <div class="form-group"><label>Transferfenster offen</label><input type="datetime-local" name="transferWindowOpenAt" /></div>
+                            <div class="form-group"><label>Transferfenster zu</label><input type="datetime-local" name="transferWindowCloseAt" /></div>
+                            <div class="form-group"><label>Status</label><select name="status"><option value="planned">Geplant</option><option value="active">Aktiv</option><option value="inactive">Inaktiv</option></select></div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary btn-small" id="ws-season-submit">Saison speichern</button>
+                            <button type="button" class="btn btn-secondary btn-small hidden" id="ws-season-cancel">Bearbeitung abbrechen</button>
+                        </div>
+                    </form>
+                    <table class="table" style="margin-top: 12px;">
+                        <thead><tr><th>Name</th><th>Zeitraum</th><th>Meldungsfrist</th><th>Transferfenster</th><th>Status</th><th>Aktion</th></tr></thead>
+                        <tbody id="ws-seasons-body"></tbody>
+                    </table>
+                </div>
+            `;
+            document.getElementById("ws-inbox-card")?.insertAdjacentElement("afterend", seasonCard);
         }
 
         const recordsBody = document.getElementById("ws-records-body");
@@ -1520,6 +1556,15 @@ function initDomainWorkspace(config) {
         orgSelect.innerHTML = `<option value="">-- Organisation wählen --</option>${
             organizations.map((org) => `<option value="${escapeHtml(org.id)}">${escapeHtml(org.name)}${org.short_name ? ` (${escapeHtml(org.short_name)})` : ""}</option>`).join("")
         }`;
+        const isScopedToSingleOrg = !canOrganizationsWrite && organizations.length === 1;
+        if (isScopedToSingleOrg) {
+            orgSelect.value = String(organizations[0].id);
+            orgSelect.disabled = true;
+            orgSelect.title = "Als Vorsitzende/r kannst du nur Teams deiner Organisation melden.";
+        } else {
+            orgSelect.disabled = false;
+            orgSelect.title = "";
+        }
         seasonSelect.innerHTML = `<option value="">-- Saison optional --</option>${
             seasons.map((season) => `<option value="${escapeHtml(season.id)}">${escapeHtml(season.name)}</option>`).join("")
         }`;
@@ -1533,6 +1578,21 @@ function initDomainWorkspace(config) {
                 .filter((user) => String(user.status || "").toLowerCase() === "active")
                 .map((user) => {
                     const label = `${user.username} · ${user.name} · ${user.email}`;
+                    return `<option value="${escapeHtml(user.username)}"></option><option value="${escapeHtml(user.email)}"></option><option value="${escapeHtml(user.name)}"></option><option value="${escapeHtml(String(user.id))}"></option><option value="${escapeHtml(label)}"></option>`;
+                })
+                .join("");
+        }
+        const managerOptions = document.getElementById("ws-manager-user-options");
+        if (managerOptions) {
+            const managerUsers = users
+                .filter((user) => String(user.status || "").toLowerCase() === "active")
+                .filter((user) => {
+                    const role = String(user.role || "").toLowerCase();
+                    return role.includes("teammanager") || role.includes("trainer");
+                });
+            managerOptions.innerHTML = managerUsers
+                .map((user) => {
+                    const label = `${user.username} · ${user.name} · ${user.email} · ID ${user.id}`;
                     return `<option value="${escapeHtml(user.username)}"></option><option value="${escapeHtml(user.email)}"></option><option value="${escapeHtml(user.name)}"></option><option value="${escapeHtml(String(user.id))}"></option><option value="${escapeHtml(label)}"></option>`;
                 })
                 .join("");
@@ -1716,6 +1776,73 @@ function initDomainWorkspace(config) {
             }
             const teamId = Number(button.getAttribute("data-history-team"));
             button.addEventListener("click", () => openTeamHistoryModal(teamId));
+        });
+
+    }
+
+    function renderSeasonAdminPanel() {
+        if (domainKey !== "msc_admin") return;
+        const tbody = document.getElementById("ws-seasons-body");
+        if (!tbody) return;
+        const canSeasonsWrite = hasPermission("seasons.write");
+        const seasons = Array.isArray(state.seasons) ? state.seasons : [];
+        tbody.innerHTML = seasons.map((season) => {
+            const period = `${season.start_date || "—"} bis ${season.end_date || "—"}`;
+            const transferWindow = `${season.transfer_window_open_at ? formatDateTime(season.transfer_window_open_at) : "—"} → ${season.transfer_window_close_at ? formatDateTime(season.transfer_window_close_at) : "—"}`;
+            return `
+                <tr>
+                    <td><strong>${escapeHtml(season.name || `Saison ${season.id}`)}</strong></td>
+                    <td>${escapeHtml(period)}</td>
+                    <td>${season.registration_deadline_at ? escapeHtml(formatDateTime(season.registration_deadline_at)) : "—"}</td>
+                    <td>${escapeHtml(transferWindow)}</td>
+                    <td>${statusBadge(String(season.status || "planned").toLowerCase())}</td>
+                    <td>
+                        <div class="actions-inline">
+                            ${canSeasonsWrite ? `<button type="button" class="btn btn-small btn-secondary" data-edit-season="${season.id}">Bearbeiten</button>` : ""}
+                            ${canSeasonsWrite ? `<button type="button" class="btn btn-small btn-danger" data-delete-season="${season.id}">Löschen</button>` : ""}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join("") || "<tr><td colspan='6' class='table-empty'>Keine Saisons vorhanden.</td></tr>";
+
+        tbody.querySelectorAll("[data-edit-season]").forEach((button) => {
+            const seasonId = Number(button.getAttribute("data-edit-season"));
+            button.addEventListener("click", () => {
+                const season = seasons.find((entry) => Number(entry.id) === seasonId);
+                const form = document.getElementById("ws-season-form");
+                if (!season || !form) return;
+                form.elements.seasonId.value = String(season.id);
+                form.elements.name.value = season.name || "";
+                form.elements.startDate.value = season.start_date || "";
+                form.elements.endDate.value = season.end_date || "";
+                form.elements.registrationDeadlineAt.value = toLocalDateTimeInput(season.registration_deadline_at);
+                form.elements.transferWindowOpenAt.value = toLocalDateTimeInput(season.transfer_window_open_at);
+                form.elements.transferWindowCloseAt.value = toLocalDateTimeInput(season.transfer_window_close_at);
+                form.elements.status.value = season.status || "planned";
+                const submit = document.getElementById("ws-season-submit");
+                if (submit) submit.textContent = "Saison aktualisieren";
+                document.getElementById("ws-season-cancel")?.classList.remove("hidden");
+                form.scrollIntoView({ behavior: "smooth", block: "start" });
+                form.elements.name.focus();
+            });
+        });
+
+        tbody.querySelectorAll("[data-delete-season]").forEach((button) => {
+            const seasonId = Number(button.getAttribute("data-delete-season"));
+            button.addEventListener("click", () => {
+                const season = seasons.find((entry) => Number(entry.id) === seasonId);
+                if (!season) return;
+                confirmDelete(`Saison ${season.name || seasonId}`, async () => {
+                    try {
+                        await api(`/seasons/${seasonId}`, { method: "DELETE" });
+                        showToast("Saison gelöscht.", "success");
+                        await refreshDomainWorkspacePage();
+                    } catch (error) {
+                        showToast(error.message, "error");
+                    }
+                });
+            });
         });
     }
 
@@ -1957,10 +2084,11 @@ function initDomainWorkspace(config) {
     }
 
     function bindTeamAdminPanel() {
-        if (domainKey !== "team_portal") return;
+        if (domainKey !== "team_portal" && domainKey !== "msc_admin") return;
+        const isTeamPortal = domainKey === "team_portal";
         const orgForm = document.getElementById("ws-organization-form");
         const teamForm = document.getElementById("ws-team-admin-form");
-        if (orgForm && orgForm.dataset.bound !== "1") {
+        if (isTeamPortal && orgForm && orgForm.dataset.bound !== "1") {
             orgForm.dataset.bound = "1";
             orgForm.addEventListener("submit", async (event) => {
                 event.preventDefault();
@@ -1998,11 +2126,65 @@ function initDomainWorkspace(config) {
                 }
             });
         }
-        if (teamForm && teamForm.dataset.bound !== "1") {
+        if (isTeamPortal && teamForm && teamForm.dataset.bound !== "1") {
             teamForm.dataset.bound = "1";
             teamForm.addEventListener("submit", async (event) => {
                 event.preventDefault();
                 const data = getFormData(teamForm);
+                const organizations = Array.isArray(state.organizations) ? state.organizations : [];
+                const teams = Array.isArray(state.teams) ? state.teams : [];
+                const seasons = Array.isArray(state.seasons) ? state.seasons : [];
+                const users = Array.isArray(state.users) ? state.users : [];
+                const managerLookup = String(data.managerUserLookup || "").trim();
+                const managerMatch = managerLookup
+                    ? users.find((user) => {
+                        const matchPool = [
+                            String(user.id || ""),
+                            String(user.username || ""),
+                            String(user.email || ""),
+                            String(user.name || "")
+                        ].map((entry) => entry.trim().toLowerCase());
+                        const needle = managerLookup.toLowerCase();
+                        return matchPool.includes(needle) || matchPool.some((entry) => entry.includes(needle));
+                    })
+                    : null;
+                const managerUserId = managerMatch ? Number(managerMatch.id) : null;
+                const selectedOrgId = Number(data.organizationId || 0);
+                const selectedType = String(data.teamType || "").trim().toUpperCase();
+                if (!selectedOrgId) {
+                    showToast("Bitte eine Organisation auswählen.", "error");
+                    return;
+                }
+                const selectedOrg = organizations.find((org) => Number(org.id) === selectedOrgId);
+                if (!selectedOrg) {
+                    showToast("Organisation wurde nicht gefunden oder liegt außerhalb deines Scopes.", "error");
+                    return;
+                }
+                const orgTeams = teams.filter((team) => Number(team.organization_id) === selectedOrgId && String(team.status || "").toLowerCase() !== "inactive");
+                if (orgTeams.length >= 3) {
+                    showToast("Diese Organisation hat bereits 3 aktive Teams (Maximum erreicht).", "error");
+                    return;
+                }
+                const hasA = orgTeams.some((team) => String(team.team_type || "").trim().toUpperCase() === "A");
+                if (orgTeams.length === 0 && selectedType !== "A") {
+                    showToast("Erstes Team einer Organisation muss ein A-Team sein.", "error");
+                    return;
+                }
+                if (selectedType === "A" && hasA) {
+                    showToast("Diese Organisation hat bereits ein A-Team.", "error");
+                    return;
+                }
+                if (managerLookup && !managerMatch) {
+                    showToast("Trainer/Manager wurde nicht gefunden.", "error");
+                    return;
+                }
+                if (data.seasonId) {
+                    const season = seasons.find((entry) => Number(entry.id) === Number(data.seasonId));
+                    if (!season || String(season.status || "").toLowerCase() === "inactive") {
+                        showToast("Bitte eine aktive oder geplante Saison wählen.", "error");
+                        return;
+                    }
+                }
                 try {
                     await api("/teams", {
                         method: "POST",
@@ -2011,17 +2193,67 @@ function initDomainWorkspace(config) {
                             organizationId: data.organizationId,
                             teamType: data.teamType,
                             seasonId: data.seasonId || null,
-                            managerUserId: data.managerUserId || null
+                            managerUserId
                         })
                     });
                     showToast("Team gespeichert.", "success");
                     teamForm.reset();
+                    const orgSelect = teamForm.querySelector("select[name='organizationId']");
+                    if (orgSelect && orgSelect.disabled && organizations.length === 1) {
+                        orgSelect.value = String(organizations[0].id);
+                    }
                     await refreshDomainWorkspacePage();
                 } catch (error) {
                     showToast(error.message, "error");
                 }
             });
         }
+        const seasonForm = document.getElementById("ws-season-form");
+        if (seasonForm && seasonForm.dataset.bound !== "1") {
+            seasonForm.dataset.bound = "1";
+            seasonForm.addEventListener("submit", async (event) => {
+                event.preventDefault();
+                const data = getFormData(seasonForm);
+                const payload = {
+                    name: String(data.name || "").trim(),
+                    startDate: String(data.startDate || "").trim() || null,
+                    endDate: String(data.endDate || "").trim() || null,
+                    registrationDeadlineAt: toIsoFromLocalInput(data.registrationDeadlineAt),
+                    transferWindowOpenAt: toIsoFromLocalInput(data.transferWindowOpenAt),
+                    transferWindowCloseAt: toIsoFromLocalInput(data.transferWindowCloseAt),
+                    status: String(data.status || "planned").trim().toLowerCase()
+                };
+                try {
+                    const seasonId = Number(data.seasonId || 0);
+                    await api(seasonId > 0 ? `/seasons/${seasonId}` : "/seasons", {
+                        method: seasonId > 0 ? "PATCH" : "POST",
+                        body: JSON.stringify(payload)
+                    });
+                    showToast(seasonId > 0 ? "Saison aktualisiert." : "Saison erstellt.", "success");
+                    seasonForm.reset();
+                    seasonForm.elements.seasonId.value = "";
+                    const submit = document.getElementById("ws-season-submit");
+                    if (submit) submit.textContent = "Saison speichern";
+                    document.getElementById("ws-season-cancel")?.classList.add("hidden");
+                    await refreshDomainWorkspacePage();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+        }
+        const seasonCancel = document.getElementById("ws-season-cancel");
+        if (seasonCancel && seasonCancel.dataset.bound !== "1") {
+            seasonCancel.dataset.bound = "1";
+            seasonCancel.addEventListener("click", () => {
+                if (!seasonForm) return;
+                seasonForm.reset();
+                seasonForm.elements.seasonId.value = "";
+                const submit = document.getElementById("ws-season-submit");
+                if (submit) submit.textContent = "Saison speichern";
+                seasonCancel.classList.add("hidden");
+            });
+        }
+        if (!isTeamPortal) return;
         document.querySelectorAll("[data-team-template]").forEach((button) => {
             if (button.dataset.bound === "1") return;
             button.dataset.bound = "1";
@@ -2224,6 +2456,14 @@ function initDomainWorkspace(config) {
                 hasPermission("users.read") ? api("/users") : Promise.resolve([]),
                 api("/team-portal/error-report").catch(() => ({ summary: { total: 0 }, issues: [] }))
                 ]
+                : domainKey === "msc_admin"
+                    ? [
+                        Promise.resolve([]),
+                        api("/seasons").catch(() => []),
+                        Promise.resolve([]),
+                        Promise.resolve([]),
+                        Promise.resolve({ summary: { total: 0 }, issues: [] })
+                    ]
                 : [Promise.resolve([]), Promise.resolve([]), Promise.resolve([]), Promise.resolve([]), Promise.resolve({ summary: { total: 0 }, issues: [] })];
         const [scope, records, logs, savedViews, notifications, models, organizations, seasons, teams, users, errorReport] = await Promise.all([
                 api("/system-scope"),
@@ -2265,12 +2505,26 @@ function initDomainWorkspace(config) {
         renderNotifications();
         renderProblemScanner();
         renderTeamAdminPanel();
+        renderSeasonAdminPanel();
         bindTeamAdminPanel();
         if (!hasPermission("organizations.write")) {
             applyReadOnlyUi("#ws-organization-form");
         }
         if (!hasPermission("teams.write")) {
             applyReadOnlyUi("#ws-team-admin-form");
+        }
+        if (domainKey === "msc_admin" && !hasPermission("seasons.write")) {
+            applyReadOnlyUi("#ws-season-form");
+            const seasonCard = document.getElementById("ws-season-admin-card");
+            const body = seasonCard?.querySelector(".card-body");
+            if (body && !body.querySelector("[data-season-readonly-hint='1']")) {
+                const hint = document.createElement("div");
+                hint.dataset.seasonReadonlyHint = "1";
+                hint.className = "workspace-muted";
+                hint.style.marginBottom = "10px";
+                hint.textContent = "Saisonbearbeitung ist nur mit Admin-/Saison-Schreibrechten verfügbar.";
+                body.prepend(hint);
+            }
         }
         rerenderFilteredViews();
     }

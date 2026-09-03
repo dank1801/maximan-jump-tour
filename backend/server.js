@@ -4069,6 +4069,20 @@ app.post("/api/teams/:id/submit-registration", authRequired, requirePermission("
         res.status(400).json({ error: "Team hat keine zugewiesene Saison." });
         return;
     }
+    const members = db.prepare(
+        `SELECT id, is_springer, license_status
+         FROM team_members
+         WHERE team_id = ? AND status = 'active'`
+    ).all(id);
+    if (members.length === 0) {
+        res.status(400).json({ error: "Teammeldung unvollständig: mindestens ein aktives Teammitglied erforderlich." });
+        return;
+    }
+    const unconfirmedSpringer = members.find((member) => Number(member.is_springer) === 1 && String(member.license_status || "").toLowerCase() !== "confirmed");
+    if (unconfirmedSpringer) {
+        res.status(409).json({ error: "Teammeldung blockiert: mindestens ein Springer hat keine bestätigte Lizenz." });
+        return;
+    }
     if (isTeamDeadlineLocked(team) && !canBypassDeadlineLock(req.user)) {
         res.status(409).json({ error: "Dieses Team ist nach Meldeschluss gesperrt." });
         return;
@@ -4263,13 +4277,67 @@ app.delete("/api/team-members/:id", authRequired, requirePermission("team_member
     res.status(204).send();
 });
 
+function validateSeasonPayloadChronology({ startDate, endDate, registrationDeadlineAt, transferWindowOpenAt, transferWindowCloseAt }) {
+    const parseDate = (value, label) => {
+        const raw = String(value || "").trim();
+        if (!raw) return null;
+        const date = new Date(raw);
+        if (Number.isNaN(date.getTime())) {
+            return { error: `${label} ist kein gültiges Datum.` };
+        }
+        return { value: date };
+    };
+    const start = parseDate(startDate, "Startdatum");
+    if (start?.error) return start.error;
+    const end = parseDate(endDate, "Enddatum");
+    if (end?.error) return end.error;
+    const deadline = parseDate(registrationDeadlineAt, "Meldungsfrist");
+    if (deadline?.error) return deadline.error;
+    const transferOpen = parseDate(transferWindowOpenAt, "Transferfenster offen");
+    if (transferOpen?.error) return transferOpen.error;
+    const transferClose = parseDate(transferWindowCloseAt, "Transferfenster zu");
+    if (transferClose?.error) return transferClose.error;
+
+    if (start?.value && end?.value && start.value.getTime() > end.value.getTime()) {
+        return "Startdatum darf nicht nach dem Enddatum liegen.";
+    }
+    if (transferOpen?.value && transferClose?.value && transferOpen.value.getTime() > transferClose.value.getTime()) {
+        return "Transferfenster offen darf nicht nach Transferfenster zu liegen.";
+    }
+    if (end?.value && deadline?.value && deadline.value.getTime() > end.value.getTime()) {
+        return "Meldungsfrist darf nicht nach dem Saisonende liegen.";
+    }
+    if (end?.value && transferClose?.value && transferClose.value.getTime() > end.value.getTime()) {
+        return "Transferfenster-Ende darf nicht nach dem Saisonende liegen.";
+    }
+    return null;
+}
+
 app.get("/api/seasons", authRequired, requirePermission("seasons.read"), (_, res) => {
     res.json(db.prepare("SELECT * FROM seasons ORDER BY id DESC").all());
 });
 
 app.post("/api/seasons", authRequired, requirePermission("seasons.write"), (req, res) => {
+    if (!assertAdminUser(res, req.user)) return;
     const { name, startDate, endDate, registrationDeadlineAt, transferWindowOpenAt, transferWindowCloseAt, pointsRules, status } = req.body || {};
     if (!requireFields(res, req.body || {}, ["name"])) return;
+    const chronologyError = validateSeasonPayloadChronology({ startDate, endDate, registrationDeadlineAt, transferWindowOpenAt, transferWindowCloseAt });
+    if (chronologyError) {
+        res.status(400).json({ error: chronologyError });
+        return;
+    }
+    const normalizedStatus = String(status || "planned").trim().toLowerCase();
+    if (!["planned", "active", "inactive"].includes(normalizedStatus)) {
+        res.status(400).json({ error: "Saisonstatus muss planned, active oder inactive sein." });
+        return;
+    }
+    if (normalizedStatus === "active") {
+        const active = db.prepare("SELECT id, name FROM seasons WHERE status = 'active' LIMIT 1").get();
+        if (active) {
+            res.status(409).json({ error: `Es gibt bereits eine aktive Saison: "${active.name}".` });
+            return;
+        }
+    }
     const result = db
         .prepare(
             `INSERT INTO seasons (name, start_date, end_date, registration_deadline_at, transfer_window_open_at, transfer_window_close_at, points_rules, status)
@@ -4283,7 +4351,7 @@ app.post("/api/seasons", authRequired, requirePermission("seasons.write"), (req,
             transferWindowOpenAt || null,
             transferWindowCloseAt || null,
             pointsRules || null,
-            status || "planned"
+            normalizedStatus
         );
     const created = db.prepare("SELECT * FROM seasons WHERE id = ?").get(result.lastInsertRowid);
     logAudit(req.user, "CREATE_SEASON", "seasons", created.id, created.name);
@@ -4291,6 +4359,7 @@ app.post("/api/seasons", authRequired, requirePermission("seasons.write"), (req,
 });
 
 app.patch("/api/seasons/:id", authRequired, requirePermission("seasons.write"), (req, res) => {
+    if (!assertAdminUser(res, req.user)) return;
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid season id" });
@@ -4300,6 +4369,31 @@ app.patch("/api/seasons/:id", authRequired, requirePermission("seasons.write"), 
     if (!existing) {
         res.status(404).json({ error: "Season not found" });
         return;
+    }
+    const nextSnapshot = {
+        name: req.body?.name !== undefined ? req.body.name : existing.name,
+        startDate: req.body?.startDate !== undefined ? req.body.startDate : existing.start_date,
+        endDate: req.body?.endDate !== undefined ? req.body.endDate : existing.end_date,
+        registrationDeadlineAt: req.body?.registrationDeadlineAt !== undefined ? req.body.registrationDeadlineAt : existing.registration_deadline_at,
+        transferWindowOpenAt: req.body?.transferWindowOpenAt !== undefined ? req.body.transferWindowOpenAt : existing.transfer_window_open_at,
+        transferWindowCloseAt: req.body?.transferWindowCloseAt !== undefined ? req.body.transferWindowCloseAt : existing.transfer_window_close_at
+    };
+    const chronologyError = validateSeasonPayloadChronology(nextSnapshot);
+    if (chronologyError) {
+        res.status(400).json({ error: chronologyError });
+        return;
+    }
+    const requestedStatus = req.body?.status !== undefined ? String(req.body.status || "").trim().toLowerCase() : String(existing.status || "planned").toLowerCase();
+    if (!["planned", "active", "inactive"].includes(requestedStatus)) {
+        res.status(400).json({ error: "Saisonstatus muss planned, active oder inactive sein." });
+        return;
+    }
+    if (requestedStatus === "active") {
+        const active = db.prepare("SELECT id, name FROM seasons WHERE status = 'active' AND id != ? LIMIT 1").get(id);
+        if (active) {
+            res.status(409).json({ error: `Es gibt bereits eine aktive Saison: "${active.name}".` });
+            return;
+        }
     }
     const map = {
         name: "name",
@@ -4316,6 +4410,10 @@ app.patch("/api/seasons/:id", authRequired, requirePermission("seasons.write"), 
     Object.entries(map).forEach(([requestKey, dbField]) => {
         if (req.body[requestKey] !== undefined) {
             updates.push(`${dbField} = ?`);
+            if (requestKey === "status") {
+                values.push(requestedStatus);
+                return;
+            }
             values.push(req.body[requestKey] ? String(req.body[requestKey]).trim() : null);
         }
     });
@@ -4323,6 +4421,7 @@ app.patch("/api/seasons/:id", authRequired, requirePermission("seasons.write"), 
         res.status(400).json({ error: "No updatable fields provided" });
         return;
     }
+    updates.push("updated_at = CURRENT_TIMESTAMP");
     values.push(id);
     db.prepare(`UPDATE seasons SET ${updates.join(", ")} WHERE id = ?`).run(...values);
     const updated = db.prepare("SELECT * FROM seasons WHERE id = ?").get(id);
@@ -4331,6 +4430,7 @@ app.patch("/api/seasons/:id", authRequired, requirePermission("seasons.write"), 
 });
 
 app.delete("/api/seasons/:id", authRequired, requirePermission("seasons.write"), (req, res) => {
+    if (!assertAdminUser(res, req.user)) return;
     const id = parseId(req.params.id);
     if (!id) {
         res.status(400).json({ error: "Invalid season id" });
