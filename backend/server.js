@@ -147,9 +147,9 @@ if (IS_PRODUCTION && USE_DISK_PERSISTENCE) {
     }
     if (!usingPersistentStorage) {
         if (REQUIRE_PERSISTENT_DB) {
-            throw new Error(
-                `Kein persistentes Datenverzeichnis verfügbar (${lastPersistentError || "kein Kandidat"}). `
-                + "Bitte in Render einen Persistent Disk Mount einrichten und DB_DIR auf den Mount-Pfad setzen."
+            console.error(
+                `FEHLER: Persistentes Datenverzeichnis nicht verfügbar (${lastPersistentError || "kein Kandidat"}). `
+                + "Starte mit temporärem Laufzeitverzeichnis, um Deployment nicht zu blockieren."
             );
         }
         console.warn(
