@@ -3292,6 +3292,53 @@ app.delete("/api/transfers/:id", authRequired, requirePermission("transfers.writ
     res.status(204).send();
 });
 
+app.patch("/api/transfers/:id", authRequired, requirePermission("transfers.write"), (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Invalid transfer id" });
+        return;
+    }
+    const existing = db.prepare("SELECT * FROM transfers WHERE id = ?").get(id);
+    if (!existing) {
+        res.status(404).json({ error: "Transfer not found" });
+        return;
+    }
+    const nextAthleteName = req.body?.athleteName !== undefined
+        ? String(req.body.athleteName || "").trim()
+        : existing.athlete_name;
+    if (!nextAthleteName) {
+        res.status(400).json({ error: "athleteName is required" });
+        return;
+    }
+    const nextFromTeamId = req.body?.fromTeamId !== undefined
+        ? (req.body.fromTeamId ? parseId(req.body.fromTeamId) : null)
+        : existing.from_team_id;
+    const nextToTeamId = req.body?.toTeamId !== undefined
+        ? (req.body.toTeamId ? parseId(req.body.toTeamId) : null)
+        : existing.to_team_id;
+    if (req.body?.fromTeamId && !nextFromTeamId) {
+        res.status(400).json({ error: "Invalid fromTeamId" });
+        return;
+    }
+    if (req.body?.toTeamId && !nextToTeamId) {
+        res.status(400).json({ error: "Invalid toTeamId" });
+        return;
+    }
+    const nextStatus = req.body?.status !== undefined ? String(req.body.status || "").trim() : existing.status;
+    const nextLockUntil = req.body?.lockUntil !== undefined ? (req.body.lockUntil || null) : existing.lock_until;
+    const nextIsEmergency = req.body?.isEmergency !== undefined ? (req.body.isEmergency ? 1 : 0) : existing.is_emergency;
+    const nextNotes = req.body?.notes !== undefined ? (req.body.notes ? String(req.body.notes).trim() : null) : existing.notes;
+
+    db.prepare(
+        `UPDATE transfers
+         SET athlete_name = ?, from_team_id = ?, to_team_id = ?, status = ?, lock_until = ?, is_emergency = ?, notes = ?
+         WHERE id = ?`
+    ).run(nextAthleteName, nextFromTeamId, nextToTeamId, nextStatus, nextLockUntil, nextIsEmergency, nextNotes, id);
+    const updated = db.prepare("SELECT * FROM transfers WHERE id = ?").get(id);
+    logAudit(req.user, "UPDATE_TRANSFER", "transfers", id, updated.athlete_name);
+    res.json(updated);
+});
+
 app.get("/api/contracts", authRequired, requirePermission("contracts.read"), (_, res) => {
     res.json(db.prepare("SELECT * FROM contracts ORDER BY id DESC").all());
 });
@@ -3325,6 +3372,40 @@ app.delete("/api/contracts/:id", authRequired, requirePermission("contracts.writ
     res.status(204).send();
 });
 
+app.patch("/api/contracts/:id", authRequired, requirePermission("contracts.write"), (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Invalid contract id" });
+        return;
+    }
+    const existing = db.prepare("SELECT * FROM contracts WHERE id = ?").get(id);
+    if (!existing) {
+        res.status(404).json({ error: "Contract not found" });
+        return;
+    }
+    const nextFileName = req.body?.fileName !== undefined ? String(req.body.fileName || "").trim() : existing.file_name;
+    const nextEntityType = req.body?.entityType !== undefined ? String(req.body.entityType || "").trim() : existing.entity_type;
+    const nextEntityId = req.body?.entityId !== undefined ? (req.body.entityId ? parseId(req.body.entityId) : null) : existing.entity_id;
+    if (!nextFileName || !nextEntityType) {
+        res.status(400).json({ error: "fileName and entityType are required" });
+        return;
+    }
+    if (req.body?.entityId && !nextEntityId) {
+        res.status(400).json({ error: "Invalid entityId" });
+        return;
+    }
+    const nextStatus = req.body?.status !== undefined ? String(req.body.status || "").trim() : existing.status;
+    const nextExpiresAt = req.body?.expiresAt !== undefined ? (req.body.expiresAt || null) : existing.expires_at;
+    db.prepare(
+        `UPDATE contracts
+         SET file_name = ?, entity_type = ?, entity_id = ?, status = ?, expires_at = ?
+         WHERE id = ?`
+    ).run(nextFileName, nextEntityType, nextEntityId, nextStatus, nextExpiresAt, id);
+    const updated = db.prepare("SELECT * FROM contracts WHERE id = ?").get(id);
+    logAudit(req.user, "UPDATE_CONTRACT", "contracts", id, updated.file_name);
+    res.json(updated);
+});
+
 app.get("/api/publications", authRequired, requirePermission("publications.read"), (_, res) => {
     res.json(db.prepare("SELECT * FROM publications ORDER BY id DESC").all());
 });
@@ -3353,6 +3434,35 @@ app.delete("/api/publications/:id", authRequired, requirePermission("publication
     }
     logAudit(req.user, "DELETE_PUBLICATION", "publications", id, "Publication removed");
     res.status(204).send();
+});
+
+app.patch("/api/publications/:id", authRequired, requirePermission("publications.write"), (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Invalid publication id" });
+        return;
+    }
+    const existing = db.prepare("SELECT * FROM publications WHERE id = ?").get(id);
+    if (!existing) {
+        res.status(404).json({ error: "Publication not found" });
+        return;
+    }
+    const nextTitle = req.body?.title !== undefined ? String(req.body.title || "").trim() : existing.title;
+    const nextFormat = req.body?.format !== undefined ? String(req.body.format || "").trim() : existing.format;
+    if (!nextTitle || !nextFormat) {
+        res.status(400).json({ error: "title and format are required" });
+        return;
+    }
+    const nextStatus = req.body?.status !== undefined ? String(req.body.status || "").trim() : existing.status;
+    const nextPublishedAt = req.body?.publishedAt !== undefined ? (req.body.publishedAt || null) : existing.published_at;
+    db.prepare(
+        `UPDATE publications
+         SET title = ?, format = ?, status = ?, published_at = ?
+         WHERE id = ?`
+    ).run(nextTitle, nextFormat, nextStatus, nextPublishedAt, id);
+    const updated = db.prepare("SELECT * FROM publications WHERE id = ?").get(id);
+    logAudit(req.user, "UPDATE_PUBLICATION", "publications", id, updated.title);
+    res.json(updated);
 });
 
 app.get("/api/settings", authRequired, requireAnyPermission(["settings.read", "settings.write"]), (_, res) => {

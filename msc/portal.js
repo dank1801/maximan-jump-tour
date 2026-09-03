@@ -935,6 +935,11 @@ const usersPageState = {
     editingRoleId: null
 };
 
+const teamsPageState = {
+    teams: [],
+    editingTeamId: null
+};
+
 function permissionLabel(permission) {
     return PERMISSION_LABELS[permission] || permission;
 }
@@ -1597,6 +1602,7 @@ async function loadTeams() {
     try {
         const canManageTeams = hasPermission("teams.write");
         const teams = await api("/teams");
+        teamsPageState.teams = Array.isArray(teams) ? teams : [];
         const html = teams.map(t => `
             <tr>
                 <td><strong>${t.name}</strong></td>
@@ -1619,7 +1625,7 @@ async function loadTeams() {
     }
 }
 
-async function loadTeamManagerOptions(selectedId = "") {
+async function loadTeamManagerOptions(selectedId = "", currentTeamId = null) {
     const select = document.getElementById("create-team-manager");
     if (!select) return;
     const normalizedSelected = String(selectedId || "").trim();
@@ -1627,6 +1633,7 @@ async function loadTeamManagerOptions(selectedId = "") {
         const [users, teams] = await Promise.all([api("/users"), api("/teams")]);
         const assigned = new Set(
             (Array.isArray(teams) ? teams : [])
+                .filter((team) => !currentTeamId || Number(team.id) !== Number(currentTeamId))
                 .map((team) => String(team.manager_username || "").trim())
                 .filter(Boolean)
         );
@@ -1682,6 +1689,8 @@ async function setupTeamsPage() {
         return;
     }
     const form = document.getElementById("create-team-form");
+    const cancelEditButton = document.getElementById("team-cancel-edit");
+    const submitButton = form?.querySelector("button[type='submit']");
     if (form && !form.dataset.boundSubmit) {
         form.dataset.boundSubmit = "1";
         form.addEventListener("submit", async (event) => {
@@ -1692,16 +1701,37 @@ async function setupTeamsPage() {
             }
             const data = getFormData(form);
             try {
-                await api("/teams", {
-                    method: "POST",
-                    body: JSON.stringify(data)
-                });
-                showToast(`Team ${data.name} wurde erstellt.`, "success");
+                if (teamsPageState.editingTeamId) {
+                    await api(`/teams/${teamsPageState.editingTeamId}`, {
+                        method: "PATCH",
+                        body: JSON.stringify(data)
+                    });
+                    showToast(`Team ${data.name} wurde aktualisiert.`, "success");
+                } else {
+                    await api("/teams", {
+                        method: "POST",
+                        body: JSON.stringify(data)
+                    });
+                    showToast(`Team ${data.name} wurde erstellt.`, "success");
+                }
                 form.reset();
+                teamsPageState.editingTeamId = null;
+                if (submitButton) submitButton.textContent = "Team erstellen";
+                cancelEditButton?.classList.add("hidden");
                 await Promise.all([loadTeamManagerOptions(), loadTeams(), loadTeamLicenses()]);
             } catch (error) {
                 showToast(error.message, "error");
             }
+        });
+    }
+    if (cancelEditButton && cancelEditButton.dataset.boundClick !== "1") {
+        cancelEditButton.dataset.boundClick = "1";
+        cancelEditButton.addEventListener("click", async () => {
+            teamsPageState.editingTeamId = null;
+            form?.reset();
+            if (submitButton) submitButton.textContent = "Team erstellen";
+            cancelEditButton.classList.add("hidden");
+            await loadTeamManagerOptions();
         });
     }
     if (!canWriteTeams) {
@@ -1731,6 +1761,7 @@ async function deleteTeam(id) {
 
 async function loadEvents() {
     try {
+        const canManageEvents = hasPermission("events.write");
         const events = await api("/events");
         const html = events.map(e => `
             <tr>
@@ -1739,10 +1770,12 @@ async function loadEvents() {
                 <td>${e.location || "—"}</td>
                 <td>${formatDate(e.event_date)}</td>
                 <td>${statusBadge(e.status || "pending")}</td>
-                <td>
-                    <button class="btn-small btn-secondary" onclick="editEventModal(${e.id})">Bearbeiten</button>
-                    <button class="btn-small btn-danger" onclick="confirmDelete('Event ${e.name}', () => deleteEvent(${e.id}))">Löschen</button>
-                </td>
+                <td>${canManageEvents
+                    ? `
+                        <button class="btn-small btn-secondary" onclick="editEventModal(${e.id})">Bearbeiten</button>
+                        <button class="btn-small btn-danger" onclick="confirmDelete('Event ${e.name}', () => deleteEvent(${e.id}))">Löschen</button>
+                    `
+                    : `<span class="badge badge-info">Leseansicht</span>`}</td>
             </tr>
         `).join("");
         setTableRows(["events-list-tbody", "events-list"], html, 6, "Keine Events vorhanden");
@@ -1784,6 +1817,7 @@ async function loadPointsRules() {
 
 async function loadTransfers() {
     try {
+        const canManageTransfers = hasPermission("transfers.write");
         const transfers = await api("/transfers");
         const html = transfers.map(t => `
             <tr>
@@ -1793,14 +1827,31 @@ async function loadTransfers() {
                 <td>${t.is_emergency ? "Notfall" : "Normal"}</td>
                 <td>${statusBadge(t.status || "requested")}</td>
                 <td>${formatDate(t.lock_until)}</td>
-                <td>
-                    <button class="btn-small btn-secondary" onclick="editTransferModal(${t.id})">Details</button>
-                </td>
+                <td>${canManageTransfers
+                    ? `
+                        <button class="btn-small btn-secondary" onclick="editTransferModal(${t.id})">Bearbeiten</button>
+                        <button class="btn-small btn-danger" onclick="confirmDelete('Transfer ${escapeHtml(t.athlete_name || "Unbekannt")}', () => deleteTransfer(${t.id}))">Löschen</button>
+                    `
+                    : `<span class="badge badge-info">Leseansicht</span>`}</td>
             </tr>
         `).join("");
         setTableRows(["transfers-list-tbody", "transfers-list"], html, 7, "Noch keine Transfers vorhanden");
     } catch (error) {
         showToast("Transfers konnten nicht geladen werden.", "error");
+    }
+}
+
+async function deleteTransfer(id) {
+    if (!hasPermission("transfers.write")) {
+        showToast("Für das Löschen von Transfers fehlt die Berechtigung.", "warning");
+        return;
+    }
+    try {
+        await api(`/transfers/${id}`, { method: "DELETE" });
+        showToast("Transfer gelöscht.", "success");
+        await loadTransfers();
+    } catch (error) {
+        showToast(error.message, "error");
     }
 }
 
@@ -1824,16 +1875,93 @@ async function loadAuditLog() {
     }
 }
 
-function editTeamModal() {
-    showToast("Bearbeiten ist in Kürze verfügbar.", "info");
+async function editTeamModal(id) {
+    if (!hasPermission("teams.write")) {
+        showToast("Für das Bearbeiten von Teams fehlt die Berechtigung.", "warning");
+        return;
+    }
+    const form = document.getElementById("create-team-form");
+    if (!form) return;
+    let team = teamsPageState.teams.find((entry) => Number(entry.id) === Number(id));
+    if (!team) {
+        const teams = await api("/teams");
+        teamsPageState.teams = Array.isArray(teams) ? teams : [];
+        team = teamsPageState.teams.find((entry) => Number(entry.id) === Number(id));
+    }
+    if (!team) {
+        showToast("Team nicht gefunden.", "error");
+        return;
+    }
+    teamsPageState.editingTeamId = team.id;
+    form.elements.name.value = team.name || "";
+    form.elements.category.value = team.category || "";
+    form.elements.nation.value = team.nation || "";
+    await loadTeamManagerOptions(team.manager_user_id ? String(team.manager_user_id) : "", team.id);
+    form.elements.managerUserId.value = team.manager_user_id ? String(team.manager_user_id) : "";
+    const submitButton = form.querySelector("button[type='submit']");
+    if (submitButton) submitButton.textContent = "Team aktualisieren";
+    document.getElementById("team-cancel-edit")?.classList.remove("hidden");
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function editEventModal() {
-    showToast("Bearbeiten ist in Kürze verfügbar.", "info");
+async function editEventModal(id) {
+    if (!hasPermission("events.write")) {
+        showToast("Für das Bearbeiten von Events fehlt die Berechtigung.", "warning");
+        return;
+    }
+    const form = document.getElementById("create-event-form");
+    if (!form) return;
+    const events = await api("/events");
+    const eventEntry = (Array.isArray(events) ? events : []).find((entry) => Number(entry.id) === Number(id));
+    if (!eventEntry) {
+        showToast("Event nicht gefunden.", "error");
+        return;
+    }
+    const hiddenField = form.elements.namedItem("event_id");
+    if (hiddenField) hiddenField.value = String(eventEntry.id);
+    form.elements.name.value = eventEntry.name || "";
+    form.elements.location.value = eventEntry.location || "";
+    form.elements.date.value = eventEntry.event_date ? String(eventEntry.event_date).slice(0, 10) : "";
+    form.elements.season_id.value = eventEntry.season_id ? String(eventEntry.season_id) : "";
+    const formatNode = form.querySelector(`input[name="format"][value="${eventEntry.event_type || ""}"]`);
+    if (formatNode) formatNode.checked = true;
+    const submitButton = form.querySelector("button[type='submit']");
+    if (submitButton) submitButton.textContent = "Event aktualisieren";
+    document.getElementById("event-cancel-edit")?.classList.remove("hidden");
+    if (typeof window.renderEventPreview === "function") window.renderEventPreview();
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function editTransferModal() {
-    showToast("Detailansicht ist in Kürze verfügbar.", "info");
+async function editTransferModal(id) {
+    if (!hasPermission("transfers.write")) {
+        showToast("Für das Bearbeiten von Transfers fehlt die Berechtigung.", "warning");
+        return;
+    }
+    const form = document.getElementById("create-transfer-form");
+    if (!form) return;
+    const transfers = await api("/transfers");
+    const transfer = (Array.isArray(transfers) ? transfers : []).find((entry) => Number(entry.id) === Number(id));
+    if (!transfer) {
+        showToast("Transfer nicht gefunden.", "error");
+        return;
+    }
+    const hiddenField = form.elements.namedItem("transfer_id");
+    if (hiddenField) hiddenField.value = String(transfer.id);
+    const athleteField = form.elements.namedItem("athlete_name");
+    if (athleteField) athleteField.value = transfer.athlete_name || "";
+    form.elements.from_team_id.value = transfer.from_team_id ? String(transfer.from_team_id) : "";
+    form.elements.to_team_id.value = transfer.to_team_id ? String(transfer.to_team_id) : "";
+    const typeField = form.elements.namedItem("transfer_type");
+    if (typeField) typeField.value = transfer.is_emergency ? "emergency" : "regular";
+    const statusField = form.elements.namedItem("status");
+    if (statusField) statusField.value = transfer.status || "requested";
+    const lockUntilField = form.elements.namedItem("lock_until");
+    if (lockUntilField) lockUntilField.value = transfer.lock_until ? String(transfer.lock_until).slice(0, 10) : "";
+    form.elements.notes.value = transfer.notes || "";
+    const submitButton = form.querySelector("button[type='submit']");
+    if (submitButton) submitButton.textContent = "Transfer aktualisieren";
+    document.getElementById("transfer-cancel-edit")?.classList.remove("hidden");
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function rerenderCurrentPageForTimezone() {

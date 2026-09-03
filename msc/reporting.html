@@ -205,6 +205,7 @@
                     </div>
                     <div class="card-body">
                         <form id="create-publication-form" >
+                            <input type="hidden" name="publication_id" />
                             <div class="grid-2">
                                 <div class="form-group">
                                     <label>Titel *</label>
@@ -219,9 +220,22 @@
                                         <option value="xlsx">Excel</option>
                                     </select>
                                 </div>
+                                <div class="form-group">
+                                    <label>Status *</label>
+                                    <select name="status" required>
+                                        <option value="draft">Entwurf</option>
+                                        <option value="published">Veröffentlicht</option>
+                                        <option value="archived">Archiviert</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Veröffentlicht am</label>
+                                    <input type="datetime-local" name="published_at" />
+                                </div>
                             </div>
                             <div class="form-actions">
                                 <button type="submit" class="btn btn-primary">Veröffentlichung erstellen</button>
+                                <button type="button" class="btn btn-secondary hidden" id="publication-cancel-edit">Bearbeitung abbrechen</button>
                             </div>
                         </form>
                         <table class="table">
@@ -245,6 +259,8 @@
     <script src="portal.js"></script>
     <script>
         if (!isLoginPage()) {
+            let publicationsCache = [];
+
             async function loadAuditLog() {
                 try {
                     const logs = await api("/audit-logs?limit=100");
@@ -263,7 +279,98 @@
                 }
             }
 
-            document.addEventListener("DOMContentLoaded", loadAuditLog);
+            async function loadPublications() {
+                try {
+                    const publications = await api("/publications");
+                    publicationsCache = Array.isArray(publications) ? publications : [];
+                    const html = publicationsCache.map((entry) => `
+                        <tr>
+                            <td><strong>${escapeHtml(entry.title || "—")}</strong></td>
+                            <td>${escapeHtml(entry.format || "—")}</td>
+                            <td>${statusBadge(entry.status || "draft")}</td>
+                            <td>${formatDateTime(entry.created_at)}</td>
+                            <td>
+                                <button type="button" class="btn btn-small btn-secondary" data-edit-publication="${entry.id}">Bearbeiten</button>
+                                <button type="button" class="btn btn-small btn-danger" data-delete-publication="${entry.id}">Löschen</button>
+                            </td>
+                        </tr>
+                    `).join("");
+                    document.getElementById("publications-list").innerHTML = html || "<tr><td colspan='5' class='table-empty'>Keine Veröffentlichungen vorhanden</td></tr>";
+                    document.querySelectorAll("[data-edit-publication]").forEach((buttonNode) => {
+                        buttonNode.addEventListener("click", () => {
+                            const id = Number(buttonNode.getAttribute("data-edit-publication"));
+                            const entry = publicationsCache.find((publication) => Number(publication.id) === id);
+                            if (!entry) return;
+                            const form = document.getElementById("create-publication-form");
+                            form.elements.publication_id.value = String(entry.id);
+                            form.elements.title.value = entry.title || "";
+                            form.elements.format.value = entry.format || "";
+                            form.elements.status.value = entry.status || "draft";
+                            form.elements.published_at.value = entry.published_at ? String(entry.published_at).slice(0, 16) : "";
+                            const submitButton = form.querySelector("button[type='submit']");
+                            if (submitButton) submitButton.textContent = "Veröffentlichung aktualisieren";
+                            document.getElementById("publication-cancel-edit")?.classList.remove("hidden");
+                            form.scrollIntoView({ behavior: "smooth", block: "start" });
+                        });
+                    });
+                    document.querySelectorAll("[data-delete-publication]").forEach((buttonNode) => {
+                        buttonNode.addEventListener("click", () => {
+                            const id = Number(buttonNode.getAttribute("data-delete-publication"));
+                            const entry = publicationsCache.find((publication) => Number(publication.id) === id);
+                            confirmDelete(`Veröffentlichung ${entry?.title || id}`, async () => {
+                                try {
+                                    await api(`/publications/${id}`, { method: "DELETE" });
+                                    showToast("Veröffentlichung gelöscht.", "success");
+                                    await loadPublications();
+                                } catch (error) {
+                                    showToast(error.message, "error");
+                                }
+                            });
+                        });
+                    });
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            }
+
+            document.getElementById("create-publication-form")?.addEventListener("submit", async (event) => {
+                event.preventDefault();
+                const form = document.getElementById("create-publication-form");
+                const data = getFormData(form);
+                const payload = {
+                    title: data.title || "",
+                    format: data.format || "",
+                    status: data.status || "draft",
+                    publishedAt: data.published_at || null
+                };
+                try {
+                    const id = Number(data.publication_id || 0);
+                    await api(id > 0 ? `/publications/${id}` : "/publications", {
+                        method: id > 0 ? "PATCH" : "POST",
+                        body: JSON.stringify(payload)
+                    });
+                    showToast(id > 0 ? "Veröffentlichung aktualisiert." : "Veröffentlichung erstellt.", "success");
+                    form.reset();
+                    const submitButton = form.querySelector("button[type='submit']");
+                    if (submitButton) submitButton.textContent = "Veröffentlichung erstellen";
+                    document.getElementById("publication-cancel-edit")?.classList.add("hidden");
+                    await loadPublications();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+
+            document.getElementById("publication-cancel-edit")?.addEventListener("click", () => {
+                const form = document.getElementById("create-publication-form");
+                form.reset();
+                const submitButton = form.querySelector("button[type='submit']");
+                if (submitButton) submitButton.textContent = "Veröffentlichung erstellen";
+                document.getElementById("publication-cancel-edit").classList.add("hidden");
+            });
+
+            document.addEventListener("DOMContentLoaded", async () => {
+                await Promise.all([loadAuditLog(), loadPublications()]);
+            });
         }
     </script>
 </body>

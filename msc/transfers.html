@@ -89,12 +89,11 @@
                         <h2>Neuen Transfer erstellen</h2>
                     </div>
                     <form id="create-transfer-form">
+                        <input type="hidden" name="transfer_id" />
                         <div class="grid-2">
                             <div class="form-group">
                                 <label>Athlet *</label>
-                                <select name="athlete_id" required>
-                                    <option value="">-- Athlet wählen --</option>
-                                </select>
+                                <input type="text" name="athlete_name" placeholder="z.B. Max Mustermann" required />
                             </div>
                             <div class="form-group">
                                 <label>Von Team *</label>
@@ -116,6 +115,18 @@
                                     <option value="emergency">Notfall</option>
                                 </select>
                             </div>
+                            <div class="form-group">
+                                <label>Status *</label>
+                                <select name="status" required>
+                                    <option value="requested">Angefragt</option>
+                                    <option value="approved">Genehmigt</option>
+                                    <option value="rejected">Abgelehnt</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Sperrfrist bis</label>
+                                <input type="date" name="lock_until" />
+                            </div>
                         </div>
                         <div class="form-group">
                             <label>Notizen</label>
@@ -123,6 +134,7 @@
                         </div>
                         <div class="form-actions">
                             <button type="submit" class="btn btn-primary">Transfer erstellen</button>
+                            <button type="button" class="btn btn-secondary hidden" id="transfer-cancel-edit">Bearbeitung abbrechen</button>
                         </div>
                     </form>
                 </div>
@@ -158,20 +170,51 @@
                     <div class="card-body">
                         <div class="form-group" >
                             <label>Vertrag hochladen</label>
-                            <input type="file" accept=".pdf,.doc,.docx" />
-                            <div class="form-actions">
-                                <select>
-                                    <option value="">-- Mit Athlet verknüpfen --</option>
-                                </select>
-                                <button class="btn btn-primary btn-small">Hochladen</button>
-                            </div>
+                            <form id="contract-form">
+                                <input type="hidden" name="contract_id" />
+                                <div class="grid-2">
+                                    <div class="form-group">
+                                        <label>Dateiname *</label>
+                                        <input type="text" name="file_name" placeholder="z.B. transfer-event-8.pdf" required />
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Entität *</label>
+                                        <select name="entity_type" required>
+                                            <option value="">-- Bitte auswählen --</option>
+                                            <option value="athlete">Athlet</option>
+                                            <option value="team">Team</option>
+                                            <option value="transfer">Transfer</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Entität-ID</label>
+                                        <input type="number" name="entity_id" min="1" placeholder="z.B. 12" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Status *</label>
+                                        <select name="status" required>
+                                            <option value="in_review">In Prüfung</option>
+                                            <option value="active">Aktiv</option>
+                                            <option value="expired">Abgelaufen</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Läuft ab</label>
+                                        <input type="date" name="expires_at" />
+                                    </div>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary btn-small">Vertrag speichern</button>
+                                    <button type="button" id="contract-cancel-edit" class="btn btn-secondary btn-small hidden">Bearbeitung abbrechen</button>
+                                </div>
+                            </form>
                         </div>
                         <table class="table">
                             <thead>
                                 <tr>
                                     <th>Datei</th>
-                                    <th>Athlet</th>
-                                    <th>Team</th>
+                                    <th>Entität</th>
+                                    <th>ID</th>
                                     <th>Datum</th>
                                     <th>Status</th>
                                     <th>Aktionen</th>
@@ -188,6 +231,26 @@
     <script src="portal.js"></script>
     <script>
         if (!isLoginPage()) {
+            let transfersCache = [];
+            let contractsCache = [];
+
+            async function loadTeamsForTransferForm() {
+                const fromSelect = document.querySelector("#create-transfer-form select[name='from_team_id']");
+                const toSelect = document.querySelector("#create-transfer-form select[name='to_team_id']");
+                if (!fromSelect || !toSelect) return;
+                try {
+                    const teams = await api("/teams");
+                    const options = (Array.isArray(teams) ? teams : [])
+                        .map((team) => `<option value="${team.id}">${escapeHtml(team.name || `Team ${team.id}`)}</option>`)
+                        .join("");
+                    fromSelect.innerHTML = `<option value="">-- Team wählen --</option>${options}`;
+                    toSelect.innerHTML = `<option value="">-- Team wählen --</option>${options}`;
+                } catch (_error) {
+                    fromSelect.innerHTML = "<option value=''>Teams konnten nicht geladen werden</option>";
+                    toSelect.innerHTML = "<option value=''>Teams konnten nicht geladen werden</option>";
+                }
+            }
+
             document.getElementById("transfer-window-form")?.addEventListener("submit", async (e) => {
                 e.preventDefault();
                 const data = getFormData(document.getElementById("transfer-window-form"));
@@ -206,20 +269,25 @@
                 e.preventDefault();
                 const data = getFormData(document.getElementById("create-transfer-form"));
                 const payload = {
-                    athleteName: data.athlete_name || data.athlete_id || "",
+                    athleteName: data.athlete_name || "",
                     fromTeamId: data.from_team_id || null,
                     toTeamId: data.to_team_id || null,
-                    status: "requested",
+                    status: data.status || "requested",
+                    lockUntil: data.lock_until || null,
                     isEmergency: data.transfer_type === "emergency",
                     notes: data.notes || null
                 };
                 try {
-                    await api("/transfers", {
-                        method: "POST",
+                    const editingId = Number(data.transfer_id || 0);
+                    await api(editingId > 0 ? `/transfers/${editingId}` : "/transfers", {
+                        method: editingId > 0 ? "PATCH" : "POST",
                         body: JSON.stringify(payload)
                     });
-                    showToast("Transfer erstellt.", "success");
+                    showToast(editingId > 0 ? "Transfer aktualisiert." : "Transfer erstellt.", "success");
                     document.getElementById("create-transfer-form").reset();
+                    const submitButton = document.querySelector("#create-transfer-form button[type='submit']");
+                    if (submitButton) submitButton.textContent = "Transfer erstellen";
+                    document.getElementById("transfer-cancel-edit")?.classList.add("hidden");
                     loadTransfers();
                 } catch (error) {
                     showToast(error.message, "error");
@@ -229,7 +297,8 @@
             async function loadTransfers() {
                 try {
                     const transfers = await api("/transfers");
-                    const html = transfers.map(t => `
+                    transfersCache = Array.isArray(transfers) ? transfers : [];
+                    const html = transfersCache.map(t => `
                         <tr>
                             <td><strong>${t.athlete_name || "—"}</strong></td>
                             <td>${t.from_team_name || "—"}</td>
@@ -238,18 +307,171 @@
                             <td>${statusBadge(t.status)}</td>
                             <td>${formatDate(t.lock_until)}</td>
                             <td>
-                                <button class="btn btn-small btn-secondary">Bearbeiten</button>
-                                <button class="btn btn-small btn-primary">Genehmigen</button>
+                                <button class="btn btn-small btn-secondary" data-edit-transfer="${t.id}">Bearbeiten</button>
+                                <button class="btn btn-small btn-primary" data-approve-transfer="${t.id}">Genehmigen</button>
+                                <button class="btn btn-small btn-danger" data-delete-transfer="${t.id}">Löschen</button>
                             </td>
                         </tr>
                     `).join("");
                     document.getElementById("transfers-list").innerHTML = html || "<tr><td colspan='7' class='table-empty'>Noch keine Transfers vorhanden.</td></tr>";
+                    document.querySelectorAll("[data-edit-transfer]").forEach((buttonNode) => {
+                        buttonNode.addEventListener("click", () => {
+                            const id = Number(buttonNode.getAttribute("data-edit-transfer"));
+                            const entry = transfersCache.find((transfer) => Number(transfer.id) === id);
+                            if (!entry) return;
+                            const form = document.getElementById("create-transfer-form");
+                            form.elements.transfer_id.value = String(entry.id);
+                            form.elements.athlete_name.value = entry.athlete_name || "";
+                            form.elements.from_team_id.value = entry.from_team_id ? String(entry.from_team_id) : "";
+                            form.elements.to_team_id.value = entry.to_team_id ? String(entry.to_team_id) : "";
+                            form.elements.transfer_type.value = entry.is_emergency ? "emergency" : "regular";
+                            form.elements.status.value = entry.status || "requested";
+                            form.elements.lock_until.value = entry.lock_until ? String(entry.lock_until).slice(0, 10) : "";
+                            form.elements.notes.value = entry.notes || "";
+                            const submitButton = form.querySelector("button[type='submit']");
+                            if (submitButton) submitButton.textContent = "Transfer aktualisieren";
+                            document.getElementById("transfer-cancel-edit")?.classList.remove("hidden");
+                            form.scrollIntoView({ behavior: "smooth", block: "start" });
+                        });
+                    });
+                    document.querySelectorAll("[data-approve-transfer]").forEach((buttonNode) => {
+                        buttonNode.addEventListener("click", async () => {
+                            const id = Number(buttonNode.getAttribute("data-approve-transfer"));
+                            try {
+                                await api(`/transfers/${id}`, {
+                                    method: "PATCH",
+                                    body: JSON.stringify({ status: "approved" })
+                                });
+                                showToast("Transfer genehmigt.", "success");
+                                await loadTransfers();
+                            } catch (error) {
+                                showToast(error.message, "error");
+                            }
+                        });
+                    });
+                    document.querySelectorAll("[data-delete-transfer]").forEach((buttonNode) => {
+                        buttonNode.addEventListener("click", () => {
+                            const id = Number(buttonNode.getAttribute("data-delete-transfer"));
+                            const entry = transfersCache.find((transfer) => Number(transfer.id) === id);
+                            confirmDelete(`Transfer ${entry?.athlete_name || id}`, async () => {
+                                try {
+                                    await api(`/transfers/${id}`, { method: "DELETE" });
+                                    showToast("Transfer gelöscht.", "success");
+                                    await loadTransfers();
+                                } catch (error) {
+                                    showToast(error.message, "error");
+                                }
+                            });
+                        });
+                    });
                 } catch (error) {
                     console.error(error);
                 }
             }
 
-            document.addEventListener("DOMContentLoaded", loadTransfers);
+            document.getElementById("transfer-cancel-edit")?.addEventListener("click", () => {
+                const form = document.getElementById("create-transfer-form");
+                form.reset();
+                const submitButton = form.querySelector("button[type='submit']");
+                if (submitButton) submitButton.textContent = "Transfer erstellen";
+                document.getElementById("transfer-cancel-edit").classList.add("hidden");
+            });
+
+            document.getElementById("contract-form")?.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const data = getFormData(document.getElementById("contract-form"));
+                const payload = {
+                    fileName: data.file_name || "",
+                    entityType: data.entity_type || "",
+                    entityId: data.entity_id ? Number(data.entity_id) : null,
+                    status: data.status || "in_review",
+                    expiresAt: data.expires_at || null
+                };
+                try {
+                    const editingId = Number(data.contract_id || 0);
+                    await api(editingId > 0 ? `/contracts/${editingId}` : "/contracts", {
+                        method: editingId > 0 ? "PATCH" : "POST",
+                        body: JSON.stringify(payload)
+                    });
+                    showToast(editingId > 0 ? "Vertrag aktualisiert." : "Vertrag gespeichert.", "success");
+                    document.getElementById("contract-form").reset();
+                    const submitButton = document.querySelector("#contract-form button[type='submit']");
+                    if (submitButton) submitButton.textContent = "Vertrag speichern";
+                    document.getElementById("contract-cancel-edit")?.classList.add("hidden");
+                    await loadContracts();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
+
+            async function loadContracts() {
+                try {
+                    const contracts = await api("/contracts");
+                    contractsCache = Array.isArray(contracts) ? contracts : [];
+                    const html = contractsCache.map((entry) => `
+                        <tr>
+                            <td><strong>${escapeHtml(entry.file_name || "—")}</strong></td>
+                            <td>${escapeHtml(entry.entity_type || "—")}</td>
+                            <td>${entry.entity_id || "—"}</td>
+                            <td>${formatDate(entry.created_at)}</td>
+                            <td>${statusBadge(entry.status || "in_review")}</td>
+                            <td>
+                                <button class="btn btn-small btn-secondary" data-edit-contract="${entry.id}">Bearbeiten</button>
+                                <button class="btn btn-small btn-danger" data-delete-contract="${entry.id}">Löschen</button>
+                            </td>
+                        </tr>
+                    `).join("");
+                    document.getElementById("contracts-list").innerHTML = html || "<tr><td colspan='6' class='table-empty'>Noch keine Verträge vorhanden.</td></tr>";
+                    document.querySelectorAll("[data-edit-contract]").forEach((buttonNode) => {
+                        buttonNode.addEventListener("click", () => {
+                            const id = Number(buttonNode.getAttribute("data-edit-contract"));
+                            const entry = contractsCache.find((contract) => Number(contract.id) === id);
+                            if (!entry) return;
+                            const form = document.getElementById("contract-form");
+                            form.elements.contract_id.value = String(entry.id);
+                            form.elements.file_name.value = entry.file_name || "";
+                            form.elements.entity_type.value = entry.entity_type || "";
+                            form.elements.entity_id.value = entry.entity_id ? String(entry.entity_id) : "";
+                            form.elements.status.value = entry.status || "in_review";
+                            form.elements.expires_at.value = entry.expires_at ? String(entry.expires_at).slice(0, 10) : "";
+                            const submitButton = form.querySelector("button[type='submit']");
+                            if (submitButton) submitButton.textContent = "Vertrag aktualisieren";
+                            document.getElementById("contract-cancel-edit")?.classList.remove("hidden");
+                            form.scrollIntoView({ behavior: "smooth", block: "start" });
+                        });
+                    });
+                    document.querySelectorAll("[data-delete-contract]").forEach((buttonNode) => {
+                        buttonNode.addEventListener("click", () => {
+                            const id = Number(buttonNode.getAttribute("data-delete-contract"));
+                            const entry = contractsCache.find((contract) => Number(contract.id) === id);
+                            confirmDelete(`Vertrag ${entry?.file_name || id}`, async () => {
+                                try {
+                                    await api(`/contracts/${id}`, { method: "DELETE" });
+                                    showToast("Vertrag gelöscht.", "success");
+                                    await loadContracts();
+                                } catch (error) {
+                                    showToast(error.message, "error");
+                                }
+                            });
+                        });
+                    });
+                } catch (error) {
+                    console.error(error);
+                }
+            }
+
+            document.getElementById("contract-cancel-edit")?.addEventListener("click", () => {
+                const form = document.getElementById("contract-form");
+                form.reset();
+                const submitButton = form.querySelector("button[type='submit']");
+                if (submitButton) submitButton.textContent = "Vertrag speichern";
+                document.getElementById("contract-cancel-edit").classList.add("hidden");
+            });
+
+            document.addEventListener("DOMContentLoaded", async () => {
+                await loadTeamsForTransferForm();
+                await Promise.all([loadTransfers(), loadContracts()]);
+            });
         }
     </script>
 </body>

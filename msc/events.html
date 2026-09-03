@@ -43,6 +43,7 @@
                         <h2>Neuen Event erstellen</h2>
                     </div>
                     <form id="create-event-form">
+                        <input type="hidden" name="event_id" />
                         <div class="tabs">
                             <button class="tab-button active" type="button" data-tab="event-basics">Basisdaten</button>
                             <button class="tab-button" type="button" data-tab="event-format">Format</button>
@@ -123,6 +124,7 @@
 
                         <div class="form-actions" >
                             <button type="submit" class="btn btn-primary">Event erstellen</button>
+                            <button type="button" class="btn btn-secondary hidden" id="event-cancel-edit">Bearbeitung abbrechen</button>
                         </div>
                     </form>
                 </div>
@@ -176,6 +178,7 @@
                     Status: <strong>${statusText}</strong>
                 `;
             }
+            window.renderEventPreview = renderEventPreview;
 
             async function loadSeasonsForEvents() {
                 if (!seasonSelect) return;
@@ -249,17 +252,29 @@
                     status: "planned"
                 };
                 try {
-                    await api("/events", {
-                        method: "POST",
+                    const editingId = Number(data.event_id || 0);
+                    await api(editingId > 0 ? `/events/${editingId}` : "/events", {
+                        method: editingId > 0 ? "PATCH" : "POST",
                         body: JSON.stringify(payload)
                     });
-                    showToast(`Event ${data.name} wurde erstellt.`, "success");
+                    showToast(editingId > 0 ? `Event ${data.name} wurde aktualisiert.` : `Event ${data.name} wurde erstellt.`, "success");
                     form.reset();
+                    const submitButton = form.querySelector("button[type='submit']");
+                    if (submitButton) submitButton.textContent = "Event erstellen";
+                    document.getElementById("event-cancel-edit")?.classList.add("hidden");
                     renderEventPreview();
                     await renderEventsTable();
                 } catch (error) {
                     showToast(error.message, "error");
                 }
+            });
+
+            document.getElementById("event-cancel-edit")?.addEventListener("click", () => {
+                form.reset();
+                const submitButton = form.querySelector("button[type='submit']");
+                if (submitButton) submitButton.textContent = "Event erstellen";
+                document.getElementById("event-cancel-edit")?.classList.add("hidden");
+                renderEventPreview();
             });
 
             document.addEventListener("DOMContentLoaded", async () => {
