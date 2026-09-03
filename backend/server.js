@@ -3204,7 +3204,7 @@ app.get("/api/teams", authRequired, requirePermission("teams.read"), (req, res) 
 });
 
 app.post("/api/teams", authRequired, requirePermission("teams.write"), (req, res) => {
-    const { name, organizationId, teamType, nation, category, managerUserId, seasonId, registrationStatus } = req.body || {};
+    const { name, organizationId, teamType, nation, category, managerUserId, seasonId } = req.body || {};
     if (!requireFields(res, req.body || {}, ["name", "organizationId", "teamType"])) return;
     const scope = getAccessibleTeamScope(req.user);
     const orgId = parseId(organizationId);
@@ -3277,7 +3277,7 @@ app.post("/api/teams", authRequired, requirePermission("teams.write"), (req, res
             category ? String(category).trim() : null,
             managerId,
             parsedSeasonId,
-            registrationStatus ? String(registrationStatus).trim().toLowerCase() : "draft",
+            "draft",
             req.body?.registrationDeadlineAt ? String(req.body.registrationDeadlineAt).trim() : seasonDeadline
         );
     const created = db.prepare("SELECT * FROM teams WHERE id = ?").get(result.lastInsertRowid);
@@ -3298,7 +3298,11 @@ app.patch("/api/teams/:id", authRequired, requirePermission("teams.write"), (req
     }
     const scope = getAccessibleTeamScope(req.user);
     if (!assertTeamAccess(res, req.user, existing, "write")) return;
-    const allowed = ["name", "organization_id", "team_type", "nation", "category", "status", "manager_user_id", "season_id", "registration_status", "submitted_at", "confirmed_at", "registration_deadline_at"];
+    if (req.body?.registrationStatus !== undefined || req.body?.registration_status !== undefined || req.body?.submitted_at !== undefined || req.body?.confirmed_at !== undefined) {
+        res.status(400).json({ error: "Meldestatus darf nur über den festen Meldeablauf geändert werden." });
+        return;
+    }
+    const allowed = ["name", "organization_id", "team_type", "nation", "category", "status", "manager_user_id", "season_id", "registration_deadline_at"];
     const updates = [];
     const values = [];
     let managerValidationError = null;
@@ -3399,6 +3403,46 @@ app.patch("/api/teams/:id", authRequired, requirePermission("teams.write"), (req
     db.prepare(`UPDATE teams SET ${updates.join(", ")} WHERE id = ?`).run(...values);
     const updated = db.prepare("SELECT * FROM teams WHERE id = ?").get(id);
     logAudit(req.user, "UPDATE_TEAM", "teams", id, JSON.stringify(req.body));
+    res.json(updated);
+});
+
+app.post("/api/teams/:id/submit-registration", authRequired, requirePermission("team_portal.write"), (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) {
+        res.status(400).json({ error: "Invalid team id" });
+        return;
+    }
+    const team = getTeamById(id);
+    if (!team || team.status === "inactive") {
+        res.status(404).json({ error: "Team not found" });
+        return;
+    }
+    if (!assertTeamAccess(res, req.user, team, "write")) return;
+    if (!team.season_id) {
+        res.status(400).json({ error: "Team hat keine zugewiesene Saison." });
+        return;
+    }
+    if (isTeamDeadlineLocked(team) && !canBypassDeadlineLock(req.user)) {
+        res.status(409).json({ error: "Dieses Team ist nach Meldeschluss gesperrt." });
+        return;
+    }
+    const currentStatus = String(team.registration_status || "draft").toLowerCase();
+    if (!["draft", "revision_requested"].includes(currentStatus)) {
+        res.status(409).json({ error: "Teammeldung kann in diesem Status nicht eingereicht werden." });
+        return;
+    }
+    db.prepare(
+        `UPDATE teams
+         SET registration_status = 'submitted',
+             submitted_at = CURRENT_TIMESTAMP,
+             registration_review_comment = NULL,
+             registration_reviewed_at = NULL,
+             registration_reviewed_by = NULL,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`
+    ).run(id);
+    const updated = db.prepare("SELECT * FROM teams WHERE id = ?").get(id);
+    logAudit(req.user, "SUBMIT_TEAM_REGISTRATION", "teams", id, `${team.name} submitted for review`);
     res.json(updated);
 });
 
@@ -3666,6 +3710,11 @@ app.post("/api/teams/:id/confirm-registration", authRequired, requirePermission(
         return;
     }
     if (!assertTeamAccess(res, req.user, team, "write")) return;
+    if (!assertAdminUser(res, req.user)) return;
+    if (String(team.registration_status || "").toLowerCase() !== "submitted") {
+        res.status(409).json({ error: "Teammeldung muss zuerst eingereicht werden." });
+        return;
+    }
     if (!team.season_id) {
         res.status(400).json({ error: "Team hat keine zugewiesene Saison." });
         return;
@@ -3725,6 +3774,11 @@ app.post("/api/teams/:id/request-revision", authRequired, requirePermission("tea
         return;
     }
     if (!assertTeamAccess(res, req.user, team, "write")) return;
+    if (!assertAdminUser(res, req.user)) return;
+    if (String(team.registration_status || "").toLowerCase() !== "submitted") {
+        res.status(409).json({ error: "Rückfragen sind nur bei eingereichten Teammeldungen möglich." });
+        return;
+    }
     const comment = String(req.body?.comment || "").trim();
     if (!comment) {
         res.status(400).json({ error: "Ein Kommentar ist für eine Rückfrage erforderlich." });

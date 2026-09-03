@@ -36,43 +36,16 @@
             </div>
 
             <div class="portal-content">
-                <!-- Create Team Card -->
                 <div class="card">
                     <div class="card-header">
-                        <h2>Neues Team erstellen</h2>
+                        <h2>Team-Verwaltung</h2>
                     </div>
-                    <form id="create-team-form">
-                        <div class="grid-2">
-                            <div class="form-group">
-                                <label>Team Name *</label>
-                                <input type="text" name="name" placeholder="z.B. Maximan Flyers" required />
-                            </div>
-                            <div class="form-group">
-                                <label>Kategorie *</label>
-                                <select name="category" required>
-                                    <option value="">-- Bitte auswählen --</option>
-                                    <option value="A">A (Elite)</option>
-                                    <option value="B">B (Regional)</option>
-                                    <option value="C">C (Nachwuchs)</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Nation</label>
-                                <input type="text" name="nation" placeholder="z.B. Deutschland" />
-                            </div>
-                            <div class="form-group">
-                                <label>Teammanager</label>
-                                <select id="create-team-manager" name="managerUserId">
-                                    <option value="">-- Kein Teammanager zuweisen --</option>
-                                </select>
-                                <div class="help-text">Nur Benutzer mit Rolle „Teammanager“ werden angezeigt.</div>
-                            </div>
-                        </div>
+                    <div class="card-body">
+                        <p>Teams werden jetzt ausschließlich im <strong>Team Portal</strong> gemeldet und durchlaufen dort den festen Ablauf (Entwurf → Einreichen → Prüfung/Bestätigung).</p>
                         <div class="form-actions">
-                            <button type="submit" class="btn btn-primary">Team erstellen</button>
-                            <button type="button" id="team-cancel-edit" class="btn btn-secondary hidden">Bearbeitung abbrechen</button>
+                            <a class="btn btn-primary" href="team-portal.html">Team Portal öffnen</a>
                         </div>
-                    </form>
+                    </div>
                 </div>
 
                 <!-- Teams List -->

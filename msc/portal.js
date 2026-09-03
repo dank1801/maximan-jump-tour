@@ -1898,7 +1898,6 @@ async function setupUsersPage() {
 
 async function loadTeams() {
     try {
-        const canManageTeams = hasPermission("teams.write");
         const teams = await api("/teams");
         teamsPageState.teams = Array.isArray(teams) ? teams : [];
         const html = teams.map(t => `
@@ -1908,12 +1907,8 @@ async function loadTeams() {
                 <td>${t.nation || "—"}</td>
                 <td>${t.manager_username || "—"}</td>
                 <td>${statusBadge(t.status || "pending")}</td>
-                <td>${canManageTeams
-                    ? `
-                        <button class="btn-small btn-secondary" onclick="editTeamModal(${t.id})">Bearbeiten</button>
-                        <button class="btn-small btn-danger" onclick="confirmDelete('Team ${t.name}', () => deleteTeam(${t.id}))">Löschen</button>
-                    `
-                    : `<span class="badge badge-info">Leseansicht</span>`}
+                <td>
+                    <a class="btn-small btn-secondary" href="team-portal.html">Im Team Portal</a>
                 </td>
             </tr>
         `).join("");

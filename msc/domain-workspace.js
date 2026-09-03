@@ -489,7 +489,7 @@ function initDomainWorkspace(config) {
                                 <div class="form-group"><label>Name *</label><input type="text" name="name" required /></div>
                                 <div class="form-group"><label>Saison</label><select name="seasonId"></select></div>
                                 <div class="form-group"><label>Trainer/Manager ID</label><input type="number" name="managerUserId" min="1" /></div>
-                                <div class="form-group"><label>Meldestatus</label><select name="registrationStatus"><option value="draft">Entwurf</option><option value="submitted">Eingereicht</option><option value="revision_requested">Rückfrage</option><option value="confirmed">Bestätigt</option></select></div>
+                                <div class="form-group"><label>Meldestatus</label><input type="text" value="Entwurf (automatisch)" disabled /></div>
                             </div>
                             <div class="form-actions"><button type="submit" class="btn btn-primary btn-small">Team speichern</button></div>
                         </form>
@@ -1511,6 +1511,8 @@ function initDomainWorkspace(config) {
             const confirmed = String(team.registration_status || "").toLowerCase() === "confirmed";
             const reviewStatus = String(team.registration_status || "draft").toLowerCase();
             const locked = isLocked(team);
+            const canReview = hasPermission("organizations.write");
+            const canSubmit = reviewStatus === "draft" || reviewStatus === "revision_requested";
             return `
                 <tr>
                     <td><strong>${escapeHtml(team.name || "—")}</strong></td>
@@ -1523,8 +1525,9 @@ function initDomainWorkspace(config) {
                     <td>${locked ? statusBadge("blocked") : statusBadge("planned")}</td>
                     <td>
                         <div class="actions-inline">
-                            <button type="button" class="btn btn-small btn-secondary" data-confirm-team="${team.id}">Bestätigen</button>
-                            <button type="button" class="btn btn-small btn-warning" data-reject-team="${team.id}">Rückfrage</button>
+                            ${canSubmit ? `<button type="button" class="btn btn-small btn-primary" data-submit-team="${team.id}">Einreichen</button>` : ""}
+                            ${canReview ? `<button type="button" class="btn btn-small btn-secondary" data-confirm-team="${team.id}">Bestätigen</button>` : ""}
+                            ${canReview ? `<button type="button" class="btn btn-small btn-warning" data-reject-team="${team.id}">Rückfrage</button>` : ""}
                             <button type="button" class="btn btn-small btn-secondary" data-history-team="${team.id}">Historie</button>
                         </div>
                     </td>
@@ -1581,7 +1584,7 @@ function initDomainWorkspace(config) {
         `;
 
         grid.querySelectorAll("[data-confirm-team]").forEach((button) => {
-            if (!state.canWrite) {
+            if (!state.canWrite || !hasPermission("organizations.write")) {
                 button.disabled = true;
                 button.classList.add("readonly-action");
                 return;
@@ -1590,13 +1593,30 @@ function initDomainWorkspace(config) {
             button.addEventListener("click", () => openTeamReviewModal(teamId, "confirm"));
         });
         grid.querySelectorAll("[data-reject-team]").forEach((button) => {
-            if (!state.canWrite) {
+            if (!state.canWrite || !hasPermission("organizations.write")) {
                 button.disabled = true;
                 button.classList.add("readonly-action");
                 return;
             }
             const teamId = Number(button.getAttribute("data-reject-team"));
             button.addEventListener("click", () => openTeamReviewModal(teamId, "reject"));
+        });
+        grid.querySelectorAll("[data-submit-team]").forEach((button) => {
+            if (!state.canWrite) {
+                button.disabled = true;
+                button.classList.add("readonly-action");
+                return;
+            }
+            const teamId = Number(button.getAttribute("data-submit-team"));
+            button.addEventListener("click", async () => {
+                try {
+                    await api(`/teams/${teamId}/submit-registration`, { method: "POST" });
+                    showToast("Teammeldung eingereicht.", "success");
+                    await refreshDomainWorkspacePage();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            });
         });
         grid.querySelectorAll("[data-history-team]").forEach((button) => {
             if (!state.canWrite && !hasPermission("teams.read")) {
@@ -1729,8 +1749,7 @@ function initDomainWorkspace(config) {
                             organizationId: data.organizationId,
                             teamType: data.teamType,
                             seasonId: data.seasonId || null,
-                            managerUserId: data.managerUserId || null,
-                            registrationStatus: data.registrationStatus || "draft"
+                            managerUserId: data.managerUserId || null
                         })
                     });
                     showToast("Team gespeichert.", "success");
@@ -1748,10 +1767,8 @@ function initDomainWorkspace(config) {
                 const template = String(button.getAttribute("data-team-template") || "").toUpperCase();
                 if (!teamForm) return;
                 const teamTypeField = teamForm.elements.teamType;
-                const statusField = teamForm.elements.registrationStatus;
                 const nameField = teamForm.elements.name;
                 if (teamTypeField) teamTypeField.value = template;
-                if (statusField) statusField.value = "draft";
                 if (nameField && !String(nameField.value || "").trim()) {
                     nameField.placeholder = `${template}-Team Name`;
                 }
